@@ -201,36 +201,36 @@ TEST_CASE("BSelMarg weight functors have correct properties", "[gpu][physics][bs
     double const xi = 0.5;
     double const sigmoid = 0.7;
 
-    double const w = BSelMargP1GPUWeight::weight(xi, sigmoid);
+    double const w = y3_cuda::BSelMargP1GPUWeight::weight(xi, sigmoid);
     CHECK(w == 1.0);
-    CHECK(BSelMargP1GPUWeight::uses_bias == false);
+    CHECK(y3_cuda::BSelMargP1GPUWeight::uses_bias == false);
   }
 
   SECTION("I1 weight includes sigmoid") {
     double const xi = 0.5;
     double const sigmoid = 0.7;
 
-    double const w = BSelMargI1GPUWeight::weight(xi, sigmoid);
+    double const w = y3_cuda::BSelMargI1GPUWeight::weight(xi, sigmoid);
     CHECK(w == Approx(xi * sigmoid));
-    CHECK(BSelMargI1GPUWeight::uses_bias == true);
+    CHECK(y3_cuda::BSelMargI1GPUWeight::uses_bias == true);
   }
 
   SECTION("I2 weight excludes sigmoid") {
     double const xi = 0.5;
     double const sigmoid = 0.7;
 
-    double const w = BSelMargI2GPUWeight::weight(xi, sigmoid);
+    double const w = y3_cuda::BSelMargI2GPUWeight::weight(xi, sigmoid);
     CHECK(w == Approx(xi));
-    CHECK(BSelMargI2GPUWeight::uses_bias == true);
+    CHECK(y3_cuda::BSelMargI2GPUWeight::uses_bias == true);
   }
 
   SECTION("J weight = I2 - I1") {
     double const xi = 0.5;
     double const sigmoid = 0.7;
 
-    double const w_i1 = BSelMargI1GPUWeight::weight(xi, sigmoid);
-    double const w_i2 = BSelMargI2GPUWeight::weight(xi, sigmoid);
-    double const w_j = BSelMargJGPUWeight::weight(xi, sigmoid);
+    double const w_i1 = y3_cuda::BSelMargI1GPUWeight::weight(xi, sigmoid);
+    double const w_i2 = y3_cuda::BSelMargI2GPUWeight::weight(xi, sigmoid);
+    double const w_j = y3_cuda::BSelMargJGPUWeight::weight(xi, sigmoid);
 
     CHECK(w_j == Approx(w_i2 - w_i1).epsilon(1e-10));
     CHECK(w_j == Approx(xi * (1.0 - sigmoid)).epsilon(1e-10));

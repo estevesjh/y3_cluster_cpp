@@ -187,7 +187,7 @@ TEST_CASE("Gaussian function is normalised", "[gpu][physics][primitives]")
     double sum = 0.0;
     double const dx = 0.01;
     for (double x = -10.0; x <= 10.0; x += dx) {
-      sum += gaussian(x, mu, sigma) * dx;
+      sum += y3_cuda::gaussian(x, mu, sigma) * dx;
     }
 
     CHECK(sum == Approx(1.0).epsilon(0.01));
@@ -200,7 +200,7 @@ TEST_CASE("Gaussian function is normalised", "[gpu][physics][primitives]")
     double sum = 0.0;
     double const dx = 0.01;
     for (double x = mu - 10 * sigma; x <= mu + 10 * sigma; x += dx) {
-      sum += gaussian(x, mu, sigma) * dx;
+      sum += y3_cuda::gaussian(x, mu, sigma) * dx;
     }
 
     CHECK(sum == Approx(1.0).epsilon(0.01));

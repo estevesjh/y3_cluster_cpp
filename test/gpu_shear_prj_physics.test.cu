@@ -268,31 +268,31 @@ TEST_CASE("Shear weight functors select correct components", "[gpu][physics][she
   bool const has_cl = true;
 
   SECTION("SigmaRndWeight returns random component") {
-    double const w = SigmaRndWeight::weight(common, Sigma_v, DSigma_v,
+    double const w = y3_cuda::SigmaRndWeight::weight(common, Sigma_v, DSigma_v,
                                             b_Mz, b_sel, xi_val, has_cl);
     CHECK(w == Approx(common * Sigma_v));
   }
 
   SECTION("SigmaClWeight returns clustering component") {
-    double const w = SigmaClWeight::weight(common, Sigma_v, DSigma_v,
+    double const w = y3_cuda::SigmaClWeight::weight(common, Sigma_v, DSigma_v,
                                            b_Mz, b_sel, xi_val, has_cl);
     CHECK(w == Approx(common * b_Mz * b_sel * xi_val * Sigma_v));
   }
 
   SECTION("SigmaClWeight is zero when has_cl=false") {
-    double const w = SigmaClWeight::weight(common, Sigma_v, DSigma_v,
+    double const w = y3_cuda::SigmaClWeight::weight(common, Sigma_v, DSigma_v,
                                            b_Mz, b_sel, xi_val, false);
     CHECK(w == 0.0);
   }
 
   SECTION("DSigmaRndWeight returns random DSigma") {
-    double const w = DSigmaRndWeight::weight(common, Sigma_v, DSigma_v,
+    double const w = y3_cuda::DSigmaRndWeight::weight(common, Sigma_v, DSigma_v,
                                              b_Mz, b_sel, xi_val, has_cl);
     CHECK(w == Approx(common * DSigma_v));
   }
 
   SECTION("DSigmaClWeight returns clustering DSigma") {
-    double const w = DSigmaClWeight::weight(common, Sigma_v, DSigma_v,
+    double const w = y3_cuda::DSigmaClWeight::weight(common, Sigma_v, DSigma_v,
                                             b_Mz, b_sel, xi_val, has_cl);
     CHECK(w == Approx(common * b_Mz * b_sel * xi_val * DSigma_v));
   }
