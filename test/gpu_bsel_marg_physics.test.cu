@@ -24,9 +24,8 @@
 
 #include <cmath>
 
-using namespace y3_cuda;
-
-// Import the helper functions from p_operator_gpu_t.cuh
+// Note: Do NOT use "using namespace y3_cuda" at file scope - causes sqrt conflicts with CUDA
+// Import the helper functions from p_operator_gpu_t.cuh in anonymous namespace
 namespace {
   using namespace y3_cuda::p_op_gpu_detail;
 }
@@ -157,7 +156,7 @@ TEST_CASE("Photo-z kernel w_z has correct form", "[gpu][physics][bsel]")
   // The P[X] operator uses w_z(zt, zob) = 1 - u^2 where u = (zt - zob)/sigma_z
   // This is an Epanechnikov-like kernel
 
-  SIGMA_PHOTOZ_DES_t sigma_z_model;
+  y3_cuda::SIGMA_PHOTOZ_DES_t sigma_z_model;
 
   SECTION("Kernel is maximum when zt equals zob") {
     double const zob = 0.4;

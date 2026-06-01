@@ -21,13 +21,13 @@
 #include <cmath>
 #include <vector>
 
-using namespace y3_cuda;
+// Note: Do NOT use "using namespace y3_cuda" - causes sqrt conflicts with CUDA
 
 // ============================================================================
 // Test: MOR (Mass-Observable Relation) basic properties
 // ============================================================================
 
-TEST_CASE("MOR_DES_LOG_t produces valid probability density", "[gpu][physics][mor]")
+TEST_CASE("y3_cuda::MOR_DES_LOG_t produces valid probability density", "[gpu][physics][mor]")
 {
   // Typical DES Y3 MOR parameters
   double const Mmin = 2.43e11;       // 10^11.3853
@@ -37,7 +37,7 @@ TEST_CASE("MOR_DES_LOG_t produces valid probability density", "[gpu][physics][mo
   double const epsilon = 0.0;
   double const z_pivot = 0.4544;
 
-  MOR_DES_LOG_t mor(Mmin, ratio, alpha, sigma_intr, epsilon, z_pivot);
+  y3_cuda::MOR_DES_LOG_t mor(Mmin, ratio, alpha, sigma_intr, epsilon, z_pivot);
 
   SECTION("MOR is positive for valid inputs") {
     double const lnM = 33.0;  // ~10^14 solar masses
@@ -89,9 +89,9 @@ TEST_CASE("MOR_DES_LOG_t produces valid probability density", "[gpu][physics][mo
 // Test: Photo-z kernel integration
 // ============================================================================
 
-TEST_CASE("INT_ZO_ZT_DES_t integrates correctly", "[gpu][physics][photoz]")
+TEST_CASE("y3_cuda::INT_ZO_ZT_DES_t integrates correctly", "[gpu][physics][photoz]")
 {
-  INT_ZO_ZT_DES_t photoz_kernel;
+  y3_cuda::INT_ZO_ZT_DES_t photoz_kernel;
 
   SECTION("Photo-z kernel is a valid probability") {
     double const zt = 0.4;
@@ -149,9 +149,9 @@ TEST_CASE("INT_ZO_ZT_DES_t integrates correctly", "[gpu][physics][photoz]")
 // Test: Photo-z sigma model
 // ============================================================================
 
-TEST_CASE("SIGMA_PHOTOZ_DES_t produces reasonable values", "[gpu][physics][photoz]")
+TEST_CASE("y3_cuda::SIGMA_PHOTOZ_DES_t produces reasonable values", "[gpu][physics][photoz]")
 {
-  SIGMA_PHOTOZ_DES_t sigma_z;
+  y3_cuda::SIGMA_PHOTOZ_DES_t sigma_z;
 
   SECTION("Sigma_z is positive for all redshifts") {
     for (double z = 0.1; z < 0.8; z += 0.1) {
@@ -222,7 +222,7 @@ TEST_CASE("Number counts physics constraints", "[gpu][physics][number_counts]")
     // This test would require HMF_t which needs datablock, so we test the concept
     // using the MOR expectation that higher richness clusters are rarer
 
-    MOR_DES_LOG_t mor(2.43e11, 20.47, 0.859, 0.181, 0.0, 0.4544);
+    y3_cuda::MOR_DES_LOG_t mor(2.43e11, 20.47, 0.859, 0.181, 0.0, 0.4544);
 
     // For a given mass, MOR gives P(lambda|M) which should peak and then decay
     double const lnM = 33.5;
@@ -237,7 +237,7 @@ TEST_CASE("Number counts physics constraints", "[gpu][physics][number_counts]")
 
   SECTION("Survey volume increases with redshift bin width") {
     // Wider redshift bins should capture more clusters
-    INT_ZO_ZT_DES_t photoz;
+    y3_cuda::INT_ZO_ZT_DES_t photoz;
 
     double const zt = 0.4;
     double const narrow = photoz(0.35, 0.40, zt);

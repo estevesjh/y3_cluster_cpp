@@ -20,9 +20,8 @@
 
 #include <cmath>
 
-using namespace y3_cuda;
-
-// Import helper functions from sigma_prj_gpu_t.cuh
+// Note: Do NOT use "using namespace y3_cuda" at file scope - causes sqrt conflicts with CUDA
+// Import helper functions from sigma_prj_gpu_t.cuh in anonymous namespace
 namespace {
   using namespace y3_cuda::sp_gpu_detail;
 }
