@@ -83,7 +83,7 @@ p_lob_given_ltr(double lob, double ltr, double z)
 
   // Simplified EMG: mu ~ ltr, sigma ~ sqrt(ltr), tau small
   double mu = ltr;                    // Mean: lob ~ ltr (no systematic bias)
-  double sigma = 0.5 + 0.1 * sqrt(ltr);  // Scatter increases with richness
+  double sigma = 0.5 + 0.1 * std::sqrt(ltr);  // Scatter increases with richness
 
   // Gaussian approximation (full model includes exponential tail)
   double x = lob - mu;
