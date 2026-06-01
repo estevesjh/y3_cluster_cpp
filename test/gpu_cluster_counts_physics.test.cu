@@ -25,7 +25,8 @@
 #include <vector>
 #include <numeric>
 
-using namespace y3_cuda;
+// Note: Do NOT use "using namespace y3_cuda" here - it causes conflicts
+// between y3_cuda::sqrt and CUDA's sqrt in math_functions.hpp
 
 
 // ============================================================================
@@ -99,7 +100,7 @@ p_lob_given_ltr(double lob, double ltr, double z)
 
 TEST_CASE("Photo-z sigma follows DES polynomial fit", "[gpu][physics][counts]")
 {
-  SIGMA_PHOTOZ_DES_t sigma_z;
+  y3_cuda::SIGMA_PHOTOZ_DES_t sigma_z;
 
   SECTION("Sigma is positive at all redshifts") {
     for (double z = 0.15; z <= 0.7; z += 0.05) {
@@ -132,7 +133,7 @@ TEST_CASE("Photo-z sigma follows DES polynomial fit", "[gpu][physics][counts]")
 
 TEST_CASE("Photo-z kernel K(zo|zt) integrates Gaussian over bin", "[gpu][physics][counts]")
 {
-  INT_ZO_ZT_DES_t photoz_kernel;
+  y3_cuda::INT_ZO_ZT_DES_t photoz_kernel;
 
   SECTION("Kernel is 1.0 when bin spans full range") {
     double zt = 0.4;
@@ -143,7 +144,7 @@ TEST_CASE("Photo-z kernel K(zo|zt) integrates Gaussian over bin", "[gpu][physics
 
   SECTION("Kernel is ~0.5 for bin centered on z_true") {
     double zt = 0.4;
-    SIGMA_PHOTOZ_DES_t sigma_z;
+    y3_cuda::SIGMA_PHOTOZ_DES_t sigma_z;
     double sig = sigma_z(zt);
 
     // Bin from z_true to z_true + 3*sigma should capture ~50% of upper tail
