@@ -58,6 +58,38 @@ if (USE_CUDA)
   target_compile_options(timing_sentry_cuda_test PRIVATE "--expt-relaxed-constexpr")
   add_test(timing_sentry_cuda_test timing_sentry_cuda_test)
 
+  # GPU Physics Tests for Number Counts
+  add_executable(gpu_number_counts_physics_test gpu_number_counts_physics.test.cu)
+  target_link_libraries(gpu_number_counts_physics_test PRIVATE cuda_utils cuda_models utils testmain)
+  target_include_directories(gpu_number_counts_physics_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/externals ${PAGANI_DIR})
+  set_target_properties(gpu_number_counts_physics_test PROPERTIES POSITION_INDEPENDENT_CODE ON CUDA_ARCHITECTURES ${Y3GCC_TARGET_ARCH})
+  target_compile_options(gpu_number_counts_physics_test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+  add_test(gpu_number_counts_physics_test gpu_number_counts_physics_test)
+
+  # GPU Physics Tests for bSelMarg
+  add_executable(gpu_bsel_marg_physics_test gpu_bsel_marg_physics.test.cu)
+  target_link_libraries(gpu_bsel_marg_physics_test PRIVATE cuda_utils cuda_models utils testmain)
+  target_include_directories(gpu_bsel_marg_physics_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/externals ${PAGANI_DIR})
+  set_target_properties(gpu_bsel_marg_physics_test PROPERTIES POSITION_INDEPENDENT_CODE ON CUDA_ARCHITECTURES ${Y3GCC_TARGET_ARCH})
+  target_compile_options(gpu_bsel_marg_physics_test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+  add_test(gpu_bsel_marg_physics_test gpu_bsel_marg_physics_test)
+
+  # GPU Physics Tests for ShearPrj
+  add_executable(gpu_shear_prj_physics_test gpu_shear_prj_physics.test.cu)
+  target_link_libraries(gpu_shear_prj_physics_test PRIVATE cuda_utils cuda_models utils testmain)
+  target_include_directories(gpu_shear_prj_physics_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/externals ${PAGANI_DIR})
+  set_target_properties(gpu_shear_prj_physics_test PROPERTIES POSITION_INDEPENDENT_CODE ON CUDA_ARCHITECTURES ${Y3GCC_TARGET_ARCH})
+  target_compile_options(gpu_shear_prj_physics_test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+  add_test(gpu_shear_prj_physics_test gpu_shear_prj_physics_test)
+
+  # GPU Physics Tests for Cluster Counts (Predicted N)
+  add_executable(gpu_cluster_counts_physics_test gpu_cluster_counts_physics.test.cu)
+  target_link_libraries(gpu_cluster_counts_physics_test PRIVATE cuda_utils cuda_models utils testmain)
+  target_include_directories(gpu_cluster_counts_physics_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/externals ${PAGANI_DIR})
+  set_target_properties(gpu_cluster_counts_physics_test PROPERTIES POSITION_INDEPENDENT_CODE ON CUDA_ARCHITECTURES ${Y3GCC_TARGET_ARCH})
+  target_compile_options(gpu_cluster_counts_physics_test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+  add_test(gpu_cluster_counts_physics_test gpu_cluster_counts_physics_test)
+
 endif()
 
 add_executable(
