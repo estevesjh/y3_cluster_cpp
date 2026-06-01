@@ -259,8 +259,9 @@ TEST_CASE("Selection bias physical constraints", "[gpu][physics][bsel]")
     // Sigmoid is 0.5 at theta = theta0
     CHECK(sigmoid(theta0) == Approx(0.5).epsilon(0.01));
 
-    // Sigmoid approaches 0 for small theta
-    CHECK(sigmoid(0.0) < 0.1);
+    // Sigmoid approaches ~0.22 for theta=0 (not 0, due to theta0 = 0.5*theta_lob)
+    // sigmoid(0) = 1/(1+exp(k*theta0)) = 1/(1+exp(1.25)) ≈ 0.22
+    CHECK(sigmoid(0.0) < 0.25);
 
     // Sigmoid approaches 1 for large theta
     CHECK(sigmoid(2.0 * theta_lob) > 0.9);

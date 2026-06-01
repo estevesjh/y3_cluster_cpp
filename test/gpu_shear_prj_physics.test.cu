@@ -147,9 +147,10 @@ TEST_CASE("b_sel_sigmoid has correct transition", "[gpu][physics][shear]")
     CHECK(sig == Approx(0.5).epsilon(0.01));
   }
 
-  SECTION("Sigmoid approaches 0 for small theta") {
+  SECTION("Sigmoid approaches ~0.22 for theta=0") {
+    // sigmoid(0) = 1/(1+exp(k*theta0)) = 1/(1+exp(1.25)) ≈ 0.22
     double const sig = b_sel_sigmoid(0.0, theta_lob);
-    CHECK(sig < 0.1);
+    CHECK(sig < 0.25);
   }
 
   SECTION("Sigmoid approaches 1 for large theta") {
