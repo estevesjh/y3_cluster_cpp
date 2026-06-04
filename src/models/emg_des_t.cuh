@@ -158,14 +158,11 @@ public:
   __host__ __device__ double
   cdf(double lob, double ltr, double z) const
   {
-<<<<<<< Updated upstream
-=======
     // Handle infinite bounds: CDF(+inf) = 1, CDF(-inf) = 0
     if (!isfinite(lob)) {
       return lob > 0.0 ? 1.0 : 0.0;
     }
 
->>>>>>> Stashed changes
     double mu, sigma, tau, fprj;
     get_params(ltr, z, mu, sigma, tau, fprj);
 
