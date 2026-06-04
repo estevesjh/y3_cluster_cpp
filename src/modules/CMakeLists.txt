@@ -55,3 +55,6 @@ add_subdirectory(ExampleOneD)
 
 # Simple GPU modules (no selection function) for validation
 add_subdirectory(simple_gpu)
+
+# GPU number counts with full 3D integration (EMG scatter model, templated)
+add_subdirectory(gpu_modules)
