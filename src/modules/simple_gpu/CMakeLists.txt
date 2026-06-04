@@ -4,13 +4,6 @@ link_directories(${COSMOSIS_BASE_DIR}/cosmosis/datablock)
 if (USE_CUDA)
   find_library(NVTX_LIBRARY nvToolsExt PATHS ENV LD_LIBRARY_PATH)
 
-  # numberCountsSimple.cu - Number counts without selection function
-  add_library(numberCountsSimple MODULE numberCountsSimple.cu)
-  target_link_libraries(numberCountsSimple PRIVATE cosmosis ${NVTX_LIBRARY} utils cuda_models cuda_utils)
-  target_include_directories(numberCountsSimple PRIVATE ${CMAKE_SOURCE_DIR}/src ${CUBACPP_DIR} ${PAGANI_DIR})
-  set_target_properties(numberCountsSimple PROPERTIES POSITION_INDEPENDENT_CODE ON CUDA_ARCHITECTURES ${Y3GCC_TARGET_ARCH})
-  target_compile_options(numberCountsSimple PRIVATE "--expt-relaxed-constexpr" "-lineinfo" "-DCURAND")
-
   # sigma1hSimple.cu - 1-halo surface density without selection function
   add_library(sigma1hSimple MODULE sigma1hSimple.cu)
   target_link_libraries(sigma1hSimple PRIVATE cosmosis ${NVTX_LIBRARY} utils cuda_models cuda_utils)
