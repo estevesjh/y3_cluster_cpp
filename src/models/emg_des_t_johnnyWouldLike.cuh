@@ -6,41 +6,12 @@
 #include "utils/make_interp_1d.cuh"
 #include "utils/primitives.cuh"
 
-#include <cmath>  // still needed for exp/erfc/pow/isfinite; no project primitive found
 #include <vector>
 
 namespace y3_cuda {
 
 namespace emg_constants {
   __host__ __device__ constexpr double SQRT2 = 1.4142135623730951;
-  __host__ __device__ constexpr double SQRT2_INV = 0.7071067811865475;
-  __host__ __device__ constexpr double SQRTPI = 1.7724538509055159;
-}
-
-__host__ __device__ inline double
-erfcx_impl(double x)
-{
-  double ax = fabs(x);
-
-  if (ax < 4.0) {
-    return exp(x * x) * erfc(x);
-  } else {
-    double x2 = ax * ax;
-    double result = (1.0 / emg_constants::SQRTPI) / ax *
-                    (1.0 - 0.5 / x2 + 0.75 / (x2 * x2));
-
-    if (x < 0.0) {
-      result = 2.0 * exp(x2) - result;
-    }
-
-    return result;
-  }
-}
-
-__host__ __device__ inline double
-phi_cdf(double x)
-{
-  return 0.5 * (1.0 + erf(x * emg_constants::SQRT2_INV));
 }
 
 class EMG_DES_t {
@@ -107,41 +78,9 @@ public:
     fprj = fmax(0.0, fmin(1.0, fprj));
   }
 
-  // CDF used by numberCountsFull_t.cu for richness-bin integral.
-  __host__ __device__ double
-  cdf(double lob, double ltr, double z) const
-  {
-    if (!isfinite(lob)) {
-      return lob > 0.0 ? 1.0 : 0.0;
-    }
-
-    double mu, sigma, tau, fprj;
-    get_params(ltr, z, mu, sigma, tau, fprj);
-
-    double const z_std = (lob - mu) / sigma;
-    double const u = (tau * sigma - z_std) * emg_constants::SQRT2_INV;
-
-    double const exp_mz2 = exp(-0.5 * z_std * z_std);
-    double const abs_u = fabs(u);
-    double const tail_base = 0.5 * erfcx_impl(abs_u) * exp_mz2;
-
-    double tail;
-    if (u < 0.0) {
-      double A = -tau * (lob - mu) + 0.5 * tau * tau * sigma * sigma;
-      A = fmax(-700.0, fmin(700.0, A));
-      tail = exp(A) - tail_base;
-    } else {
-      tail = tail_base;
-    }
-
-    double const result = phi_cdf(z_std) - fprj * tail;
-    return fmax(0.0, fmin(1.0, result));
-  }
-
-  // PDF used for debugging/tests.
-  // Direct formula:
-  // P = (1 - fprj) * Gaussian + fprj * EMG
-  // This replaces the old derivative-of-CDF implementation.
+  // P(lambda_ob | lambda_tr, z)
+  // Direct PDF:
+  // (1 - fprj) * Gaussian + fprj * EMG
   __host__ __device__ double
   operator()(double lob, double ltr, double z) const
   {
@@ -177,3 +116,4 @@ public:
 } // namespace y3_cuda
 
 #endif
+
