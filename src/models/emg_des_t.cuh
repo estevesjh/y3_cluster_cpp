@@ -95,7 +95,8 @@ public:
     double const a_fprj_z = a_fprj_.clamp(z);
     double const b_fprj_z = b_fprj_.clamp(z);
 
-    mu = a_mu_z + b_mu_z * ltr_safe;
+    double const delta_mu = a_mu_z + b_mu_z * ltr_safe;
+    mu = ltr_safe + delta_mu;  // Eq. 12: mu = lambda_tr + Delta_mu
     sigma = b_sig_z * pow(ltr_safe, a_sig_z);
     tau = b_tau_z / pow(ltr_safe, a_tau_z);
 
