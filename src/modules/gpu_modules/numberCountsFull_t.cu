@@ -9,14 +9,14 @@
 //   N = int dltr int dz int dlnM
 //       Omega(z) * (dV/dOmega/dz)(z) * n(M,z)
 //       * P_HOD(ltr | M,z)
-//       * P_EMG_bin(lob_low,lob_high | ltr,z)
-//       * K(zo | z)
+//       * K_i(lob_low,lob_high | ltr,z)
+//       * K_j(zo | z)
 //
 // where:
 //   - P_HOD(ltr | M,z) is the MOR (mass-observable relation): mor_des_log_t
-//   - P_EMG_bin = CDF(lob_high | ltr,z) - CDF(lob_low | ltr,z) is the richness
+//   - K_i = CDF(lob_high | ltr,z) - CDF(lob_low | ltr,z) is the richness
 //     bin kernel
-//   - K(zo | z) is the photo-z bin kernel: int_zo_zt_des_t
+//   - K_j(zo | z) is the photo-z bin kernel: int_zo_zt_des_t
 //
 // Grid: (lob_low, lob_high, zo_low, zo_high) - per richness and redshift bin
 
@@ -36,8 +36,8 @@
 #include "models/dv_do_dz_t.cuh"
 #include "models/hmf_t.cuh"
 #include "models/mor_des_log_t.cuh"
-#include "models/int_zo_zt_des_t.cuh"
-#include "models/emg_des_t.cuh"
+#include "models/int_zo_zt_des_t.cuh" // photo-z
+#include "models/emg_des_t.cuh" // eq 30 of https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex
 
 #include <iostream>
 #include <optional>
