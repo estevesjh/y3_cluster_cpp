@@ -6,8 +6,10 @@
 #include "utils/make_interp_1d.cuh"
 #include "utils/primitives.cuh"
 
-#include <cmath>  // still needed for exp/erfc/pow/isfinite; no project primitive found
+#include <cmath>  
 #include <vector>
+
+//
 
 namespace y3_cuda {
 
@@ -138,10 +140,6 @@ public:
     return fmax(0.0, fmin(1.0, result));
   }
 
-  // PDF used for debugging/tests.
-  // Direct formula:
-  // P = (1 - fprj) * Gaussian + fprj * EMG
-  // This replaces the old derivative-of-CDF implementation.
   __host__ __device__ double
   operator()(double lob, double ltr, double z) const
   {
