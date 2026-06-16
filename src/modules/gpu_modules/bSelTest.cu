@@ -148,10 +148,10 @@ extern "C" void* setup(DataBlock* options) {
 extern "C" int execute(DataBlock* block, void* config) {
   auto* cfg = static_cast<Config*>(config);
 
-  // Read P1, I1, J from datablock
-  auto P1_vec = block->view<std::vector<double>>("b_sel_marg_P1", "vals");
-  auto I1_vec = block->view<std::vector<double>>("b_sel_marg_I1", "vals");
-  auto J_vec  = block->view<std::vector<double>>("b_sel_marg_J", "vals");
+  // Read P1, I1, J from datablock (use get_vector_double for ndarray compatibility)
+  auto P1_vec = get_vector_double(*block, "b_sel_marg_P1", "vals");
+  auto I1_vec = get_vector_double(*block, "b_sel_marg_I1", "vals");
+  auto J_vec  = get_vector_double(*block, "b_sel_marg_J", "vals");
 
   // Read grid info to find which P1/I1/J corresponds to which (zob, lob_bin)
   auto zo_low_vec  = get_vector_double(*block, "b_sel_marg_P1", "zo_low");
@@ -167,20 +167,20 @@ extern "C" int execute(DataBlock* block, void* config) {
   }
 
   // Read distances for chi(z)
-  auto z_dist = block->view<std::vector<double>>("distances", "z");
-  auto chi_dist = block->view<std::vector<double>>("distances", "d_c");
+  auto z_dist = get_vector_double(*block, "distances", "z");
+  auto chi_dist = get_vector_double(*block, "distances", "d_c");
 
   // Read MOR parameters
   y3_cuda::MOR_SHIFTED_POISSON_t mor(*block);
 
   // Read HMF and bias for b_eff computation
-  auto mf_m = block->view<std::vector<double>>("mass_function", "m_h");
-  auto mf_z = block->view<std::vector<double>>("mass_function", "z");
-  auto mf_vals_nd = block->view<std::vector<double>>("mass_function", "dndlnmh");
+  auto mf_m = get_vector_double(*block, "mass_function", "m_h");
+  auto mf_z = get_vector_double(*block, "mass_function", "z");
+  auto mf_vals_nd = get_vector_double(*block, "mass_function", "dndlnmh");
 
-  auto hm_m = block->view<std::vector<double>>("haloModel", "m_h");
-  auto hm_z = block->view<std::vector<double>>("haloModel", "z");
-  auto hm_bias_nd = block->view<std::vector<double>>("haloModel", "bias");
+  auto hm_m = get_vector_double(*block, "haloModel", "m_h");
+  auto hm_z = get_vector_double(*block, "haloModel", "z");
+  auto hm_bias_nd = get_vector_double(*block, "haloModel", "bias");
 
   // Rescale HMF mass axis by (omm - omn) to match CPU convention
   std::vector<double> mf_m_scaled(mf_m.size());
