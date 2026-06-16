@@ -44,31 +44,9 @@ namespace y3_cuda {
 
     static constexpr double PI = 3.14159265358979323846;
 
-    // GL nodes and weights for N=10 (single panel)
+    // GL node counts
     static constexpr int GL_N_SINGLE = 10;
-    static constexpr double gl_x10[10] = {
-      -0.9739065285171717, -0.8650633666889845, -0.6794095682990244,
-      -0.4333953941292472, -0.1488743389816312,  0.1488743389816312,
-       0.4333953941292472,  0.6794095682990244,  0.8650633666889845,
-       0.9739065285171717
-    };
-    static constexpr double gl_w10[10] = {
-      0.0666713443086881, 0.1494513491505806, 0.2190863625159820,
-      0.2692667193099963, 0.2955242247147529, 0.2955242247147529,
-      0.2692667193099963, 0.2190863625159820, 0.1494513491505806,
-      0.0666713443086881
-    };
-
-    // GL nodes and weights for N=5 (for split panels)
     static constexpr int GL_N_HALF = 5;
-    static constexpr double gl_x5[5] = {
-      -0.9061798459386640, -0.5384693101056831, 0.0,
-       0.5384693101056831,  0.9061798459386640
-    };
-    static constexpr double gl_w5[5] = {
-      0.2369268850561891, 0.4786286704993665, 0.5688888888888889,
-      0.4786286704993665, 0.2369268850561891
-    };
 
     __host__ __device__ inline double
     R_lambda(double lam)
@@ -257,6 +235,17 @@ namespace y3_cuda {
       // CPU splits the theta panel at theta_lob so the sigmoid
       // transition gets proper resolution. Use 5+5 nodes.
       // ---------------------------------------------------------------
+
+      // GL nodes and weights for N=5 - embedded for device compatibility
+      const double gl_x5[5] = {
+        -0.9061798459386640, -0.5384693101056831, 0.0,
+         0.5384693101056831,  0.9061798459386640
+      };
+      const double gl_w5[5] = {
+        0.2369268850561891, 0.4786286704993665, 0.5688888888888889,
+        0.4786286704993665, 0.2369268850561891
+      };
+
       double th_sum = 0.0;
 
       // Clamp split point to valid range

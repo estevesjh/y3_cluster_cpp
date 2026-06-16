@@ -123,9 +123,9 @@ void interp_to_z(
 extern "C" void* setup(DataBlock* options) {
   auto* cfg = new Config;
 
-  cfg->lob = y3_cluster::get_vector_double(*options, "bSelTest", "lob");
-  cfg->ltr = y3_cluster::get_vector_double(*options, "bSelTest", "ltr");
-  cfg->zob = y3_cluster::get_vector_double(*options, "bSelTest", "zob");
+  cfg->lob = get_vector_double(*options, "bSelTest", "lob");
+  cfg->ltr = get_vector_double(*options, "bSelTest", "ltr");
+  cfg->zob = get_vector_double(*options, "bSelTest", "zob");
 
   cfg->n_theta = options->view<int>("bSelTest", "n_theta");
   cfg->theta_lo = options->view<double>("bSelTest", "theta_lo");
@@ -154,9 +154,9 @@ extern "C" int execute(DataBlock* block, void* config) {
   auto J_vec  = block->view<std::vector<double>>("b_sel_marg_J", "vals");
 
   // Read grid info to find which P1/I1/J corresponds to which (zob, lob_bin)
-  auto zo_low_vec  = y3_cluster::get_vector_double(*block, "b_sel_marg_P1", "zo_low");
-  auto zo_high_vec = y3_cluster::get_vector_double(*block, "b_sel_marg_P1", "zo_high");
-  auto lam_bin_vec = y3_cluster::get_vector_double(*block, "b_sel_marg_P1", "lambda_bin");
+  auto zo_low_vec  = get_vector_double(*block, "b_sel_marg_P1", "zo_low");
+  auto zo_high_vec = get_vector_double(*block, "b_sel_marg_P1", "zo_high");
+  auto lam_bin_vec = get_vector_double(*block, "b_sel_marg_P1", "lambda_bin");
 
   // Read cosmology
   double const h0 = block->view<double>("cosmological_parameters", "h0");
