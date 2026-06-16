@@ -86,14 +86,6 @@ namespace y3_cuda {
     return b_sel_from_asymptotes(theta, b_zero, b_infty, th_lob);
   }
 
-  // Marginalized version: <b_sel>(theta | lob, zob) = B_small + (B_large - B_small) * sigmoid
-  __host__ __device__ inline double
-  b_sel_marg(double theta, double B_small, double B_large, double theta_lob_val)
-  {
-    double const sig = b_sel_sigmoid(theta, theta_lob_val);
-    return B_small + (B_large - B_small) * sig;
-  }
-
 }  // namespace y3_cuda
 
 #endif
