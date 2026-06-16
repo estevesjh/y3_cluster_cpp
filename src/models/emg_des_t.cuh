@@ -6,41 +6,43 @@
 #include "utils/make_interp_1d.cuh"
 #include "utils/primitives.cuh"
 
-#include <cmath>  // still needed for exp/erfc/pow/isfinite; no project primitive found
+#include <cmath>
 #include <vector>
 
 namespace y3_cuda {
 
 namespace emg_constants {
-  __host__ __device__ constexpr double SQRT2 = 1.4142135623730951;
-  __host__ __device__ constexpr double SQRT2_INV = 0.7071067811865475;
-  __host__ __device__ constexpr double SQRTPI = 1.7724538509055159;
-}
-
-__host__ __device__ inline double
-erfcx_impl(double x)
-{
-  double ax = fabs(x);
-
-  if (ax < 4.0) {
-    return exp(x * x) * erfc(x);
-  } else {
-    double x2 = ax * ax;
-    double result = (1.0 / emg_constants::SQRTPI) / ax *
-                    (1.0 - 0.5 / x2 + 0.75 / (x2 * x2));
-
-    if (x < 0.0) {
-      result = 2.0 * exp(x2) - result;
-    }
-
-    return result;
-  }
+  static constexpr double SQRT2     = 1.4142135623730951;
+  static constexpr double SQRT2_INV = 0.7071067811865475;
+  static constexpr double SQRTPI    = 1.7724538509055159;
 }
 
 __host__ __device__ inline double
 phi_cdf(double x)
 {
   return 0.5 * (1.0 + erf(x * emg_constants::SQRT2_INV));
+}
+
+// Scaled complementary error function erfcx(x)=exp(x^2) erfc(x).
+// Used only to make the EMG CDF numerically safer.
+__host__ __device__ inline double
+erfcx_impl(double x)
+{
+  double const ax = fabs(x);
+
+  if (ax < 4.0) {
+    return exp(x * x) * erfc(x);
+  }
+
+  double const x2 = ax * ax;
+  double result = (1.0 / emg_constants::SQRTPI) / ax *
+                  (1.0 - 0.5 / x2 + 0.75 / (x2 * x2));
+
+  if (x < 0.0) {
+    result = 2.0 * exp(x2) - result;
+  }
+
+  return result;
 }
 
 class EMG_DES_t {
@@ -86,28 +88,40 @@ public:
   {
     double const ltr_safe = fmax(ltr, 0.5);
 
-    double const a_mu_z = a_mu_.clamp(z);
-    double const b_mu_z = b_mu_.clamp(z);
-    double const a_sig_z = a_sig_.clamp(z);
-    double const b_sig_z = b_sig_.clamp(z);
-    double const a_tau_z = a_tau_.clamp(z);
-    double const b_tau_z = b_tau_.clamp(z);
+    double const a_mu_z   = a_mu_.clamp(z);
+    double const b_mu_z   = b_mu_.clamp(z);
+    double const a_sig_z  = a_sig_.clamp(z);
+    double const b_sig_z  = b_sig_.clamp(z);
+    double const a_tau_z  = a_tau_.clamp(z);
+    double const b_tau_z  = b_tau_.clamp(z);
     double const a_fprj_z = a_fprj_.clamp(z);
     double const b_fprj_z = b_fprj_.clamp(z);
 
     mu = a_mu_z + b_mu_z * ltr_safe;
+
+    // Costanzi et al. (2019)/DES parameterisations for the EMG width, exponential rate,
+    // and projection fraction.
     sigma = b_sig_z * pow(ltr_safe, a_sig_z);
-    tau = b_tau_z / pow(ltr_safe, a_tau_z);
+    tau   = b_tau_z / pow(ltr_safe, a_tau_z);
 
     double const denom = pow(1.0 + exp(-ltr_safe), a_fprj_z);
-    fprj = fmin(1.0, b_fprj_z / fmax(denom, 1e-10));
+    fprj = b_fprj_z / fmax(denom, 1e-300);
 
-    sigma = fmax(sigma, 1e-6);
-    tau = fmax(tau, 1e-6);
-    fprj = fmax(0.0, fmin(1.0, fprj));
+    sigma = fmax(sigma, 1e-8);
+    tau   = fmax(tau,   1e-8);
+    fprj  = fmax(0.0, fmin(1.0, fprj));
   }
 
-  // CDF used by numberCountsFull_t.cu for richness-bin integral.
+  // Total observed-richness CDF used for the bin probability:
+  //
+  //   K_i(lambda_tr,z) = CDF(lambda_high) - CDF(lambda_low)
+  //
+  // This implements Eq. 30 in CDF form:
+  //
+  //   F_total(x) = Phi((x - mu)/sigma)
+  //              - f_prj exp[-tau(x-mu) + 0.5 tau^2 sigma^2]
+  //                      Phi((x - mu)/sigma - tau sigma)
+  //
   __host__ __device__ double
   cdf(double lob, double ltr, double z) const
   {
@@ -119,11 +133,15 @@ public:
     get_params(ltr, z, mu, sigma, tau, fprj);
 
     double const z_std = (lob - mu) / sigma;
-    double const u = (tau * sigma - z_std) * emg_constants::SQRT2_INV;
+    double const gaussian_cdf = phi_cdf(z_std);
 
-    double const exp_mz2 = exp(-0.5 * z_std * z_std);
-    double const abs_u = fabs(u);
-    double const tail_base = 0.5 * erfcx_impl(abs_u) * exp_mz2;
+    // EMG correction term:
+    //   exp(A) * Phi(z_std - tau*sigma)
+    // computed with erfcx for stability.
+    double const u = (tau * sigma - z_std) * emg_constants::SQRT2_INV;
+    double const exp_mhalf_z2 = exp(-0.5 * z_std * z_std);
+    double const tail_base =
+        0.5 * erfcx_impl(fabs(u)) * exp_mhalf_z2;
 
     double tail;
     if (u < 0.0) {
@@ -134,32 +152,31 @@ public:
       tail = tail_base;
     }
 
-    double const result = phi_cdf(z_std) - fprj * tail;
+    double const result = gaussian_cdf - fprj * tail;
     return fmax(0.0, fmin(1.0, result));
   }
 
-  // PDF used for debugging/tests.
-  // Direct formula:
-  // P = (1 - fprj) * Gaussian + fprj * EMG
-  // This replaces the old derivative-of-CDF implementation.
+  // PDF for debugging/tests only.
+  // numberCountsFull_t should use cdf(high)-cdf(low), not this PDF.
   __host__ __device__ double
   operator()(double lob, double ltr, double z) const
   {
     double mu, sigma, tau, fprj;
     get_params(ltr, z, mu, sigma, tau, fprj);
 
-    double const gauss =
-        y3_cuda::gaussian(lob, mu, sigma);
+    double const gauss = y3_cuda::gaussian(lob, mu, sigma);
 
     double const exp_arg =
         0.5 * tau * (2.0 * mu + tau * sigma * sigma - 2.0 * lob);
 
     double const erfc_arg =
-        (mu + tau * sigma * sigma - lob)
-        / (emg_constants::SQRT2 * sigma);
+        (mu + tau * sigma * sigma - lob) /
+        (emg_constants::SQRT2 * sigma);
 
-    double const emg =
-        0.5 * tau * exp(exp_arg) * erfc(erfc_arg);
+    double emg = 0.0;
+    if (exp_arg > -700.0 && exp_arg < 700.0) {
+      emg = 0.5 * tau * exp(exp_arg) * erfc(erfc_arg);
+    }
 
     return (1.0 - fprj) * gauss + fprj * emg;
   }

@@ -78,10 +78,8 @@ private:
     double zo_high_;
 
 public:
-    // Initialize integrand object from configuration block.
-    // No special configuration is needed at setup time for this module.
     explicit numberCountsFull_t(cosmosis::DataBlock& /*cfg*/) {
-        // Configuration parameters could be read here if needed.
+       
     }
 
     // Set data members from values read from the current sample.
@@ -121,28 +119,45 @@ public:
             return 0.0;
         }
 
-        // Richness bin kernel:
+        // Richness part of the selection kernel: K_i(lambda_tr, z_tr).
         //
-        //   P(lob_low < lob < lob_high | ltr, z)
-        //     = CDF(lob_high) - CDF(lob_low)
+        // This is Eq. (30) in the closed-form richness-selection note:
         //
-        // fmax guards against tiny negative values from floating-point subtraction.
-        double const richness_bin = fmax(
-            0.0,
-            emg_->cdf(lob_high_, ltr, zt) - emg_->cdf(lob_low_, ltr, zt)
-        );
+        //   K_i(lambda_tr,z_tr)
+        //     = int_{lob_low}^{lob_high} d lambda_ob
+        //         P(lambda_ob | lambda_tr, z_tr)
+        //     = F(lob_high | lambda_tr,z_tr)
+        //       - F(lob_low  | lambda_tr,z_tr).
+        //
+        // Here EMG_DES_t::cdf() must implement the closed-form CDF for
+        // the Gaussian + projection EMG kernel. Therefore this line means
+        // the lambda_ob integral is already done analytically.
+        double const Ki_raw =
+            emg_->cdf(lob_high_, ltr, zt) -
+            emg_->cdf(lob_low_,  ltr, zt);
 
-        if (richness_bin == 0.0) {
+        // Guard only against tiny floating-point undershoots.
+        // K_i is a probability, so it must live in [0,1].
+        double const Ki = fmin(1.0, fmax(0.0, Ki_raw));
+        if (Ki <= 0.0) {
             return 0.0;
         }
+
+        // Photo-z part of the selection kernel: K_j(z_tr).
+        // This was calculated above as the Gaussian photo-z CDF difference.
+        double const Kj = photoz;
+
+        // Full selection kernel:
+        //
+        //   K_ij(lambda_tr,z_tr) = K_i(lambda_tr,z_tr) * K_j(z_tr).
+        double const Kij = Ki * Kj;
 
         // Common cosmology factors: Omega(z) * dV/dOmega/dz * dn/dlnM.
         double const common = (*omega_z_)(zt) * (*dv_do_dz_)(zt) * (*hmf_)(lnM, zt);
 
-        return common * p_hod * richness_bin * photoz;
+        return common * p_hod * Kij;
     }
 
-    // Module label - must match section name in pipeline.ini file.
     static char const* module_label() {
         return "numberCountsFull_t";
     }
