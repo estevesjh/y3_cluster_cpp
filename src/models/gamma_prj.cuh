@@ -78,11 +78,16 @@ namespace y3_cuda {
       h0_ = sample.view<double>("cosmological_parameters", "h0");
 
       // Read B_small, B_large from bSelMargGPU output
+      // These are written as ndarray<double> so read them that way
       if (sample.has_val("b_sel_marginalised", "b_small")) {
-        b_small_vec_ = get_vector_double(sample, "b_sel_marginalised", "b_small");
-        b_large_vec_ = get_vector_double(sample, "b_sel_marginalised", "b_large");
-        lob_vec_ = get_vector_double(sample, "b_sel_marginalised", "lob");
-        zob_vec_ = get_vector_double(sample, "b_sel_marginalised", "zob");
+        auto b_small_nd = sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "b_small");
+        auto b_large_nd = sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "b_large");
+        auto lob_nd = sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "lob");
+        auto zob_nd = sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "zob");
+        b_small_vec_.assign(b_small_nd.begin(), b_small_nd.end());
+        b_large_vec_.assign(b_large_nd.begin(), b_large_nd.end());
+        lob_vec_.assign(lob_nd.begin(), lob_nd.end());
+        zob_vec_.assign(zob_nd.begin(), zob_nd.end());
 
         // Determine grid dimensions (assume regular grid)
         // Count unique zob values
