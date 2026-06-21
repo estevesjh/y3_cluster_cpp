@@ -26,6 +26,10 @@
 
 namespace y3_cuda {
 
+  // Maximum number of (zob, lob) grid points for B_small/B_large lookup
+  // Typically 3 z-bins x 4 lambda-bins = 12 points
+  static constexpr int MAX_BSEL_GRID = 64;
+
   class GAMMA_PRJ {
   private:
     // 2-halo surface density DSigma_hh(r, z)
@@ -40,18 +44,23 @@ namespace y3_cuda {
     // Comoving distance chi(z) for theta calculation
     quad::Interp1D chi_;
 
-    // B_small, B_large from bSelMargGPU - stored as vectors for lookup
-    // Shape: (n_grid,) where grid is (zob, lob) pairs
-    std::vector<double> b_small_vec_;
-    std::vector<double> b_large_vec_;
-    std::vector<double> lob_vec_;
-    std::vector<double> zob_vec_;
+    // B_small, B_large from bSelMargGPU - GPU-compatible fixed arrays
+    double b_small_arr_[MAX_BSEL_GRID];
+    double b_large_arr_[MAX_BSEL_GRID];
+    double lob_arr_[MAX_BSEL_GRID];
+    double zob_arr_[MAX_BSEL_GRID];
+    int n_grid_ = 0;
     int n_zob_ = 0;
     int n_lob_ = 0;
 
     // Current grid point state
     double zob_ = 0.0;
     double chi_o_ = 0.0;  // chi(zob)
+
+    // Pre-computed B values for current zob (averaged over lob)
+    // This simplifies GPU lookup
+    double B_small_current_ = 1.0;
+    double B_large_current_ = 1.0;
 
     // Cosmology
     double h0_ = 1.0;
@@ -75,6 +84,14 @@ namespace y3_cuda {
                                       "sigmaCritInv", "sigma_crit_inv"))
       , chi_(make_Interp1D(sample, "distances", "z", "d_c"))
     {
+      // Initialize arrays to defaults
+      for (int i = 0; i < MAX_BSEL_GRID; ++i) {
+        b_small_arr_[i] = 1.0;
+        b_large_arr_[i] = 1.0;
+        lob_arr_[i] = 0.0;
+        zob_arr_[i] = 0.0;
+      }
+
       h0_ = sample.view<double>("cosmological_parameters", "h0");
 
       // Read B_small, B_large from bSelMargGPU output
@@ -84,23 +101,33 @@ namespace y3_cuda {
         auto b_large_nd = sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "b_large");
         auto lob_nd = sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "lob");
         auto zob_nd = sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "zob");
-        b_small_vec_.assign(b_small_nd.begin(), b_small_nd.end());
-        b_large_vec_.assign(b_large_nd.begin(), b_large_nd.end());
-        lob_vec_.assign(lob_nd.begin(), lob_nd.end());
-        zob_vec_.assign(zob_nd.begin(), zob_nd.end());
+
+        n_grid_ = static_cast<int>(b_small_nd.size());
+        if (n_grid_ > MAX_BSEL_GRID) n_grid_ = MAX_BSEL_GRID;
+
+        // Copy to fixed arrays
+        for (int i = 0; i < n_grid_; ++i) {
+          b_small_arr_[i] = b_small_nd[i];
+          b_large_arr_[i] = b_large_nd[i];
+          lob_arr_[i] = lob_nd[i];
+          zob_arr_[i] = zob_nd[i];
+        }
 
         // Determine grid dimensions (assume regular grid)
         // Count unique zob values
-        std::vector<double> unique_zob;
-        for (double z : zob_vec_) {
+        double unique_zob[MAX_BSEL_GRID];
+        int n_unique = 0;
+        for (int i = 0; i < n_grid_; ++i) {
           bool found = false;
-          for (double uz : unique_zob) {
-            if (std::abs(z - uz) < 1e-6) { found = true; break; }
+          for (int j = 0; j < n_unique; ++j) {
+            if (fabs(zob_arr_[i] - unique_zob[j]) < 1e-6) { found = true; break; }
           }
-          if (!found) unique_zob.push_back(z);
+          if (!found && n_unique < MAX_BSEL_GRID) {
+            unique_zob[n_unique++] = zob_arr_[i];
+          }
         }
-        n_zob_ = unique_zob.size();
-        n_lob_ = (n_zob_ > 0) ? (zob_vec_.size() / n_zob_) : 0;
+        n_zob_ = n_unique;
+        n_lob_ = (n_zob_ > 0) ? (n_grid_ / n_zob_) : 0;
       }
     }
 
@@ -108,44 +135,34 @@ namespace y3_cuda {
     {
       zob_ = 0.5 * (zo_low + zo_high);
       chi_o_ = chi_.clamp(zob_) * h0_;  // Convert to cMpc/h
-    }
 
-    // Lookup B_small, B_large for given (zob, lob)
-    __host__ __device__ void
-    get_B_values(double lob, double& B_small, double& B_large) const
-    {
-      // Default values if no b_sel data available
-      B_small = 1.0;
-      B_large = 1.0;
+      // Pre-compute average B_small and B_large for this zob
+      // (averaging over lob bins)
+      if (n_grid_ > 0 && n_zob_ > 0) {
+        // Find nearest zob index
+        int iz = 0;
+        double min_dz = 1e30;
+        for (int i = 0; i < n_zob_; ++i) {
+          double z_i = zob_arr_[i * n_lob_];
+          double dz = fabs(z_i - zob_);
+          if (dz < min_dz) { min_dz = dz; iz = i; }
+        }
 
-      if (b_small_vec_.empty() || n_zob_ == 0 || n_lob_ == 0) {
-        return;
-      }
-
-      // Find nearest zob index
-      int iz = 0;
-      double min_dz = 1e30;
-      for (int i = 0; i < n_zob_; ++i) {
-        // zob values repeat every n_lob_ entries
-        double z_i = zob_vec_[i * n_lob_];
-        double dz = std::abs(z_i - zob_);
-        if (dz < min_dz) { min_dz = dz; iz = i; }
-      }
-
-      // Find nearest lob index
-      int il = 0;
-      double min_dl = 1e30;
-      for (int i = 0; i < n_lob_; ++i) {
-        double l_i = lob_vec_[i];
-        double dl = std::abs(l_i - lob);
-        if (dl < min_dl) { min_dl = dl; il = i; }
-      }
-
-      // Linear index into flat arrays
-      int idx = iz * n_lob_ + il;
-      if (idx >= 0 && idx < static_cast<int>(b_small_vec_.size())) {
-        B_small = b_small_vec_[idx];
-        B_large = b_large_vec_[idx];
+        // Average B_small and B_large over lob bins for this zob
+        double sum_small = 0.0, sum_large = 0.0;
+        int count = 0;
+        for (int il = 0; il < n_lob_; ++il) {
+          int idx = iz * n_lob_ + il;
+          if (idx < n_grid_) {
+            sum_small += b_small_arr_[idx];
+            sum_large += b_large_arr_[idx];
+            ++count;
+          }
+        }
+        if (count > 0) {
+          B_small_current_ = sum_small / count;
+          B_large_current_ = sum_large / count;
+        }
       }
     }
 
@@ -153,7 +170,7 @@ namespace y3_cuda {
     // r = radius (h^-1 Mpc)
     // lnM = log mass
     // zt = true redshift
-    // lo = observed richness (used to look up B_small, B_large)
+    // lo = observed richness (used for theta_lob calculation)
     __host__ __device__ double
     operator()(double r, double lnM, double zt, double lo) const
     {
@@ -175,9 +192,10 @@ namespace y3_cuda {
       // theta_lob for sigmoid
       double const th_lob = theta_lob(lo, zob_, chi_o_);
 
-      // Get B_small, B_large for this (zob, lo)
-      double B_small, B_large;
-      get_B_values(lo, B_small, B_large);
+      // Use pre-computed B_small/B_large for current zob
+      // (GPU-compatible: no std::vector access)
+      double const B_small = B_small_current_;
+      double const B_large = B_large_current_;
 
       // b_sel(theta) = B_small + (B_large - B_small) * sigmoid(theta)
       double const sig = b_sel_sigmoid(theta, th_lob);
