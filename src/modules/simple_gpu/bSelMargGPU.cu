@@ -271,11 +271,15 @@ public:
     // Read HMF and bias tables
     auto mf_m = get_vector_double(sample, "mass_function", "m_h");
     auto mf_z = get_vector_double(sample, "mass_function", "z");
-    auto mf_vals = get_vector_double(sample, "mass_function", "dndlnmh");
+    // dndlnmh is a 2D ndarray (Nz, NM) - read as ndarray and flatten to vector
+    auto mf_ndarray = sample.view<cosmosis::ndarray<double>>("mass_function", "dndlnmh");
+    std::vector<double> mf_vals(mf_ndarray.begin(), mf_ndarray.end());
 
     auto hm_m = get_vector_double(sample, "haloModel", "m_h");
     auto hm_z = get_vector_double(sample, "haloModel", "z");
-    auto hm_bias = get_vector_double(sample, "haloModel", "bias");
+    // bias is also a 2D ndarray (Nz, NM)
+    auto bias_ndarray = sample.view<cosmosis::ndarray<double>>("haloModel", "bias");
+    std::vector<double> hm_bias(bias_ndarray.begin(), bias_ndarray.end());
 
     // Build M grid for b_eff integration (100 points, 1e13 to 1e16)
     int const NM_beff = 100;
