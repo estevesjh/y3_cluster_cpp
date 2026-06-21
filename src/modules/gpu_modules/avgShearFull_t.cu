@@ -138,7 +138,7 @@ avgShearFull_t::set_sample(DataBlock& sample)
   hmf.emplace(sample);
   mor.emplace(sample);
   lc_lt.emplace(sample);
-  int_zo_zt.emplace(sample);
+  int_zo_zt.emplace();  // Default constructor, no DataBlock needed
   gamma_1h.emplace(sample);
   gamma_prj.emplace(sample);
 }
