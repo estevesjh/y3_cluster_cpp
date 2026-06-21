@@ -105,12 +105,16 @@ namespace y3_cuda {
         n_grid_ = static_cast<int>(b_small_nd.size());
         if (n_grid_ > MAX_BSEL_GRID) n_grid_ = MAX_BSEL_GRID;
 
-        // Copy to fixed arrays
+        // Copy to fixed arrays using iterators
+        auto it_small = b_small_nd.begin();
+        auto it_large = b_large_nd.begin();
+        auto it_lob = lob_nd.begin();
+        auto it_zob = zob_nd.begin();
         for (int i = 0; i < n_grid_; ++i) {
-          b_small_arr_[i] = b_small_nd[i];
-          b_large_arr_[i] = b_large_nd[i];
-          lob_arr_[i] = lob_nd[i];
-          zob_arr_[i] = zob_nd[i];
+          b_small_arr_[i] = *it_small++;
+          b_large_arr_[i] = *it_large++;
+          lob_arr_[i] = *it_lob++;
+          zob_arr_[i] = *it_zob++;
         }
 
         // Determine grid dimensions (assume regular grid)
