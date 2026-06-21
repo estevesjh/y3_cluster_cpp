@@ -76,11 +76,14 @@ namespace y3_cuda {
     }
 
     explicit GAMMA_PRJ(cosmosis::DataBlock& sample)
-      : dsigma_hh_(make_Interp2D(sample, "haloModel", "r_sigma", "z", "DSigma_hh"))
-      , bias_(make_Interp2D(sample, "haloModel", "lnM", "z", "bias"))
+      // DSigma_hh has shape (n_z, n_r), so x-axis = z (rows), y-axis = r_sigma (cols)
+      : dsigma_hh_(make_Interp2D(sample, "haloModel", "z", "r_sigma", "DSigma_hh"))
+      // bias has shape (n_z, n_M), so x-axis = z (rows), y-axis = lnM (cols)
+      , bias_(make_Interp2D(sample, "haloModel", "z", "lnM", "bias"))
+      // sigma_crit_inv has shape (n_z, n_r), so x-axis = z (rows), y-axis = r_sigma (cols)
       , sigma_crit_inv_(make_Interp2D(sample,
-                                      "haloModel", "z",
-                                      "haloModel", "r_sigma",
+                                      "sigmaCritInv", "z",
+                                      "sigmaCritInv", "r_sigma",
                                       "sigmaCritInv", "sigma_crit_inv"))
       , chi_(make_Interp1D(sample, "distances", "z", "d_c"))
     {
@@ -178,13 +181,13 @@ namespace y3_cuda {
     __host__ __device__ double
     operator()(double r, double lnM, double zt, double lo) const
     {
-      // 2-halo surface density
-      double const dsigma_2h = dsigma_hh_.clamp(r, zt);
+      // 2-halo surface density: DSigma_hh(z, r) - x=z, y=r
+      double const dsigma_2h = dsigma_hh_.clamp(zt, r);
 
-      // Halo bias
-      double const b_Mz = bias_.clamp(lnM, zt);
+      // Halo bias: bias(z, lnM) - x=z, y=lnM
+      double const b_Mz = bias_.clamp(zt, lnM);
 
-      // Inverse critical surface density
+      // Inverse critical surface density: sigma_crit_inv(z, r) - x=z, y=r
       double const sigc_inv = sigma_crit_inv_.clamp(zt, r);
 
       // Selection bias correction
@@ -213,8 +216,8 @@ namespace y3_cuda {
     __host__ __device__ double
     operator()(double r, double lnM, double zt) const
     {
-      double const dsigma_2h = dsigma_hh_.clamp(r, zt);
-      double const b_Mz = bias_.clamp(lnM, zt);
+      double const dsigma_2h = dsigma_hh_.clamp(zt, r);
+      double const b_Mz = bias_.clamp(zt, lnM);
       double const sigc_inv = sigma_crit_inv_.clamp(zt, r);
       // No selection bias correction
       return dsigma_2h * b_Mz * sigc_inv;
