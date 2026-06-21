@@ -1,4 +1,4 @@
-// bSelMargGPU.cu -- Unified GPU module for Costanzi-2026 selection bias
+// bselmarggpu.cu -- Unified GPU module for Costanzi-2026 selection bias
 //
 // Computes P1, I1, J, b_eff and the marginalized asymptotes B_small, B_large.
 //
@@ -43,7 +43,7 @@ namespace {
   BSelMargGPUConfig
   read_config(DataBlock& cfg)
   {
-    char const* label = "bSelMargGPU";
+    char const* label = "bselmarggpu";
     BSelMargGPUConfig c;
 
     // Integration bounds
