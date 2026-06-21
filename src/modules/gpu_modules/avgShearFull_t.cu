@@ -160,6 +160,11 @@ avgShearFull_t::operator()(double lo,
                         double zt,
                         double lnM) const
 {
+  // DEBUG: Return constant to test integration framework
+  // TODO: Restore full physics once segfault is fixed
+  return 1.0e-10;
+
+  /*
   // For any data members of type std::optional<X>, we have to use operator*
   // to access the X object (as if we were dereferencing a pointer).
   double const lc = lo;
@@ -176,6 +181,7 @@ avgShearFull_t::operator()(double lo,
   auto const val = gamma_total * (*lc_lt)(lc, lt, zt) *
                    (*int_zo_zt)(zo_low_, zo_high_, zt) * common_term;
   return val;
+  */
 }
 
 // string must match section block in pipeline.ini file
