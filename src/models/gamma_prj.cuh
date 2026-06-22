@@ -16,7 +16,7 @@
 #include "cosmosis/datablock/datablock.hh"
 #include "cosmosis/datablock/ndarray.hh"
 #include "common/cuda/Interp2D.cuh"
-#include "utils/make_interp_1d.cuh"
+#include "utils/cuda_interp_1d.cuh"  // gpu_support::Interp1D that owns its data
 #include "utils/make_interp_2d.cuh"
 #include "utils/datablock_reader.hh"
 #include "models/b_sel.cuh"  // For b_sel_sigmoid, R_lambda, theta_lob
@@ -42,7 +42,8 @@ namespace y3_cuda {
     quad::Interp2D sigma_crit_inv_;
 
     // Comoving distance chi(z) for theta calculation
-    quad::Interp1D chi_;
+    // Use gpu_support::Interp1D which owns its data (avoids dangling pointer bug)
+    gpu_support::Interp1D chi_;
 
     // B_small, B_large from bSelMargGPU - GPU-compatible fixed arrays
     double b_small_arr_[MAX_BSEL_GRID];
@@ -76,16 +77,18 @@ namespace y3_cuda {
     }
 
     explicit GAMMA_PRJ(cosmosis::DataBlock& sample)
-      // DSigma_hh has shape (n_z, n_r), so x-axis = z (rows), y-axis = r_sigma (cols)
-      : dsigma_hh_(make_Interp2D(sample, "haloModel", "z", "r_sigma", "DSigma_hh"))
+      // dSigma_hh has shape (n_z, n_r), so x-axis = z (rows), y-axis = r_sigma (cols)
+      : dsigma_hh_(make_Interp2D(sample, "haloModel", "z", "r_sigma", "dSigma_hh"))
       // bias has shape (n_z, n_M), so x-axis = z (rows), y-axis = lnM (cols)
       , bias_(make_Interp2D(sample, "haloModel", "z", "lnM", "bias"))
-      // sigma_crit_inv has shape (n_z, n_r), so x-axis = z (rows), y-axis = r_sigma (cols)
+      // sigma_crit_inv has shape (n_z, n_r), x-axis = z, y-axis = r_sigma
       , sigma_crit_inv_(make_Interp2D(sample,
                                       "sigmaCritInv", "z",
                                       "sigmaCritInv", "r_sigma",
                                       "sigmaCritInv", "sigma_crit_inv"))
-      , chi_(make_Interp1D(sample, "distances", "z", "d_c"))
+      // Construct gpu_support::Interp1D directly (owns its data, no dangling pointers)
+      , chi_(sample.view<std::vector<double>>("distances", "z"),
+             sample.view<std::vector<double>>("distances", "d_c"))
     {
       // Initialize arrays to defaults
       for (int i = 0; i < MAX_BSEL_GRID; ++i) {

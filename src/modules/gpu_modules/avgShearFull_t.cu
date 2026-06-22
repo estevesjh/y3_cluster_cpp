@@ -20,7 +20,6 @@
 #include "models/gamma_1h_nfw.cuh"  // gamma_1h (1-halo term)
 #include "models/gamma_prj.cuh"     // gamma_prj (2-halo term with selection bias) 
 
-#include <iostream>
 #include <optional>
 #include <vector>
 
@@ -130,15 +129,12 @@ avgShearFull_t::avgShearFull_t( DataBlock& cfg)
 void
 avgShearFull_t::set_sample(DataBlock& sample)
 {
-  // If we had a data member of type std::optional<X>, we would set the
-  // value using std::optional::emplace(...) here. emplace takes a set
-  // of arguments that it passes to the constructor of X.
   omega_z.emplace(sample);
   dv_do_dz.emplace(sample);
   hmf.emplace(sample);
   mor.emplace(sample);
   lc_lt.emplace(sample);
-  int_zo_zt.emplace();  // Default constructor, no DataBlock needed
+  int_zo_zt.emplace();
   gamma_1h.emplace(sample);
   gamma_prj.emplace(sample);
 }
@@ -150,7 +146,6 @@ avgShearFull_t::set_grid_point(
   radius_ = grid_point[2];
   zo_low_ = grid_point[0];
   zo_high_ = grid_point[1];
-  // Set grid point for gamma_prj (needs zob for selection bias calculation)
   gamma_prj->set_grid_point(zo_low_, zo_high_);
 }
 
@@ -160,11 +155,6 @@ avgShearFull_t::operator()(double lo,
                         double zt,
                         double lnM) const
 {
-  // DEBUG: Return constant to test integration framework
-  // TODO: Restore full physics once segfault is fixed
-  return 1.0e-10;
-
-  /*
   // For any data members of type std::optional<X>, we have to use operator*
   // to access the X object (as if we were dereferencing a pointer).
   double const lc = lo;
@@ -181,7 +171,6 @@ avgShearFull_t::operator()(double lo,
   auto const val = gamma_total * (*lc_lt)(lc, lt, zt) *
                    (*int_zo_zt)(zo_low_, zo_high_, zt) * common_term;
   return val;
-  */
 }
 
 // string must match section block in pipeline.ini file

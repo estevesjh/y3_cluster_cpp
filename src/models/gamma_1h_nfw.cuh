@@ -30,12 +30,12 @@ namespace y3_cuda {
     {}
 
     explicit GAMMA_1H_NFW(cosmosis::DataBlock& sample)
-      // DSigma_nfw has shape (n_M, n_R), so x-axis = lnM (rows), y-axis = r_sigma (cols)
+      // dSigma_nfw has shape (n_M, n_R), so x-axis = lnM (rows), y-axis = r_sigma (cols)
       : _dsigma_nfw(make_Interp2D(sample,
                                   "haloModel",
                                   "lnM",
                                   "r_sigma",
-                                  "DSigma_nfw"))
+                                  "dSigma_nfw"))
       // sigma_crit_inv has shape (n_z, n_r), so x-axis = z (rows), y-axis = r_sigma (cols)
       , _sigma_crit_inv(make_Interp2D(sample,
                                       "sigmaCritInv",
