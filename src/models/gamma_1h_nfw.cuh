@@ -30,18 +30,20 @@ namespace y3_cuda {
     {}
 
     explicit GAMMA_1H_NFW(cosmosis::DataBlock& sample)
-      // dSigma_nfw has shape (n_M, n_R), so x-axis = lnM (rows), y-axis = r_sigma (cols)
+      // quad::Interp2D(xs, ys, zs) stores xs→cols, ys→rows.
+      // dSigma_nfw shape (n_M, n_r) from Python means M varies on rows, r on cols.
+      // Swap axis order so cols=n_r, rows=n_M. Call as clamp(lnM, r) works after swapping.
       : _dsigma_nfw(make_Interp2D(sample,
                                   "haloModel",
-                                  "lnM",
                                   "r_sigma",
+                                  "lnM",
                                   "dSigma_nfw"))
-      // sigma_crit_inv has shape (n_z, n_r), so x-axis = z (rows), y-axis = r_sigma (cols)
+      // sigma_crit_inv shape (n_z, n_r): z→rows, r→cols. Swap: xs=r_sigma, ys=z.
       , _sigma_crit_inv(make_Interp2D(sample,
                                       "sigmaCritInv",
-                                      "z",
-                                      "sigmaCritInv",
                                       "r_sigma",
+                                      "sigmaCritInv",
+                                      "z",
                                       "sigmaCritInv",
                                       "sigma_crit_inv"))
     {}
@@ -50,10 +52,10 @@ namespace y3_cuda {
     operator()(double r, double lnM, double zt) const
     /* r in h^-1 Mpc */ /* M in h^-1 M_solar, represented by lnM */
     {
-      // DSigma_nfw(lnM, r) - x=lnM, y=r
-      double const dsigma_1h = _dsigma_nfw.clamp(lnM, r);
-      // sigma_crit_inv(z, r) - x=z, y=r
-      double const sigc_inv = _sigma_crit_inv.clamp(zt, r);
+      // After axis swap: xs=r_sigma (cols), ys=lnM (rows). Call as clamp(r, lnM).
+      double const dsigma_1h = _dsigma_nfw.clamp(r, lnM);
+      // After axis swap: xs=r_sigma (cols), ys=z (rows). Call as clamp(r, z).
+      double const sigc_inv = _sigma_crit_inv.clamp(r, zt);
       return dsigma_1h * sigc_inv;
     }
   };

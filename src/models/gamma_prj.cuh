@@ -77,14 +77,15 @@ namespace y3_cuda {
     }
 
     explicit GAMMA_PRJ(cosmosis::DataBlock& sample)
-      // dSigma_hh has shape (n_z, n_r), so x-axis = z (rows), y-axis = r_sigma (cols)
-      : dsigma_hh_(make_Interp2D(sample, "haloModel", "z", "r_sigma", "dSigma_hh"))
-      // bias has shape (n_z, n_M), so x-axis = z (rows), y-axis = lnM (cols)
-      , bias_(make_Interp2D(sample, "haloModel", "z", "lnM", "bias"))
-      // sigma_crit_inv has shape (n_z, n_r), x-axis = z, y-axis = r_sigma
+      // quad::Interp2D(xs, ys, zs) stores xs→cols, ys→rows.
+      // dSigma_hh shape (n_z, n_Rp): z→rows, Rp→cols. Swap: xs=Rp, ys=z.
+      : dsigma_hh_(make_Interp2D(sample, "haloModel", "Rp", "z", "dSigma_hh"))
+      // bias shape (n_z, n_M): z→rows, lnM→cols. Swap: xs=lnM, ys=z.
+      , bias_(make_Interp2D(sample, "haloModel", "lnM", "z", "bias"))
+      // sigma_crit_inv shape (n_z, n_r): z→rows, r_sigma→cols. Swap: xs=r_sigma, ys=z.
       , sigma_crit_inv_(make_Interp2D(sample,
-                                      "sigmaCritInv", "z",
                                       "sigmaCritInv", "r_sigma",
+                                      "sigmaCritInv", "z",
                                       "sigmaCritInv", "sigma_crit_inv"))
       // Construct gpu_support::Interp1D directly (owns its data, no dangling pointers)
       , chi_(sample.view<std::vector<double>>("distances", "z"),
@@ -184,14 +185,14 @@ namespace y3_cuda {
     __host__ __device__ double
     operator()(double r, double lnM, double zt, double lo) const
     {
-      // 2-halo surface density: DSigma_hh(z, r) - x=z, y=r
-      double const dsigma_2h = dsigma_hh_.clamp(zt, r);
+      // After axis swap: xs=Rp (cols), ys=z (rows). Call as clamp(r, zt).
+      double const dsigma_2h = dsigma_hh_.clamp(r, zt);
 
-      // Halo bias: bias(z, lnM) - x=z, y=lnM
-      double const b_Mz = bias_.clamp(zt, lnM);
+      // After axis swap: xs=lnM (cols), ys=z (rows). Call as clamp(lnM, zt).
+      double const b_Mz = bias_.clamp(lnM, zt);
 
-      // Inverse critical surface density: sigma_crit_inv(z, r) - x=z, y=r
-      double const sigc_inv = sigma_crit_inv_.clamp(zt, r);
+      // After axis swap: xs=r_sigma (cols), ys=z (rows). Call as clamp(r, zt).
+      double const sigc_inv = sigma_crit_inv_.clamp(r, zt);
 
       // Selection bias correction
       // theta = angular separation = r / D_A(zob)

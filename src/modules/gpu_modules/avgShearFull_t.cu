@@ -1,3 +1,19 @@
+// Average shear GPU module with 3D integration.
+//
+// Integrating over (lt, zt, lnM). The lo (observed richness) integral is done
+// analytically via the EMG CDF, matching the pattern used in numberCountsFull_t.
+//
+// Integrand:
+//
+//   <gamma>_ij = int dlt int dzt int dlnM
+//       Omega(z) * (dV/dOmega/dz)(z) * n(M,z)
+//       * P_HOD(lt | M,z)
+//       * K_i(lo_low, lo_high | lt, z)     [EMG CDF difference]
+//       * K_j(zo_low, zo_high | z)          [photo-z kernel]
+//       * (gamma_1h(r, M, z) + gamma_prj(r, M, z))
+//
+// Grid: (lo_bin_low, lo_bin_high, zo_low, zo_high, radius)
+
 #include "utils/make_cuda_integration_volumes.cuh"
 #include "utils/datablock_reader.hh"
 #include "utils/cuda_module_macros.cuh"
@@ -13,12 +29,10 @@
 #include "models/dv_do_dz_t.cuh"
 #include "models/hmf_t.cuh"
 #include "models/mor_des_log_t.cuh"
-#include "models/int_lc_lt_des_t.cuh"
-#include "models/roffset_t.cuh"
-#include "models/int_zo_zt_des_t.cuh"
-// gamma_total = gamma_1h + gamma_prj
-#include "models/gamma_1h_nfw.cuh"  // gamma_1h (1-halo term)
-#include "models/gamma_prj.cuh"     // gamma_prj (2-halo term with selection bias) 
+#include "models/emg_des_t.cuh"        // EMG CDF for analytic lo integral
+#include "models/int_zo_zt_des_t.cuh"  // photo-z kernel
+#include "models/gamma_1h_nfw.cuh"
+#include "models/gamma_prj.cuh"
 
 #include <optional>
 #include <vector>
@@ -27,183 +41,99 @@ using cosmosis::DataBlock;
 using cosmosis::ndarray;
 using cubacpp::integration_result;
 
-// This is a class that models the concept of
-// "CosmoSISCUDAScalarIntegrand", and is thus suitable for use as the template
-// parameter for the class template CosmoSISScalarIntegrationModule.
-//
 class avgShearFull_t {
 public:
-  using grid_t = y3_cluster::grid_t<3>;
+  // Grid point: (lo_bin_low, lo_bin_high, zo_low, zo_high, radius)
+  using grid_t = y3_cluster::grid_t<5>;
   using grid_point_t = grid_t::value_type;
 
 private:
-  // We define the type alias volume_t to be the right dimensionality
-  // of integration volume for our integrand. If we were to change the
-  // number of arguments required by the function call operator (below),
-  // we would need to also modify this type alias to keep consistent.
-  using volume_t = quad::Volume<double, 4>;
+  // 3D integration volume: (lt, zt, lnM) — lo integrated analytically via CDF.
+  using volume_t = quad::Volume<double, 3>;
 
-  // State obtained from configuration. These things should be set in the
-  // constructor.
-  // <none in this example>
+  std::optional<y3_cuda::OMEGA_Z_DES>     omega_z_;
+  std::optional<y3_cuda::DV_DO_DZ_t>      dv_do_dz_;
+  std::optional<y3_cuda::HMF_t>           hmf_;
+  std::optional<y3_cuda::MOR_DES_LOG_t>   mor_;
+  std::optional<y3_cuda::EMG_DES_t>       emg_;
+  std::optional<y3_cuda::INT_ZO_ZT_DES_t> int_zo_zt_;
+  std::optional<y3_cuda::GAMMA_1H_NFW>    gamma_1h_;
+  std::optional<y3_cuda::GAMMA_PRJ>       gamma_prj_;
 
-  // State obtained from each sample.
-  // If there were a type X that did not have a default constructor,
-  // we would use std::optional<X> as our data member.
-  //
-  std::optional<y3_cuda::OMEGA_Z_DES> omega_z;
-  std::optional<y3_cuda::DV_DO_DZ_t> dv_do_dz;
-  std::optional<y3_cuda::HMF_t> hmf;
-  std::optional<y3_cuda::MOR_DES_LOG_t> mor;
-  std::optional<y3_cuda::INT_LC_LT_DES_t> lc_lt;
-  std::optional<y3_cuda::INT_ZO_ZT_DES_t> int_zo_zt;
-  std::optional<y3_cuda::GAMMA_1H_NFW> gamma_1h;
-  std::optional<y3_cuda::GAMMA_PRJ> gamma_prj;
-
-  // State set for current 'bin' to be integrated.
+  // Current bin edges and radius from grid point.
+  double lo_low_;
+  double lo_high_;
   double zo_low_;
   double zo_high_;
   double radius_;
 
-  bool do_cartesian_product_of_bins_;
 public:
-  // Initialize my integrand object from the parameters read
-  // from the relevant block in the CosmoSIS ini file.
-  explicit avgShearFull_t(cosmosis::DataBlock& config);
+  explicit avgShearFull_t(cosmosis::DataBlock& /*cfg*/) {}
 
-  // Set any data members from values read from the current sample.
-  // Do not attempt to copy the sample!.
-  void set_sample(cosmosis::DataBlock& sample);
-
-  // Set the data for the current bin.
-  void set_grid_point(grid_point_t const& pt);
-
-
-  // The function to be integrated. All arguments to this function must be of
-  // type double, and there must be at least two of them (because our
-  // integration routine does not work for functions of one variable). The
-  // function is const because calling it does not change the state of the
-  // object.
-  __host__ __device__ double operator()(double lo, 
-                                        double lt, 
-                                        double zt, 
-                                        double lnM) const;
-
-  // module_label() is a non-member (static) function that returns the label for
-  // this module. The name this returns
-  // is the name that must be used in the 'ini file' for configuring the module
-  // made with this class.
-  // We return char const* rather than std::string to avoid some needless memory
-  // allocations.
-  static char const* module_label();
-
-  // The following non-member (static) function creates a vector of integration
-  // volumes (the type alias defined above) based on the parameters read from
-  // the configuration block for the module.
-  static std::vector<volume_t> make_integration_volumes(
-    cosmosis::DataBlock& cfg);
-
-  // The following non-member (static) function creates a vector of grid points
-  // on which the integration results are to be evaluated, based on parameters
-  // read from the configuration block for the module.
-  static grid_t make_grid_points(cosmosis::DataBlock& cfg);
-};
-
-// We write using declarations so that we don't have to type the namespace name
-// each time we use these names
-using cosmosis::DataBlock;
-using cubacpp::integration_result;
-
-avgShearFull_t::avgShearFull_t( DataBlock& cfg)
-{
-  auto rc = 
-    cfg.get_val(module_label(),
-                "do_cartesian_product_of_bins",
-                false,
-                do_cartesian_product_of_bins_);
-  if (rc != DBS_SUCCESS) {
-    throw std::runtime_error("summedNumbersCentY1 failed to find do_cartesian_product_of_bins\n");
+  void set_sample(cosmosis::DataBlock& sample) {
+    omega_z_.emplace(sample);
+    dv_do_dz_.emplace(sample);
+    hmf_.emplace(sample);
+    mor_.emplace(sample);
+    emg_.emplace(sample);
+    int_zo_zt_.emplace();
+    gamma_1h_.emplace(sample);
+    gamma_prj_.emplace(sample);
   }
-}
 
-void
-avgShearFull_t::set_sample(DataBlock& sample)
-{
-  omega_z.emplace(sample);
-  dv_do_dz.emplace(sample);
-  hmf.emplace(sample);
-  mor.emplace(sample);
-  lc_lt.emplace(sample);
-  int_zo_zt.emplace();
-  gamma_1h.emplace(sample);
-  gamma_prj.emplace(sample);
-}
+  void set_grid_point(grid_point_t const& pt) {
+    lo_low_  = pt[0];
+    lo_high_ = pt[1];
+    zo_low_  = pt[2];
+    zo_high_ = pt[3];
+    radius_  = pt[4];
+    gamma_prj_->set_grid_point(zo_low_, zo_high_);
+  }
 
-void
-avgShearFull_t::set_grid_point(
-  grid_point_t const& grid_point)
-{
-  radius_ = grid_point[2];
-  zo_low_ = grid_point[0];
-  zo_high_ = grid_point[1];
-  gamma_prj->set_grid_point(zo_low_, zo_high_);
-}
+  __host__ __device__ double
+  operator()(double lt, double zt, double lnM) const
+  {
+    // Richness selection kernel: EMG CDF difference over [lo_low, lo_high].
+    double const Ki_raw = emg_->cdf(lo_high_, lt, zt) - emg_->cdf(lo_low_, lt, zt);
+    double const Ki = fmin(1.0, fmax(0.0, Ki_raw));
+    if (Ki <= 0.0) return 0.0;
 
-__host__ __device__ double
-avgShearFull_t::operator()(double lo,
-                        double lt,
-                        double zt,
-                        double lnM) const
-{
-  // For any data members of type std::optional<X>, we have to use operator*
-  // to access the X object (as if we were dereferencing a pointer).
-  double const lc = lo;
-  double const mor_v = (*mor)(lo, lnM, zt);
-  double common_term = (*omega_z)(zt) * (*dv_do_dz)(zt) * (*hmf)(lnM, zt) * mor_v;
+    // Photo-z kernel: integral of P(zo | zt) over [zo_low, zo_high].
+    double const Kj = (*int_zo_zt_)(zo_low_, zo_high_, zt);
+    if (Kj <= 0.0) return 0.0;
 
-  // gamma_total = gamma_1h + gamma_prj
-  // gamma_1h: 1-halo term (cluster's own NFW profile)
-  // gamma_prj: 2-halo term with selection bias correction
-  double const g_1h = (*gamma_1h)(radius_, lnM, zt);
-  double const g_prj = (*gamma_prj)(radius_, lnM, zt, lo);  // lo for b_sel lookup
-  double const gamma_total = g_1h + g_prj;
+    // MOR: P_HOD(lt | M, z).
+    double const p_hod = (*mor_)(lt, lnM, zt);
+    if (p_hod <= 0.0) return 0.0;
 
-  auto const val = gamma_total * (*lc_lt)(lc, lt, zt) *
-                   (*int_zo_zt)(zo_low_, zo_high_, zt) * common_term;
-  return val;
-}
+    // Cosmology factors.
+    double const common = (*omega_z_)(zt) * (*dv_do_dz_)(zt) * (*hmf_)(lnM, zt);
 
-// string must match section block in pipeline.ini file
-char const*
-avgShearFull_t::module_label()
-{
-  return "gammaShear";
-}
+    // Total shear: 1h + 2h. gamma_prj uses dSigma_hh which is NaN at small r
+    // (where the 2h term is unphysically negative); treat those as zero.
+    double const g1h = (*gamma_1h_)(radius_, lnM, zt);
+    double const g2h = (*gamma_prj_)(radius_, lnM, zt);
+    double const gamma_total = (isfinite(g1h) ? g1h : 0.0)
+                             + (isfinite(g2h) ? g2h : 0.0);
 
-// The implementation of make_integration_volumes can be almost the same for
-// any CosmoSISIntegrand-type class. Only the names and number of the parameters
-// provided need to be changed. It is critical that the names be given in the
-// order that correspond to the order of arguments in the class's function call
-// operator. While the compiler can verify the number of arguments provided is
-// correct, it can not verify that their order matches the order of arguments in
-// the function call operator.
-std::vector<avgShearFull_t::volume_t>
-avgShearFull_t::make_integration_volumes(
-  cosmosis::DataBlock& cfg)
-{
-  return y3_cuda::make_integration_volumes_wall_of_numbers(
-    cfg, avgShearFull_t::module_label(), "lo", "lt", "zt", "lnm");
-}
+    return common * p_hod * Ki * Kj * gamma_total;
+  }
 
-avgShearFull_t::grid_t
-avgShearFull_t::make_grid_points(cosmosis::DataBlock& cfg)
-{
-  return y3_cluster::make_grid_points_wall_of_numbers(
-    cfg,
-    avgShearFull_t::module_label(),
-    "zo_low",
-    "zo_high",
-    "radii");
-}
+  static char const* module_label() { return "gammaShear"; }
+
+  static std::vector<volume_t>
+  make_integration_volumes(cosmosis::DataBlock& cfg) {
+    return y3_cuda::make_integration_volumes_wall_of_numbers(
+      cfg, module_label(), "lt", "zt", "lnm");
+  }
+
+  static grid_t make_grid_points(cosmosis::DataBlock& cfg) {
+    return y3_cluster::make_grid_points_wall_of_numbers(
+      cfg, module_label(),
+      "lo_bin_low", "lo_bin_high",
+      "zo_low", "zo_high",
+      "radii");
+  }
+};
 
 DEFINE_COSMOSIS_CUDA_INTEGRATION_MODULE(avgShearFull_t)
