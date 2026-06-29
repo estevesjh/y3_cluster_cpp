@@ -111,7 +111,7 @@ source ${COSMOSIS_REPO_DIR}/setup-cosmosis-nersc \
 Move into your own working copy:
 
 ```bash
-export MY_TOP_DIR=/global/common/software/des/$(id -un)   # or any writable dir
+export MY_TOP_DIR=/global/common/software/des/$(id -un)   # or any writable dir, e.g. point to /pscratch/... 
 mkdir -p ${MY_TOP_DIR}
 cd ${MY_TOP_DIR}
 ```
@@ -217,7 +217,7 @@ If configure fails, **delete the `release-build/` directory and start over**
 | `Package cray-xpmem was not found` during `cmake` | Homebrew `pkg-config` shadows the system one | Strip `~/homebrew/bin` from PATH (step 4) |
 | `unsupported GNU version` from nvcc | gcc-native 13+ left active | `module swap gcc-native/13.2 gcc-native/12.3` |
 | `NVTX_LIBRARY NOTFOUND` at generate step | cudatoolkit/12.9 left active | `module swap cudatoolkit/12.9 cudatoolkit/12.2` |
-| Tests fail with `REQUIRE( out.good() )` or "file not found" under `data/` | `Y3_CLUSTER_CPP_DIR` doesn't point at the source root | `export Y3_CLUSTER_CPP_DIR=${Y3PIPE_DIR}` and re-run |
+| Tests fail with `REQUIRE( out.good() )` or "file not found" under `data/` | `Y3_CLUSTER_CPP_DIR` doesn't point at the source root (e.g. at `/pscratch/...`)) and `make_ofstream()` cannot create output files | run `export Y3_CLUSTER_CPP_DIR=${Y3PIPE_DIR}`, where `${Y3PIPE_DIR}` should be the path to the writable clone of the repository (e.g. under /pscratch/...). Make sure that `data/` and `validation-data/` directories exit and are writable. Then, re-run `ctest` |
 | `MPI.COMM_WORLD.Get_size() == 1` under `srun` for a CosmoSIS run | conda `mpi4py` not linked to Cray MPICH | Use `cosmosis --smp=N` or a SLURM job array; see `~/.claude/CLAUDE.md` "MPI at NERSC" |
 | `SIGSTKSZ` errors compiling the test binaries | Catch2 patch (step 5) wasn't applied to *this* tree | Re-apply the three patches |
 
