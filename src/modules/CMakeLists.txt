@@ -44,6 +44,41 @@ add_subdirectory(sigma_prj_cpu)
 # Brute-force triple-integral N_i[1] reference (no miscentering, no photo-z)
 # used to validate the n_operator_sel family on the same datablock layout.
 add_subdirectory(num_counts_full)
+
+# des_y3 Phase 2 backends (docs/module_reorganization_plan.md): new
+# maintained implementations live under src/pipelines/des_y3 and are
+# registered here with explicit binary dirs.
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/radial_series/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_radial_series_cpp)
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/number_counts/full_ltmz/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_full_ltmz_cpp)
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/number_counts/full_ltmz/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_full_ltmz_cuda)
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/full_ltmz/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_full_ltmz_cpp)
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_projection/fast_mass/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_fast_mass_cpp)
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/full_ltmz/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_full_ltmz_cuda)
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_fast_mass_cpp)
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_projection/full_ltmz/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_full_ltmz_cuda)
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_projection/fast_mass/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_frozen_cuda)
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_1h2h_max_cuda)
+
 # Many of these are historical
 # add_subdirectory(DESxSPTModule)
 # add_subdirectory(sigma_kappa_y1)

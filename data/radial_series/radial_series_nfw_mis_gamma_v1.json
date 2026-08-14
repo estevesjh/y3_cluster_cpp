@@ -1,0 +1,71 @@
+{
+  "name": "radial_series_nfw_mis_gamma_v1",
+  "format_version": 1,
+  "generated": "2026-08-12",
+  "generator": "src/pipelines/des_y3/observables/shear_1h2h/radial_series/python/generate_radial_series_tables.py",
+  "profile": {
+    "family": "NFW centred (Wright & Brainerd 2000) + gamma-kernel miscentred, exactly the src/models/nfw_dsigma_mis.hh conventions",
+    "concentration": 4.0,
+    "rho_crit_msun_mpc3": 277533742639.0,
+    "delta_c": 5271.147547112249,
+    "boundary": "200c on rho_crit; r_s = r_200 / c",
+    "miscentering_kernel": "gamma: P(R_mis | s) = (R_mis / s^2) exp(-R_mis / s), s = x_mis r_s",
+    "amplitude": "DSigma = A_sample * A0(y) * u; A0(y) = 2 e^y delta_c rho_crit * 1e-12 [Msun/(h pc^2)]; A_sample = 1 (centred) or rho_mult = Omega_m (miscentred), per sample",
+    "coordinates": "x = R e^-y, x_mis = r_mis e^-y, y = ln r_s(M)"
+  },
+  "contents": {
+    "U{ell}_mis": "(1/ell!) (1-L)^ell u_mis on (lnx, lnxm) axes, L = d/dlnx + d/dlnxm; array layout [ix, ixm]",
+    "U{ell}_cen": "(1/ell!) (1-L)^ell u_cen on the lnx axis",
+    "U1": "retained for validation only; mu_1 vanishes by construction in the population series"
+  },
+  "axes": {
+    "lnx": [
+      -6.925000000000178,
+      8.524999999998943,
+      619
+    ],
+    "lnxm": [
+      -4.625,
+      3.0000000000001084,
+      306
+    ],
+    "note": "lnxm domain is reduced vs the source table (x_mis <= 20; production usage is x_mis <~ 2); evaluators clamp at the edges like Interp2D::clamp"
+  },
+  "numerics": {
+    "computation_grid_spacing": 0.0125,
+    "sigma_off_quadrature": "split GL 64+64, phi0=0.1, cubic squeeze; rel err <= ~6e-11",
+    "sbar": "cumulative Simpson + analytic linear head",
+    "derivatives": "9-point central stencils along the exact (ln x, ln v) diagonal of e^s u",
+    "gamma_average": "composite Simpson over the uniform ln v grid (matrix product); O(h^3) local error at the offset = radius crease, analytic below-grid tail"
+  },
+  "source_tables": {
+    "role": "cross-check only (U_0 fidelity); the noisy source table is NOT differentiated",
+    "sha256": {
+      "table_1000_1e-03_5e+03_gamma_logx.txt": "42aa73a6aeee41697660faaa74f244ec05f224612a785672a6e6a6f0510b727c",
+      "table_1000_1e-03_5e+03_gamma_logxmis.txt": "f6a047ba4f87dcacbe1e3a0f33d9d90294815ba95afde50bacd7f40de3dde267",
+      "table_1000_1e-03_5e+03_log_deltasigma_gamma.txt": "f1bbf71e1c9fc6e1154afd6ef774c402b573fa57f6ab79c27cb0dccad73ba5c5"
+    }
+  },
+  "self_checks": {
+    "cen_vs_mpmath_taylor_max_rel": [
+      2.1532372489285897e-16,
+      4.190296339970173e-14,
+      4.3650748135192885e-12,
+      1.5995133681875428e-10
+    ],
+    "u0_vs_source_table": {
+      "ln_dev_where_unsuppressed": {
+        "median": 1.6928657529891034e-05,
+        "p99": 0.00030048712166565536,
+        "max": 0.0003787501255336778
+      },
+      "abs_dev_over_u_cen": {
+        "median": 4.813799069359662e-06,
+        "p99": 0.00021503459031353524,
+        "max": 0.00031615855139897377
+      }
+    },
+    "gamma_average_max_rel": 0.0002439886371126143
+  },
+  "interpolation": "cubic splines on the stored axes are adequate; see validate_radial_series.py for measured interpolation + truncation tolerances"
+}
