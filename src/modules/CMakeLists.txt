@@ -49,6 +49,9 @@ add_subdirectory(num_counts_full)
 # maintained implementations live under src/pipelines/des_y3 and are
 # registered here with explicit binary dirs.
 add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/number_counts/fast_mass/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_fast_mass_cpp)
+add_subdirectory(
   ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/radial_series/cpp
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_radial_series_cpp)
 add_subdirectory(
