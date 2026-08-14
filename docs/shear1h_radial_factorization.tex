@@ -1,0 +1,1099 @@
+\documentclass[a4paper, 11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[
+  left = 20mm, right = 20mm, top = 22mm, bottom = 22mm,
+]{geometry}
+
+\usepackage{amsmath,amsfonts,amssymb,bm}
+\usepackage[english]{babel}
+\usepackage{natbib}
+\usepackage{hyperref}
+\usepackage{orcidlink}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{float}
+
+\definecolor{harvardcrimson}{HTML}{8C1D40}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=harvardcrimson,
+  citecolor=harvardcrimson,
+  urlcolor=harvardcrimson,
+  hypertexnames=false,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\textcolor{harvardcrimson}{\textbf{\texttt{y3\_cluster\_cpp}: factoring $R$ out of the \texttt{DSigma1h} mass integral}}}
+\lhead{\textcolor{harvardcrimson}{\textbf{J.\,H.\,Esteves}}}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\setlength{\headheight}{14pt}
+
+\renewcommand{\baselinestretch}{1.15}
+\setlength{\emergencystretch}{3em}
+\sloppy
+
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.95}
+\setlength{\intextsep}{8pt}
+\setlength{\textfloatsep}{10pt}
+\setlength{\floatsep}{10pt}
+
+\newcommand{\hMpc}{h^{-1}\,\mathrm{Mpc}}
+\newcommand{\hMsun}{h^{-1}\,M_{\odot}}
+\newcommand{\avg}[1]{\langle #1 \rangle}
+\newcommand{\lnM}{\ln M}
+\newcommand{\rs}{r_s}
+\newcommand{\reff}{\hat r_s}
+\newcommand{\reffi}[1]{\hat r_{s,#1}}
+\newcommand{\yeff}{\hat y}
+\newcommand{\Aeff}{\hat A}
+\newcommand{\dVdz}{\dfrac{dV}{d\Omega\,dz}}
+\newcommand{\DSnfw}{\Delta\Sigma_{\rm NFW}}
+\newcommand{\rmis}{R_{\rm mis}}
+\newcommand{\DSoh}{\Delta\Sigma_{1h}}
+\newcommand{\obsij}[1]{\langle \DSoh(#1)\rangle_{ij}}
+\newcommand{\Wcal}{\mathcal{W}}
+\newcommand{\Lop}{\mathsf{L}}
+\newcommand{\pyfile}[1]{{\small\texttt{#1}}}
+
+\title{\texorpdfstring{%
+\textcolor{harvardcrimson}{\textbf{\texttt{y3\_cluster\_cpp}:\\
+factoring the radial dependence out of the \texttt{DSigma1h} mass integral}}%
+}{y3_cluster_cpp: factoring the radial dependence out of the DSigma1h mass integral}}
+\author{Johnny H.\ Esteves\,\orcidlink{0000-0003-4373-2386}\\[2pt]
+{\small Department of Physics, Harvard University}}
+\date{\today}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\paragraph{What this note is about, in one paragraph.} The pipeline
+predicts the stacked 1-halo excess surface density,
+$\obsij{R}$, for every richness bin $i$ and redshift bin $j$, by
+running a fresh 2-D quadrature over halo mass and redshift for
+\emph{every single radius $R$ on the grid}. That is the slow part
+of the whole lensing calculation: cost grows as
+$N_{\rm radii}\times N_{\rm bins}\times(\text{mass--redshift
+quadrature cost})$, and the radius grid is the multiplier we would
+most like to get rid of. This note walks through two separate
+ideas for doing that, one exact and one approximate, building each
+step from a plain-language argument before writing down the
+formula. \S\ref{sec:exact} shows that the redshift integral can be
+removed \emph{completely for free} --- no approximation, just a
+reordering of the integral --- because of a specific, checkable
+fact about this model's NFW profile. \S\ref{sec:setup}--\S\ref{sec:approaches}
+then tackle the harder part, the radial dependence hiding inside
+the remaining mass integral, and lay out three increasingly
+sophisticated ways to pull it out. \S\ref{sec:comparison} compares
+them side by side and recommends where to start.
+\S\ref{sec:validation} then checks all of this numerically: the NFW
+shape function is cross-checked against an independent projection of
+the 3-D density, and the three ideas are tested against the exact
+mass integral for a representative mass weight spanning the
+$\sigma_{\lnM}$ range discussed throughout. \S\ref{sec:mis} then
+extends the same machinery to the pipeline's actual observable ---
+the miscentered mixture, \texttt{DSigma1hMisSel} --- and shows this
+needs no new derivation, only a small generalisation of Idea 2.
+Finally, \S\ref{sec:real_validation} repeats the whole check against
+a real running \texttt{cosmosis} sample --- real mass function, real
+selection function, real halo-model and miscentering tables, cross-checked
+directly against \texttt{NumCountsSel.so} and \texttt{Shear1hMisSel.so}
+--- confirming the synthetic-weight conclusion holds with the real
+pipeline ingredients.
+
+\tableofcontents
+
+\section{The observable, and why it is expensive}
+\label{sec:exact}
+
+\subsection{What \texorpdfstring{$\obsij{R}$}{<DeltaSigma\_1h(R)>\_ij} means, in words}
+
+Picture a bin of galaxy clusters, selected because they have
+observed richness in some range $i$ and photometric redshift in
+some range $j$. Each of those clusters sits on top of a dark
+matter halo, and each halo gravitationally lenses the galaxies
+behind it. $\obsij{R}$ is the model's prediction for the
+\emph{average} lensing signal --- the excess surface mass density
+--- that this bin of clusters would produce at projected distance
+$R$ from their centres, if we could stack thousands of them and
+average away the noise. It is built from three physical
+ingredients, multiplied together and summed over every halo that
+could possibly land in the bin:
+\begin{itemize}
+\item \textbf{How many halos are there?} The halo mass function
+      $n(M,z)$ counts halos of mass $M$ at redshift $z$ per unit
+      comoving volume; $\dVdz(z)\,\Omega(z)$ converts that into a
+      count per unit redshift, weighted by how much sky area the
+      survey covers at that redshift.
+\item \textbf{Which of those halos actually end up in our bin?}
+      Not every halo of mass $M$ at redshift $z$ is observed with
+      richness in range $i$ and photo-$z$ in range $j$ --- richness
+      and photo-$z$ are noisy proxies for the true $(M,z)$. The
+      selection function $S_{ij}(\lnM,z)$ is exactly this
+      probability, precomputed once by \texttt{sel\_function.py}
+      and factorised there as $S_{ij}=S_i(\lnM,z)\,K_j(z)$: a
+      richness-selection piece $S_i$ that does the heavy lifting in
+      mass, times a redshift-window piece $K_j$ that carves out
+      bin $j$ (\texttt{src/models/sel\_function\_t.hh}).
+\item \textbf{How strongly does each surviving halo lens?} That is
+      the actual physics term, $\DSnfw(R,\lnM)$: the excess surface
+      density of an NFW halo of mass $M$, evaluated at the radius
+      $R$ we care about. This is the \emph{only} place $R$ enters
+      the whole calculation.
+\end{itemize}
+Putting the three pieces together, the code
+(\texttt{NOperatorSelRadial<DSigma1hWeight>} in
+\texttt{src/models/n\_operator\_sel\_t.hh} and
+\texttt{src/modules/num\_counts\_sel/lensing\_weights.hh}) evaluates,
+for every bin $(i,j)$ and every radius $R$,
+\begin{align}
+N_{ij}(R) &= \int\! dz \int\! d\lnM\;
+n(M,z)\,\dVdz(z)\,\Omega(z)\, S_{ij}(\lnM,z)\,
+\DSnfw(R,\lnM),
+\notag\\
+\obsij{R} &= \frac{N_{ij}(R)}{N_{ij}},
+\label{eq:full}
+\end{align}
+where $N_{ij} = \int dz\int d\lnM\; n\,\dVdz\,\Omega\,S_{ij}$ is the
+same bin's halo count, with no $R$-dependence at all (this is what
+the \texttt{NumCounts} module computes). In words,
+eq.~\eqref{eq:full} says: \emph{count the
+halos that land in bin $(i,j)$, weight each one by how it lenses
+at radius $R$, and average.}
+
+\subsection{Why this is slow}
+
+Nothing in eq.~\eqref{eq:full} looks unusual --- it is a completely
+standard halo-model stacking integral. The expense is purely
+computational: the code cannot do the $(\lnM,z)$ quadrature once
+and reuse it, because the integrand at radius $R_1$ and the
+integrand at radius $R_2$ look different (they differ in the
+$\DSnfw(R,\lnM)$ factor), so \emph{the whole 2-D quadrature is
+rerun from scratch at every point of the radius grid}, for every
+bin. If there are, say, $20$ radii and $12$ richness$\times$redshift
+bins, that is $240$ independent 2-D quadratures where, as we are
+about to see, one would (almost) do.
+
+\subsection{A free win: the halo does not know which redshift bin it is in}
+\label{sec:zwin}
+
+Here is the key observation, and it is worth stating carefully
+because it is what makes \S\ref{sec:zwin} an \emph{exact}
+simplification rather than an approximation: \emph{look again at
+eq.~\eqref{eq:full} and ask which factors actually depend on $z$.}
+$n(M,z)$, $\dVdz(z)$, $\Omega(z)$, and $S_{ij}(\lnM,z)$ all do, by
+construction. But $\DSnfw(R,\lnM)$ --- the one factor that also
+depends on $R$ --- does not carry a $z$-argument at all in this
+model. That is because the NFW profile used here fixes the
+concentration at a constant, $c=4$, and defines the halo boundary
+with a fixed reference density $\rho_{\rm crit,0}$ (optionally
+rescaled by a constant $\Omega_m$ factor, but never by
+$\rho_{\rm crit}(z)$; see \texttt{src/models/nfw\_dsigma\_mis.hh}).
+Physically: a cluster's lensing \emph{shape} in this model is
+entirely a function of its mass, full stop --- redshift only ever
+enters through \emph{how many} halos of that mass exist and how
+likely they are to fall in bin $(i,j)$, never through what the
+profile itself looks like.
+
+Once you notice that, the reduction is just Fubini's theorem ---
+swap the order of integration and do the $z$-integral first, since
+$\DSnfw(R,\lnM)$ has nothing to do with $z$ and can be pulled
+outside it:
+\begin{equation}
+\boxed{\;
+\begin{aligned}
+\widehat W_{ij}(\lnM) &\equiv \int\! dz\;
+n(M,z)\,\dVdz(z)\,\Omega(z)\, S_{ij}(\lnM,z),\\[2pt]
+N_{ij}(R) &= \int\! d\lnM\; \widehat W_{ij}(\lnM)\,\DSnfw(R,\lnM).
+\end{aligned}
+\;}
+\label{eq:reduction}
+\end{equation}
+In words: build a mass-only weight $\widehat W_{ij}(\lnM)$ once per
+bin --- how many halos of mass $M$, integrated over the whole
+redshift window, end up in bin $(i,j)$ --- and then the radius grid
+only ever touches a \emph{1-D} mass integral. This costs nothing
+extra to implement (it reuses the same mass--redshift quadrature
+nodes the code already visits) and is exact to machine precision,
+because it is nothing more than doing the integral in a different
+order. It should be implemented regardless of everything that
+follows. What it does \emph{not} solve is the remaining
+$R$-dependence sitting inside $\DSnfw(R,\lnM)$ itself --- that is
+the real obstruction, and the rest of this note is about it.
+
+\section{What is left: a stack of different-sized NFW profiles}
+\label{sec:setup}
+
+\subsection{Why \texorpdfstring{$R$}{R} still cannot be pulled out}
+
+Every NFW profile has the same functional shape, but that shape is
+stretched by a different amount for every halo mass: heavier
+halos have a larger scale radius $\rs(M)$, so their $\DSnfw$ curve
+is a stretched-out version of a lighter halo's curve, not a
+rescaled copy of the \emph{same} curve at the same $x=R/\rs$.
+Concretely,
+\begin{equation}
+\DSnfw(R,\lnM) = A(M)\, g\!\left(\frac{R}{\rs(M)}\right),
+\qquad
+g(x) = \text{Wright \& Brainerd (2000) NFW shape function},
+\label{eq:nfw_shape}
+\end{equation}
+with $\rs(M) = r_{200}(M)/c$, $r_{200}(M) = [3M/(800\pi\rho_{\rm
+crit})]^{1/3}$, $A(M) = 2\rs(M)\,\delta_c\,\rho_{\rm crit}$, and
+$\delta_c = \tfrac{200}{3}c^3/[\ln(1+c)-c/(1+c)]\approx5.27\times10^3$
+at $c=4$. If $\rs$ did not depend on $M$, eq.~\eqref{eq:reduction}
+would already be done: $g(R/\rs)$ would come straight out of the
+mass integral and $N_{ij}(R)$ would be a single evaluation of $g$
+times a mass-integrated amplitude. It is precisely because
+\emph{different halos in the same bin have different scale radii}
+that the mass integral mixes together many differently-stretched
+copies of the same curve, and the result is a genuinely new shape
+--- broader and shallower than any individual NFW profile, the way
+adding together several Gaussians of different widths gives you
+something that is no longer a single Gaussian.
+
+\subsection{A change of variable that makes the mixing explicit}
+
+Since $\ln\rs(M) = \tfrac13\lnM + {\rm const}$, it is convenient to
+stop thinking in $M$ and think directly in $y\equiv\ln\rs(M)$ ---
+the log-scale-radius is what actually controls the profile shape.
+Define the pure kernel
+\begin{equation}
+K(R,y) \equiv A\big(M(y)\big)\, g\!\left(R\,e^{-y}\right)
+= C\,e^{y}\, g\!\left(R\,e^{-y}\right),
+\qquad C \equiv 2\,\delta_c\,\rho_{\rm crit},
+\label{eq:kernel}
+\end{equation}
+i.e.\ ``the lensing profile of a halo with log-scale-radius $y$,
+evaluated at $R$.'' Relabelling the weight of eq.~\eqref{eq:reduction}
+in the same variable, $\Wcal_{ij}(y)\,dy \equiv \widehat
+W_{ij}(\lnM)\,d\lnM$ (a constant Jacobian, $d\lnM=3\,dy$), the
+mass integral becomes
+\begin{equation}
+N_{ij}(R) = \int\! dy\; \Wcal_{ij}(y)\, K(R,y).
+\label{eq:reduced_1d}
+\end{equation}
+This is exactly the same integral as eq.~\eqref{eq:reduction} ---
+nothing has been approximated --- but written this way it is
+transparent \emph{why} it is expensive: $N_{ij}(R)$ is a weighted
+average of the kernel $K(R,y)$ over the distribution of
+scale radii $\Wcal_{ij}(y)$ present in bin $(i,j)$, and that
+average has to be redone at every $R$ because $K(R,y)$'s shape in
+$y$ changes with $R$.
+
+\subsection{How wide is the mixing, in practice?}
+
+The three approximations below all work by exploiting that
+$\Wcal_{ij}(y)$ is \emph{narrow}: most of the halos contributing
+to a given richness$\times$redshift bin have a fairly similar
+mass, hence a fairly similar $\rs$. Quantitatively, a bin with mass
+scatter $\sigma_{\lnM}\sim0.3$--$0.6$ (combining intrinsic
+mass--richness scatter and the finite width of the bin itself)
+gives $\sigma_y=\sigma_{\lnM}/3\sim0.1$--$0.2$ in log-scale-radius
+--- a $10$--$20\%$ spread in $\rs$, not a factor of a few. That
+narrowness is exactly what makes it plausible to replace the full
+mixture with a compact approximation, and it sets the size of the
+errors quoted for each approach below.
+
+\section{Three ways to pull \texorpdfstring{$R$}{R} out of the mass integral}
+\label{sec:approaches}
+
+The three ideas below go from simplest-and-cheapest to
+most-robust-and-general. Each one answers the same question ---
+``can I replace the weighted average over $y$ in
+eq.~\eqref{eq:reduced_1d} with something that does not need to be
+recomputed at every $R$?'' --- with a different strategy.
+
+\subsection{Idea 1: pretend the whole bin is one effective halo}
+\label{sec:approach1}
+
+\paragraph{The idea.} If every halo in bin $(i,j)$ had exactly the
+same scale radius, $N_{ij}(R)$ would just be (halo count) times
+(the one shape function). Bin $(i,j)$'s halos do not all have the
+same scale radius, but they are close (\S\ref{sec:setup}), so the
+simplest thing to try is to replace the whole distribution by the
+single halo of \emph{mean} log-scale-radius --- equivalently, the
+halo of geometric-mean mass --- present in the bin:
+\begin{equation}
+\boxed{\;
+N_{ij}(R) \;\approx\; \Aeff_{ij}\; g\!\left(\frac{R}{\reffi{ij}}\right),
+\qquad
+\yeff_{ij} = \frac{\int dy\,\Wcal_{ij}(y)\, y}{\int dy\,\Wcal_{ij}(y)},
+\qquad
+\reffi{ij} = e^{\yeff_{ij}},
+\qquad
+\Aeff_{ij} = C\, e^{\yeff_{ij}}.
+\;}
+\label{eq:approach1}
+\end{equation}
+Two things are worth being precise about, because both are easy to
+get wrong. First, $\yeff_{ij}$ is the \emph{plain} mean of $\ln\rs$
+under the bin's own mass weight $\Wcal_{ij}$ --- \emph{not} weighted
+by the amplitude $Ce^y$. Second, $\Aeff_{ij}$ is the amplitude
+\emph{evaluated at} that mean scale radius, $Ce^{\yeff_{ij}}$ ---
+\emph{not} the amplitude averaged separately over the bin,
+$\int dy\,\Wcal_{ij}(y)\,Ce^y$ (these differ, because $e^y$ is
+convex: the average of $e^y$ is always $\ge e^{\text{average of
+}y}$, by Jensen's inequality). This particular pairing --- plain
+mean of $y$, amplitude evaluated there --- is not a stylistic
+choice: it is exactly the pairing for which the kernel identity of
+eq.~\eqref{eq:deriv_identity} below makes the first correction term
+of Idea 2 (\S\ref{sec:approach2}) vanish identically, so Idea 1
+\emph{is} Idea 2 truncated at the very first term, and any other
+pairing of ``an amplitude'' with ``a scale radius'' would not have
+that property. If a physically-labelled effective mass is wanted,
+$M_{\rm eff}=\exp(\langle\lnM\rangle_{\Wcal_{ij}})$ --- the
+geometric-mean halo mass of the bin --- reproduces $\reffi{ij}$ and
+$\Aeff_{ij}$ exactly, since $\ln\rs(M)$ is linear in $\lnM$; the
+concentration stays fixed at $c=4$, no $c_{\rm eff}$ needed.
+
+\paragraph{Cost.} Two numbers per bin, computed once; one
+evaluation of $g$ per radius --- as cheap as it gets.
+
+\paragraph{Where the error comes from.} Squeezing a whole
+distribution of stretched NFW curves into one curve necessarily
+loses the fact that the real stack is a bit broader/shallower than
+any single member of it. That broadening is the leading term Idea
+1 throws away (formally, the $n=2$ term of Idea 2's series,
+\S\ref{sec:approach2}): roughly $\sigma_y^2\times\mathcal{O}(1$--$5)$
+in size. \S\ref{sec:validation} measures this directly: for a
+representative mass weight, Idea 1 is already off by
+$\sim3\%$ at $\sigma_{\lnM}=0.3$ and grows to $\sim12\%$ at
+$\sigma_{\lnM}=0.6$; the error is smallest at small $R$ and grows
+(roughly monotonically, then saturating) toward the outer part of
+the radial range, rather than peaking at any particular $R$ ---
+this is the approach to avoid if $1\%$-level accuracy matters
+anywhere in the pipeline.
+
+\paragraph{When it breaks.} If $\Wcal_{ij}(y)$ has two separate
+humps or a heavy tail (e.g.\ a bin with unusually large
+mass--richness scatter, or contamination from the low-richness
+Poisson tail), no single curve can represent it well anywhere, and
+the good agreement near $R\approx\reffi{ij}$ does not extend to
+the edges of the radial range.
+
+\subsection{Idea 2: keep the correction terms Idea 1 threw away (recommended first cut)}
+\label{sec:approach2}
+
+\paragraph{The idea.} Idea 1 is the zeroth term of a systematic
+expansion; rather than stopping there, expand the kernel
+eq.~\eqref{eq:kernel} in a Taylor series around $y=\yeff_{ij}$ and
+keep going. The key algebraic fact that makes this work cleanly is
+that differentiating the kernel with respect to $y$ is the same
+operation as differentiating the shape function $g$ with respect
+to $\ln x$: writing $\Lop\equiv\partial/\partial\ln x$,
+\begin{equation}
+\frac{\partial^n}{\partial y^n}\Big[C e^y g(Re^{-y})\Big]
+= C e^y\,(1-\Lop)^n g(x),
+\qquad x \equiv R e^{-y}.
+\label{eq:deriv_identity}
+\end{equation}
+Because of this identity, Taylor-expanding in $y$ is \emph{exact,
+order by order} --- nothing is dropped except the terms you
+explicitly choose to truncate:
+\begin{equation}
+\boxed{\;
+N_{ij}(R) = \Aeff_{ij} \sum_{n\ge0} \frac{\mu_n^{(ij)}}{n!}\,
+\big[(1-\Lop)^n g\big](\hat x_{ij}),
+\qquad
+\hat x_{ij} = \frac{R}{\reffi{ij}},
+\qquad
+\mu_n^{(ij)} = \frac{\int dy\,\Wcal_{ij}(y)\,(y-\yeff_{ij})^n}
+{\int dy\,\Wcal_{ij}(y)},
+\;}
+\label{eq:approach2}
+\end{equation}
+with $\Aeff_{ij}$ and $\yeff_{ij}$ exactly as defined in
+eq.~\eqref{eq:approach1}: $\mu_n^{(ij)}$ is the \emph{plain}
+$n$-th central moment of $\ln\rs$ under the bin's mass weight ---
+there is no amplitude factor inside this integral, unlike
+$\Aeff_{ij}$ itself. This is the pairing that makes
+$\mu_0^{(ij)}=1$ and $\mu_1^{(ij)}=0$ automatic (the latter is
+exactly why $\yeff_{ij}$ was defined as a plain mean in
+eq.~\ref{eq:approach1} --- an amplitude-weighted mean would leave a
+nonzero, uncancelled linear term here). The $n=0$ term is Idea 1; every higher $n$
+is a correction that captures more of the true spread of scale
+radii in the bin. The needed operators are closed-form
+combinations of the NFW shape derivatives ($g'\equiv dg/dx$):
+\begin{equation}
+(1-\Lop)^0 g = g,
+\qquad
+(1-\Lop)^2 g = g - x g' + x^2 g'',
+\qquad
+(1-\Lop)^3 g = g - x g' - x^3 g'''.
+\label{eq:operators}
+\end{equation}
+
+\paragraph{Cost.} $3$--$4$ numbers per bin
+($\Aeff_{ij},\reffi{ij},\mu_2^{(ij)}$, optionally $\mu_3^{(ij)}$),
+accumulated in the \emph{same} mass-quadrature pass already needed
+for eq.~\eqref{eq:reduction} --- computing a moment costs no more
+than computing the weight itself. Per radius: evaluate
+$g,g',g''$(,$g'''$) at $\hat x_{ij}$ and add up 3--4 terms;
+$\hat x_{ij}$ is different for every bin, so the total work is
+$N_{\rm radii}\times N_{\rm bins}$ cheap analytic evaluations, with
+\emph{zero} additional quadrature.
+
+\paragraph{How accurate is truncating here?} Stopping at $n=2$
+leaves out $n=4$ as the next contribution (the $n=3$ term is
+already close to zero for a roughly symmetric $\Wcal_{ij}$); for a
+Gaussian-like weight, $\mu_4\approx3\mu_2^2$, so the relative error
+left behind is of order $(\mu_2^{(ij)})^2$, i.e.\ two more powers of
+$\sigma_y^2$ down from Idea 1's already-small error.
+\S\ref{sec:validation} confirms this is dramatic in practice: for
+the same representative weight where Idea 1 was off by $3$--$12\%$,
+truncating at $n\le2$ brings the error down to
+$0.03$--$0.6\%$ across $\sigma_{\lnM}=0.3$--$0.6$. \textbf{In
+short: $n\le2$ is already the workhorse choice.} Adding
+$\mu_3^{(ij)}$ ($n=3$) did \emph{not} help further in that test ---
+consistent with $\mu_3$ being small and slightly negative for a
+near-symmetric weight, so the $n=3$ term is comparable in size to
+noise from the already-tiny $n\ge4$ remainder rather than a
+systematic improvement; keep $n\le2$ unless a specific bin is
+visibly skewed.
+
+\paragraph{When it breaks.} This is a series in powers of
+$\sigma_y^2$, so it only converges quickly while $\Wcal_{ij}(y)$ is
+reasonably compact and unimodal --- the same condition Idea 1
+needed, just enforced to higher order. A strongly bimodal or
+heavy-tailed weight inflates every moment $\mu_3,\mu_4,\dots$
+comparably, and adding more terms stops helping. As with Idea 1,
+the residual grows (slowly, and saturating) toward the outer part
+of the radial range rather than peaking at one particular $R$
+(Fig.~\ref{fig:validation_profiles}).
+
+\subsection{Idea 3: expand the halo shape itself, not the bin's weight}
+\label{sec:approach3}
+
+\paragraph{The idea.} Ideas 1 and 2 both expand \emph{the bin's
+distribution of scale radii} and therefore only work well when
+that distribution is narrow and well-behaved. Idea 3 flips the
+strategy: instead of approximating $\Wcal_{ij}(y)$, approximate the
+kernel $K(R,y)$ itself --- a fixed, bin-\emph{independent} function
+--- as a short sum of basis functions in $y$. Because $K(R,y)$ is a
+smooth, analytic function of $y$ for any fixed $R$, it is very well
+approximated on the full range of scale radii spanned by
+\emph{all} the bins at once, $y\in[y_{\min},y_{\max}]$ (rescaled
+affinely to $\tilde y\in[-1,1]$), by a short Chebyshev series:
+\begin{equation}
+\boxed{\;
+K(R,y) \approx \sum_{k=0}^{K} u_k(R)\, T_k(\tilde y),
+\qquad
+N_{ij}(R) \approx \sum_{k=0}^{K} c_k^{(ij)}\, u_k(R),
+\qquad
+c_k^{(ij)} = \int\! dy\,\Wcal_{ij}(y)\, T_k(\tilde y).
+\;}
+\label{eq:approach3}
+\end{equation}
+The coefficients $u_k(R)$ depend only on the kernel and the
+radius, not on the bin, so they are computed \emph{once, for every
+bin simultaneously}. Each bin then just needs $K{+}1$ numbers
+$c_k^{(ij)}$ --- projections of its own weight $\Wcal_{ij}$ onto the
+same fixed basis functions --- accumulated in the same
+mass-quadrature pass as Idea 2.
+
+\paragraph{Cost.} $K{+}1\approx6$--$10$ numbers per bin (a bit more
+bookkeeping than Idea 2's 3--4); $u_k(R)$ is shared across every
+bin; per radius, a length-$(K{+}1)$ dot product.
+
+\paragraph{How accurate is this?} Chebyshev coefficients of a
+smooth, analytic function decay geometrically, so $K\approx6$--$10$
+terms over a $y$-window covering roughly $6$ dex in $\ln M$
+already gives $\sim10^{-3}$ accuracy, uniformly in $R$ ---
+\emph{regardless of how wide, skewed, or multimodal $\Wcal_{ij}$
+is}, because the approximation error lives entirely in the kernel,
+never in the weight.
+
+\paragraph{When it breaks.} Only by extrapolation --- if a bin's
+mass range falls outside $[y_{\min},y_{\max}]$, or a radius falls
+outside the tabulated range, the approximation degrades sharply.
+Both are avoided simply by building the box from the union of
+every bin's actual quadrature range. Otherwise this approach is
+robust to exactly the pathologies (bimodal or heavy-tailed
+$\Wcal_{ij}$) that break Ideas 1 and 2.
+
+\section{Comparison and recommendation}
+\label{sec:comparison}
+
+\begin{center}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l c c c c}
+\toprule
+Idea & precompute/bin & per-radius cost & measured error (\S\ref{sec:validation}) & robust to skew/bimodal $\Wcal_{ij}$ \\
+\midrule
+1. One effective halo $(\Aeff,\reff)$ & 2 numbers & 1 $g$-eval & $3$--$12\%$ & no \\
+2. Moment expansion ($n\le2$) & 3 numbers & 3 analytic terms & $0.03$--$0.6\%$ & no (asymptotic in $\sigma_y$) \\
+3. Chebyshev kernel ($K=8$) & 9 numbers & 9-term dot product & $0.001$--$0.003\%$ & yes \\
+\bottomrule
+\end{tabular}%
+}
+\end{center}
+
+Idea 2 with $n\le2$ is the one to build first: it slots directly
+into the mass-quadrature loop that already has to compute
+$\widehat W_{ij}(\lnM)$ (eq.~\ref{eq:reduction}) --- the only
+change is accumulating one extra weighted moment alongside it ---
+the NFW shape derivatives $g',g''$ are closed-form, and
+\S\ref{sec:validation} shows it already buys three orders of
+magnitude over Idea 1 for a representative weight. Idea 3 is the
+more future-proof production choice, at roughly three times the
+per-bin bookkeeping, and is the right fallback if the real
+mass--richness relation $P(\lambda\mid M,z)$ turns out to be
+skewed or multimodal for any bin (\S\ref{sec:validation} only
+tests unimodal weights). Idea 1 is the cheapest of the three but
+carries an irreducible few-percent-to-double-digit shape bias for
+realistic bin widths; treat it as a sanity check or a starting
+guess for fitting the other two, not as the production answer.
+
+\section{Numerical validation}
+\label{sec:validation}
+
+\paragraph{What is tested here, and what is not yet.} Two separate
+claims need checking: (i) is the NFW shape function $g(x)$ itself
+implemented correctly, and (ii) given a correct $g(x)$, do the three
+ideas actually reproduce the exact mass integral at the error levels
+argued in \S\ref{sec:approaches}? Both are checked below. What is
+\emph{not} checked yet is whether the real richness--mass relation
+$P(\lambda\mid M,z)$ used by this pipeline's \texttt{sel\_function.py}
+produces a mass weight $\Wcal_{ij}(y)$ that looks like the
+representative one used here --- doing that requires reading the
+actual selection-function tables out of a running pipeline sample,
+which is a natural next step but a separate piece of work from the
+math check below.
+
+\paragraph{Setup.} All constants ($c=4$, $\rho_{\rm crit}=2.775\times
+10^{11}\,\hMsun\,\hMpc^{-3}$) match
+\texttt{src/models/nfw\_dsigma\_mis.hh} exactly. The mass weight
+$\Wcal_{ij}(\lnM)$ is built as a Tinker-like halo-mass-function shape,
+$(M/M_\star)^{-\alpha}e^{-(M/M_\star)^\beta}$ with $\alpha=0.9$,
+$\beta=1.3$, $M_\star=2\times10^{14}\,\hMsun$, times a lognormal
+mass--richness kernel of width $\sigma_{\lnM}$ centred on $M_0$; three
+bins span the range quoted in \S\ref{sec:setup}: ``narrow''
+($\sigma_{\lnM}=0.30$), ``medium'' ($\sigma_{\lnM}=0.45$), and
+``wide'' ($\sigma_{\lnM}=0.60$). This is a stand-in for the true
+$\Wcal_{ij}$, not a read-out of it (see above) --- but it is built
+from the same physical ingredients (a steeply falling mass function
+times a lognormal selection kernel) and spans the same
+$\sigma_{\lnM}$ range the note has been arguing about throughout, so
+it exercises exactly the mechanism the three ideas depend on. Script:
+\texttt{docs/figs/make\_shear1h\_validation\_figs.py}.
+
+\paragraph{Check (i): the shape function.} $g(x)$ was implemented
+from the closed-form Wright \& Brainerd (2000) expression and
+independently cross-checked against a from-scratch numerical
+line-of-sight projection of the 3-D NFW density,
+$\Sigma(R)=2\int_0^\infty\!\rho(\sqrt{R^2+z^2})\,dz$ and
+$\Delta\Sigma(R)=\bar\Sigma(<R)-\Sigma(R)$, computed by direct
+quadrature with no reference to the closed form at all. The ratio of
+the two is constant to $1.6\times10^{-9}$ across
+$x\in[0.05,10]$, including on both sides of the removable
+singularity at $x=1$ --- the closed-form shape function is correct.
+
+\paragraph{Check (ii): the three ideas against the exact mass
+integral.} Table~\ref{tab:validation} and
+Fig.~\ref{fig:validation_profiles} compare $N_{ij}(R)$, computed by
+direct quadrature over $\lnM$ (eq.~\ref{eq:reduced_1d}), against
+Ideas 1, 2 ($n\le2$ and $n\le3$), and 3 (Chebyshev order $K=8$) on a
+$40$-point log-spaced radial grid, $R\in[0.05,20]\,\hMpc$.
+
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{l c c c c c}
+\toprule
+Bin & $\sigma_{\lnM}$ & \multicolumn{2}{c}{Idea 1} & \multicolumn{1}{c}{Idea 2 ($n\le2$)} & Idea 3 ($K=8$) \\
+& & max \% & rms \% & max \% & max \% \\
+\midrule
+narrow & 0.30 & 2.94 & 1.89 & 0.028 & 0.002 \\
+medium & 0.45 & 6.94 & 4.66 & 0.179 & 0.003 \\
+wide   & 0.60 & 12.29 & 8.51 & 0.611 & 0.001 \\
+\bottomrule
+\end{tabular}
+\caption{Fractional residual of each idea against the exact mass
+integral, over the full radial grid, for the representative weight of
+\S\ref{sec:validation}. Idea 2's $n\le3$ column is omitted because it
+did not improve on $n\le2$ here (\S\ref{sec:approach2}); Idea 3's rms
+is $\le0.001\%$ in every bin.}
+\label{tab:validation}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{figs/shear1h_validation_profiles.png}
+\caption{Top: exact $N_{ij}(R)$ (black) against Ideas 1, 2 ($n\le3$),
+3, for the narrow/medium/wide representative bins. Bottom: fractional
+residual. Idea 3 is essentially exact at this scale; Idea 1's error
+grows visibly with bin width and grows monotonically (then
+saturates) toward large $R$, rather than peaking at $R\approx\reffi{ij}$
+as originally guessed in \S\ref{sec:approach1} --- corrected here now
+that it has actually been measured.}
+\label{fig:validation_profiles}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.62\textwidth]{figs/shear1h_validation_scaling.png}
+\caption{Maximum fractional residual vs.\ bin width $\sigma_{\lnM}$,
+one curve per idea. Idea 1's error grows roughly as $\sigma_{\lnM}^2$,
+consistent with it being the leading truncated term of Idea 2's
+series (\S\ref{sec:approach1}); Idea 2 improves on it by
+$\sim2$ orders of magnitude across the same range; Idea 3 is flat and
+nearly a further order of magnitude below Idea 2.}
+\label{fig:validation_scaling}
+\end{figure}
+
+The results confirm the qualitative argument of
+\S\ref{sec:approaches} and sharpen it quantitatively: Idea 1 is not
+safe to use directly once $\sigma_{\lnM}\gtrsim0.4$ (already
+$\sim7\%$ off at $\sigma_{\lnM}=0.45$), Idea 2 at $n\le2$ removes
+essentially all of that error (sub-percent even at the widest bin
+tested), and Idea 3 is indistinguishable from exact at the
+resolution of this test. One correction to \S\ref{sec:approach2}'s
+original estimate: an earlier draft of this note expected Idea 2 to
+need $n\le3$ for the widest bins; in practice $n\le2$ already
+outperforms that expectation by an order of magnitude, and adding
+$n=3$ made things very slightly worse rather than better (consistent
+with $\mu_3$ being small and sign-uncertain for a near-symmetric
+weight, so it mostly adds noise once $\mu_2$ has already done the
+work).
+
+\paragraph{Remaining checklist before production use.} Items 1 and 3
+below are now done with the real pipeline in
+\S\ref{sec:real_validation}; item 2 is the one piece still open.
+\begin{enumerate}
+\item \textbf{[Done]} Read $\Wcal_{ij}(\lnM)$ out of an actual
+      pipeline sample: \S\ref{sec:real_validation} pulls it directly
+      from a running \texttt{cosmosis} sample (real HMF, distances,
+      $S_{ij}$), cross-checked against \texttt{NumCountsSel.so}
+      to $<0.1\%$.
+\item Confirm eq.~\eqref{eq:reduction} reproduces the current
+      \texttt{DSigma1hSel} output bit-for-bit for a fixed bin and
+      radius grid (it must, to machine precision, since it is a
+      reordering of the integral, not an approximation) before
+      swapping in Idea 2 on top of it --- still open; what
+      \S\ref{sec:real_validation} confirms is the zeroth moment
+      ($\int d\lnM\,\widehat W_{ij}$ vs. \texttt{NumCountsSel.so}),
+      not yet the full $R$-dependent \texttt{DSigma1hSel.so} output
+      point by point.
+\item \textbf{[Done]} Re-run the comparison with the real
+      $\Wcal_{ij}$: \S\ref{sec:real_validation}, together with the
+      miscentered mixture and a cross-check against
+      \texttt{Shear1hMisSel.so}.
+\end{enumerate}
+
+\section{Extending to the miscentered profile}
+\label{sec:mis}
+
+Everything above treats the pure centred term,
+\texttt{DSigma1hSel}/\texttt{DSigma1hWeight}. The production
+pipeline's actual lensing observable mixes in a miscentered
+component (\texttt{DSigma1hMisSel},
+\texttt{src/modules/num\_counts\_sel/lensing\_weights.hh}):
+\begin{equation}
+\Delta\Sigma_{\rm cl}(R,M) = (1-f_{\rm mis})\,\DSnfw(R,M)
++ f_{\rm mis}\,\Delta\Sigma_{\rm mis}\big(R,M;\,\tau_{\rm mis}R_\lambda(\lambda^{\rm ob})\big),
+\label{eq:mixture}
+\end{equation}
+with DES-Y3 fiducial $f_{\rm mis}=0.22$, $\tau_{\rm mis}=0.17$, and
+$R_\lambda(\lambda^{\rm ob})=(\lambda^{\rm ob}/100)^{0.2}$. A
+fraction $f_{\rm mis}$ of clusters are offset from the true halo
+centre; $\Delta\Sigma_{\rm mis}$ is the offset-averaged profile,
+read from the precomputed table
+\texttt{data/nfw\_off\_center/*\_gamma\_*.txt}
+(\texttt{NFW\_DSIGMA\_MIS}, the ``gamma'' Rayleigh-type kernel of
+Kelly et al.\ 2023) rather than a closed form.
+
+\subsection{The good news: the same machinery applies, with one simplification}
+
+Two facts make this an easy extension rather than a new derivation.
+First, $R_\lambda$ depends only on the richness bin, not on mass or
+redshift, so it is a \emph{fixed constant for a given bin} --- call
+it $\rmis \equiv \tau_{\rm mis}R_\lambda$. Second, and more usefully:
+\S\ref{sec:approach2}'s Taylor expansion never actually needed the
+amplitude/shape split $A(M)g(x)$ --- it only needed \emph{ordinary
+derivatives with respect to $y$} of whatever profile sits inside the
+mass integral. Define, for a fixed radius $R$ and bin-level $\rmis$,
+\begin{equation}
+\Phi(R,y) \equiv \Delta\Sigma_{\rm cl}\big(R,\,M(y)\big)
+= (1-f_{\rm mis})\,\DSnfw(R,M(y)) + f_{\rm mis}\,\Delta\Sigma_{\rm mis}(R,M(y);\rmis),
+\label{eq:Phi}
+\end{equation}
+and Idea 2 becomes, with no change in logic at all:
+\begin{equation}
+\boxed{\;
+N_{ij}(R) \approx \sum_{n\ge0} \frac{\mu_n^{(ij)}}{n!}\,\Phi^{(n)}(R,\yeff_{ij}),
+\qquad
+\Phi^{(n)} \equiv \frac{\partial^n\Phi}{\partial y^n},
+\;}
+\label{eq:approach2_general}
+\end{equation}
+with $\yeff_{ij}$ and $\mu_n^{(ij)}$ \emph{exactly as defined before}
+(eqs.~\ref{eq:approach1}--\ref{eq:approach2}) --- they are moments of
+the mass weight $\Wcal_{ij}$ alone and know nothing about
+miscentering. $\Phi^{(n)}(R,\yeff_{ij})$ is computed numerically:
+evaluate $\Phi(R,y)$ on a small grid of $y$ around $\yeff_{ij}$ (a
+handful of table look-ups) and read off derivatives from a local
+spline. Idea 1 is $n=0$; Idea 2 keeps $n=2$. eq.~\eqref{eq:deriv_identity}
+is the special case of eq.~\eqref{eq:approach2_general} where $\Phi$
+happens to factor as $Ce^yg(x)$ and the derivatives happen to have a
+closed form --- eq.~\eqref{eq:approach2_general} is the more general
+statement, and it is what \S\ref{sec:real_validation} actually
+implements, directly against the real tables, with \emph{no}
+amplitude/shape factoring anywhere. Idea 3 carries over the same
+way: Chebyshev-fit $\Phi(R,y)$ itself (not a factored kernel) in
+$y$; the one change is that the fit is no longer shared globally
+across richness bins, since $\rmis$ (and hence $\Phi$) now differs
+bin to bin, so $u_k(R)$ must be refit per bin (still shared across
+redshift bins at fixed richness, since $\rmis$ does not depend on
+$z$).
+
+\subsection{A validation subtlety: two independently-sourced tables}
+\label{sec:mis_subtlety}
+
+$\DSnfw(R,M)$ in production comes from a Python-computed table
+(\texttt{haloModel/dSigma\_nfw}, written by
+\texttt{halo\_model\_cosmosis.py}); $\Delta\Sigma_{\rm mis}$ comes
+from the independent C++ table read by \texttt{NFW\_DSIGMA\_MIS}.
+Confirming eq.~\eqref{eq:mixture} reduces correctly to the centred
+profile as the offset becomes negligible requires knowing both
+tables sit on the same absolute physical scale --- which the
+production code presumably guarantees, but which this note has not
+independently re-derived from \texttt{halo\_model\_cosmosis.py}. For
+\S\ref{sec:real_validation}'s validation, this is sidestepped by
+defining
+\begin{equation}
+\Delta\Sigma_{\rm mis}(R,M;\rmis) \equiv \DSnfw^{\rm real}(R,M)\times
+{\rm ratio}(x,x_{\rm mis}),
+\qquad
+{\rm ratio}(x,x_{\rm mis}) \equiv \frac{g_{\rm mis}(x,x_{\rm mis})}{g(x)},
+\label{eq:mis_ratio_def}
+\end{equation}
+with $x=R/\rs(M)$, $x_{\rm mis}=\rmis/\rs(M)$. By construction
+${\rm ratio}\to1$ for $x\gg x_{\rm mis}$ (verified against the real
+gamma table in \S\ref{sec:real_validation}): the real centred table,
+rescaled by this dimensionless, table-derived suppression factor.
+This guarantees the correct
+centred limit regardless of any independent normalisation
+convention difference between the two source tables, at the cost of
+not being a literal re-implementation of \texttt{NFW\_DSIGMA\_MIS}'s
+own internal amplitude. \S\ref{sec:real_validation} quantifies the
+resulting $\sim4\%$ shape difference from the real
+\texttt{Shear1hMisSel.so} output --- small enough that it does not
+change which idea to recommend, but real enough to flag rather than
+hide.
+
+\section{Validation against the real production pipeline}
+\label{sec:real_validation}
+
+Rather than a synthetic stand-in, this section pulls every ingredient
+from an actual running \texttt{cosmosis} sample: the real halo mass
+function, the real comoving-distance table, the real
+richness-selection function $S_{ij}(\lnM,z)$
+(\texttt{sel\_function.py}), and the real
+\texttt{haloModel/dSigma\_nfw} table --- plus the real
+miscentering table for $\Delta\Sigma_{\rm mis}$
+(\S\ref{sec:mis_subtlety}). Script:
+\texttt{docs/figs/real\_pipeline\_extract.ini} +
+\texttt{docs/figs/make\_real\_pipeline\_validation\_figs.py}; the
+pipeline is
+\texttt{consistency} $\to$ \texttt{GrowthFactor} $\to$ \texttt{cp\_camb}
+$\to$ \texttt{MfTinker} $\to$ \texttt{halo\_model} $\to$
+\texttt{average\_sigma\_crit\_inv} $\to$ \texttt{sel\_function} $\to$
+\texttt{NumCountsSel} $\to$ \texttt{Shear1hMisSel},
+run with the \texttt{test} sampler at the fiducial widePlanck point
+from \texttt{des-cluster-nersc/cosmosis-models/}, restricted to the
+four richness bins in the $z\in[0.20,0.35]$ block
+($\lambda^{\rm ob}$ centres $25,\,37.5,\,52.5,\,130$) where the
+mixture weight's default \texttt{lob\_centers} maps onto
+\texttt{bin\_index} unambiguously.\footnote{\texttt{DSigma1hMisWeight}'s
+\texttt{lob\_centers\_} defaults to length 4 (the DES-Y3 richness
+bins), but \texttt{sel\_function}'s \texttt{bin\_index} runs 0--11
+(4 richness $\times$ 3 redshift blocks); for \texttt{bin\_index}
+$\ge4$ \texttt{set\_bin} is a no-op unless the ini overrides
+\texttt{lob\_centers} to length 12. This is an orthogonal,
+out-of-scope observation about the production ini, not something
+this note's factorisation approach depends on --- avoided here by
+simply validating on the unambiguous bins.}
+
+\paragraph{Check (i): does this note's $\Wcal_{ij}$ match the real pipeline?}
+A direct Python re-implementation of $n(M,z)$, $\dVdz(z)$,
+$\Omega(z)$, and $S_{ij}(\lnM,z)$ against the sampled datablock,
+integrated over $z$ \emph{and} $\lnM$ with fixed Gauss-Legendre
+quadrature (64 and 96 nodes respectively --- this project's own
+integrator convention, not a plain trapezoid grid) via
+eq.~\eqref{eq:reduction}, is compared against the real
+\texttt{NumCountsSel.so} output for each bin:
+\begin{center}
+\small
+\begin{tabular}{c c c c}
+\toprule
+bin & $\int d\lnM\,\widehat W_{ij}$ (Python, fixed-GL) & \texttt{NumCountsSel.so} & ratio \\
+\midrule
+0 & $1.3804\times10^{3}$ & $1.3807\times10^{3}$ & $0.9998$ \\
+1 & $5.1386\times10^{2}$ & $5.1383\times10^{2}$ & $1.0000$ \\
+2 & $1.4148\times10^{2}$ & $1.4147\times10^{2}$ & $1.0001$ \\
+3 & $9.1669\times10^{1}$ & $9.1733\times10^{1}$ & $0.9993$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Agreement to $<0.1\%$, with residuals now split roughly evenly above
+and below $1.0$ (rather than the persistent same-sign bias a coarser
+trapezoid grid would leave) --- consistent with the residual being
+\texttt{NumCountsSel.so}'s own \texttt{eps\_rel}=$1.5\times10^{-3}$
+Cuhre tolerance, not a resolution limit on the Python side. The exact
+reduction of
+eq.~\eqref{eq:reduction} and this note's replica of every ingredient
+in it are both confirmed directly against the production code.
+
+\paragraph{Check (ii): the mixture against \texttt{Shear1hMisSel.so}.}
+Using $\Wcal_{ij}$ from check (i) and eq.~\eqref{eq:mixture} (with
+$\Delta\Sigma_{\rm mis}$ per eq.~\ref{eq:mis_ratio_def}), this note's
+own exact quadrature (eq.~\ref{eq:reduced_1d}) is compared, in
+\emph{shape} (each curve normalised to its own $R=0.2\,\hMpc$ point,
+since \S\ref{sec:mis_subtlety} already disclosed the two tables'
+amplitudes are not independently re-derived), against the real
+\texttt{Shear1hMisSel.so} output: maximum shape deviation
+$3.6$--$4.2\%$ across the four bins. Small, and consistent with the
+disclosed modelling choice in eq.~\eqref{eq:mis_ratio_def} rather
+than with an error in the radial-factorisation approach itself ---
+which is what the next comparison isolates.
+
+\paragraph{Ideas 1, 2, and 3 against this note's own exact quadrature.}
+Table~\ref{tab:real_validation} and
+Fig.~\ref{fig:real_validation_profiles} compare the full mixture
+$N_{ij}(R)$ (eq.~\ref{eq:approach2_general}) against all three
+ideas, every one evaluated directly off the real tables with no
+amplitude/shape factoring, on the real \texttt{Shear1hMisSel} radial
+grid ($R\in[0.2,5]\,\hMpc$, 10 points). Idea 3 uses $K=8$ and refits
+$u_k(R)$ per richness bin (\S\ref{sec:mis}), since $\rmis$ now
+differs bin to bin.
+
+\begin{table}[!htbp]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{c c c c c c c c}
+\toprule
+bin & $\lambda^{\rm ob}$ & \multicolumn{2}{c}{Idea 1} & \multicolumn{2}{c}{Idea 2 ($n\le2$)} & \multicolumn{2}{c}{Idea 3 ($K=8$)} \\
+& & max \% & rms \% & max \% & rms \% & max \% & rms \% \\
+\midrule
+0 & 25  & 9.75 & 6.53 & 0.365 & 0.238 & 0.001 & 0.001 \\
+1 & 38  & 6.15 & 3.94 & 0.288 & 0.134 & 0.004 & 0.003 \\
+2 & 52  & 3.91 & 2.43 & 0.093 & 0.050 & 0.002 & 0.001 \\
+3 & 130 & 4.91 & 2.95 & 0.149 & 0.072 & 0.002 & 0.001 \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Fractional residual of Ideas 1--3 against this note's own
+exact quadrature of the real-table mixture, for the four real,
+unambiguous richness bins of \S\ref{sec:real_validation}. Idea 3 is
+$2$--$3$ orders of magnitude more accurate than Idea 2, and $3$--$4$
+orders of magnitude more accurate than Idea 1, at real-pipeline
+resolution --- it is the one to build if the extra per-bin
+bookkeeping (\S\ref{sec:approach3}) is not a concern.}
+\label{tab:real_validation}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{figs/real_validation_profiles.png}
+\caption{Real production tables: exact mixture (black) vs.\ Idea 1,
+Idea 2 ($n\le2$), and Idea 3 ($K=8$), for the four real, unambiguous
+richness bins. Bottom: fractional residual. Idea 3 is
+indistinguishable from exact at this scale; Idea 2 sits at or below
+$0.4\%$; Idea 1 reaches $5$--$10\%$ at the largest radii.}
+\label{fig:real_validation_profiles}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.62\textwidth]{figs/real_validation_scaling.png}
+\caption{Maximum fractional residual vs.\ richness-bin centre, real
+pipeline. Idea 3 sits $2$--$4$ orders of magnitude below Idea 1 and
+consistently below Idea 2 across the full richness range tested,
+matching the synthetic-weight result of \S\ref{sec:validation}.}
+\label{fig:real_validation_scaling}
+\end{figure}
+
+This closes the loop opened in \S\ref{sec:validation}: the same
+qualitative and quantitative conclusion --- Idea 3, then Idea 2, are
+successively more accurate than Idea 1 by orders of magnitude, at
+modest extra implementation cost --- holds with the real mass
+function, the real selection function, and the real halo-model
+table, for the full miscentered mixture, not just the synthetic
+centred-only illustration. The remaining open item is
+eq.~\eqref{eq:mis_ratio_def}'s $\sim4\%$ shape offset from the true
+production mixture, which is a modelling choice made explicit in
+\S\ref{sec:mis_subtlety} for lack of the Python
+\texttt{dSigma\_nfw} table's internal amplitude convention, not a
+property of the radial factorisation itself.
+
+\section{What this buys the pipeline}
+\label{sec:timing}
+
+The point of all this is wall-clock time, so it is worth being
+concrete about the current budget. Running the full production
+pipeline (\texttt{mock\_mcmc\_cp\_camb.ini}, all 12 richness/redshift
+bins, \texttt{test} sampler, one evaluation at the fiducial
+widePlanck point) gives:
+\begin{center}
+\small
+\begin{tabular}{l r}
+\toprule
+module & time [s] \\
+\midrule
+\texttt{MfTinker}                  & 0.142 \\
+\texttt{halo\_model}               & 0.140 \\
+\texttt{sel\_function}             & 0.191 \\
+\texttt{NumCountsSel}              & 0.095 \\
+\texttt{Shear1hMisSel}             & \textbf{0.458} \\
+\texttt{b\_sel\_marg}              & 0.067 \\
+\texttt{bsel}                      & 0.019 \\
+\texttt{shear\_prj\_frozen\_physics} & 0.081 \\
+(consistency, GrowthFactor, cp\_camb, likelihoods) & $\approx0.01$ \\
+\midrule
+\textbf{total} & \textbf{1.2} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\texttt{Shear1hMisSel} is $38\%$ of the total --- the single largest
+module in the pipeline, and the one this note has been analysing.
+The reason it costs $4.8\times$ more than \texttt{NumCountsSel}, even
+though both run the identical 2-D $(\lnM,z)$ quadrature per bin, is
+exactly the obstruction of \S\ref{sec:exact}--\S\ref{sec:setup}:
+\texttt{NumCountsSel} runs that quadrature once per bin (12 calls);
+\texttt{Shear1hMisSel} reruns it once per \emph{(bin, radius)} pair
+(12 bins $\times$ 10 radii $=120$ calls, via
+\texttt{use\_cartesian\_product}), because today nothing separates
+the $R$-dependence from the mass integral. Implementing Idea 2 or
+Idea 3 removes exactly that repetition: the expensive quadrature
+(the moments $\mu_n^{(ij)}$, or the Chebyshev projections
+$c_k^{(ij)}$) is computed once per bin, the same 12 calls
+\texttt{NumCountsSel} already makes, and the 120 \texttt{(bin,
+radius)} evaluations become closed-form sums, not adaptive Cuhre
+calls. That predicts \texttt{Shear1hMisSel} dropping from $0.458$s to
+something in \texttt{NumCountsSel}'s own cost class, $\sim0.1$s ---
+taking the pipeline total from $1.2$s to $\sim0.84$s, under the
+$1$s target.
+
+\section{The C++ implementation and its measured payoff}
+\label{sec:cpp_impl}
+
+The prediction above has now been implemented, measured, and shipped
+\emph{in place}: \texttt{Shear1hMisSel.so} and \texttt{NumCountsSel.so}
+themselves are now fixed-GL evaluators
+(\pyfile{src/models/n\_operator\_sel\_gl\_t.hh}, drivers
+\pyfile{src/modules/num\_counts\_sel/\{Shear1hMis,NumCounts\}.cc}), in
+the same family as \texttt{b\_sel\_marg} and
+\texttt{shear\_prj\_frozen\_physics}: no Cuhre calls at all. A shared
+core performs one fixed Gauss--Legendre $(z,\lnM)$ pass per bin per
+sample (defaults $n_{\lnM}=96$, $n_z=64$ nodes) to build the exact
+z-marginalised weight $\widehat W_{ij}(\lnM)$ of
+eq.~\eqref{eq:reduction}. For \texttt{NumCountsSel} the observable
+\emph{is} the weight's norm ($f=1$), so the module reduces to reading
+off $\int d\lnM\,\widehat W_{ij}$; for \texttt{Shear1hMisSel} the
+weight additionally folds in the $z$-only
+$\Sigma_{\rm crit}^{-1}(z)$ factor and every radius is served from the
+cached weight. Two service methods are ini-selectable for the shear
+module (\texttt{method = exact | idea2}): \emph{exact} (the default)
+evaluates the remaining 1-D mass sum
+$\sum_k w_k \widehat W_{ij,k}\,\Phi_i(R,\lnM_k)$ per (bin, $R$) point;
+\emph{idea2} uses eq.~\eqref{eq:approach2_general} at $n\le2$ with a
+3-point central-difference stencil for $\Phi''$. Module labels, grid
+semantics (\texttt{bin\_index} wall; \texttt{bin\_index} $\times$
+\texttt{r\_perp} cartesian product, bin-slow/$R$-fast) and output
+sections (\texttt{numcountssel/vals}, \texttt{shear1hmissel/vals}) are
+unchanged, so the production ini and
+\pyfile{y3\_buzzard/likelihood\_cp.py} work as-is --- the retired
+adaptive-integrator knobs (\texttt{algorithm}, \texttt{eps\_rel},
+\texttt{max\_eval}, \dots) are simply ignored.\footnote{One
+implementation note: the output section names are deliberately
+hardcoded rather than ini-configurable. A CosmoSIS \texttt{[DEFAULT]}
+block propagates its keys into \emph{every} module section, so an
+\texttt{output\_section} knob silently redirected the modules' output
+to the vestigial \texttt{cluster\_observables\_full} value in the
+production ini's \texttt{[DEFAULT]} --- found the hard way during
+validation.}
+
+Beyond the mean speed-up, fixed GL makes the cost
+\emph{deterministic}. Adaptive Cuhre's runtime depends strongly on the
+sampled parameter point: over $\sim10^6$ MCMC realisations of the
+production chain, \texttt{NumCountsSel} averaged $0.107$\,s but
+ranged up to $0.98$\,s ($9\times$ its mean), and
+\texttt{Shear1hMisSel} averaged $0.575$\,s with a $4.0$\,s tail
+($7\times$) --- the integrator running wild trying to converge at hard
+corners of parameter space. The GL evaluators execute an identical
+node count at every sample, so those tails vanish by construction.
+
+Measured on the extraction pipeline
+(\pyfile{docs/figs/real\_pipeline\_extract.ini}, login node, full
+\texttt{bin\_index} 0--11), against the retired Cuhre modules:
+\begin{center}
+\small
+\begin{tabular}{l r r}
+\toprule
+ & Cuhre (old) [s] & fixed-GL (new) [s] \\
+\midrule
+\texttt{NumCountsSel}   & 0.088 & \textbf{0.021} \\
+\texttt{Shear1hMisSel}  & 0.470 & \textbf{0.028} \\
+\bottomrule
+\end{tabular}
+\end{center}
+(\texttt{NumCountsSel} agrees with its Cuhre predecessor to
+$3.1\times10^{-4}$ across all 12 bins, inside the old module's own
+\texttt{eps\_rel}$=1.5\times10^{-3}$.) The full production pipeline
+(\texttt{mock\_mcmc\_cp\_camb.ini}, \texttt{test} sampler, likelihood
+included) now completes in \textbf{0.70\,s} per sample, down from
+1.2\,s --- under the 1\,s target, with the two converted modules
+together costing $7\%$ of the budget instead of $46\%$. \texttt{idea2}
+buys only a few ms more than \texttt{exact} while adding its
+truncation error, confirming \S\ref{sec:comparison}'s expectation that
+once the z-marginalisation is in place the exact 1-D sum is already
+essentially free; \texttt{exact} is the production default.
+
+Accuracy, against the old module's own output:
+\begin{itemize}
+\item \textbf{Bins 0--3}: $\max|{\rm new}/{\rm old}-1| = 3.3\times10^{-4}$
+  --- an order of magnitude \emph{inside} the old module's own Cuhre
+  tolerance (\texttt{eps\_rel}$=5\times10^{-3}$).
+\item \textbf{\texttt{idea2} vs \texttt{exact}}: median
+  $8\times10^{-4}$, max $4.6\times10^{-3}$ --- matching
+  \S\ref{sec:real_validation}'s Python-side prediction for the $n\le2$
+  truncation.
+\item \textbf{Quadrature convergence}: doubling to
+  $(n_{\lnM},n_z)=(192,128)$ moves \texttt{exact} by
+  $\le4\times10^{-4}$. The $z$ axis is the one that needs the nodes:
+  $S_{ij}(\lnM,z)$ has compact support ($\Delta z\sim0.15$ inside the
+  full $[0.05,0.80]$ window), which is why the default is $n_z=64$
+  rather than 32.
+\end{itemize}
+
+\paragraph{One deliberate physics change: bins 4--11.} The old
+module's \texttt{set\_bin} is a silent no-op for
+\texttt{bin\_index}$\ge4$ (\texttt{lob\_centers\_} holds only the 4
+DES-Y3 richness centres), so bins 4--11 --- the $z\in[0.35,0.50]$ and
+$[0.50,0.65]$ blocks --- were reusing bin 3's
+$R_\lambda(130)$ in the miscentered term instead of their own richness
+bin's aperture. The new \texttt{Shear1hMisSel} resolves the richness bin as
+\texttt{bin\_index} $\bmod\ 4$ (the \texttt{sel\_function} layout is
+richness-fast, $z$-block-slow), which changes bins 4--11 by up to
+$2.2\%$ (largest for richness bin 0, where
+$R_\lambda(25)/R_\lambda(130)$ differs most). Two checks pin this down
+as the entire difference: (i) bins 7 and 11 --- richness bin 3, whose
+$R_\lambda(130)$ the old module was accidentally using anyway ---
+agree with the old module at the same $\lesssim10^{-3}$ level as bins
+0--3; and (ii) forcing \texttt{lob\_centers = 130 130 130 130} in the
+new module reproduces the old module's bins 4--11 to
+$1.6\times10^{-3}$. The new values are the correct ones.
+
+\end{document}

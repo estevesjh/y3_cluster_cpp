@@ -1,0 +1,156 @@
+/* Site-specific overrides on top of sphinx_wagtail_theme.
+ *
+ * Brand color: Harvard crimson (#A51C30). It replaces the theme's dark
+ * purple (#2e1f5e) everywhere, with a darker ramp for hover/active
+ * (#7f1525) and dark-mode surfaces (#5e0f1b), mirroring the theme's own
+ * #2e1f5e / #201641 / #1b1238 ramp. The teal link-hover/underline accent
+ * is the theme's second color and is left as is.
+ */
+
+:root {
+  --crimson: #a51c30;
+  --crimson-dark: #7f1525;
+  --crimson-darker: #5e0f1b;
+  --primary: #a51c30;
+  --indigo: #a51c30;
+}
+
+/* --- links ------------------------------------------------------------ */
+a,
+.btn-link,
+.page-link,
+.toc .current > a {
+  color: var(--crimson);
+}
+
+/* --- Bootstrap "primary" utilities (top bar uses .bg-primary) --------- */
+.bg-primary { background-color: var(--crimson) !important; }
+.border-primary { border-color: var(--crimson) !important; }
+.text-primary { color: var(--crimson) !important; }
+.badge-primary { background-color: var(--crimson); }
+
+/* --- buttons ----------------------------------------------------------- */
+.btn-primary,
+.btn-primary.disabled,
+.btn-primary:disabled {
+  background-color: var(--crimson);
+  border-color: var(--crimson);
+}
+.btn-primary:hover,
+.btn-primary:not(:disabled):not(.disabled):active,
+.btn-primary:not(:disabled):not(.disabled).active,
+.show > .btn-primary.dropdown-toggle {
+  background-color: var(--crimson-dark);
+  border-color: var(--crimson-darker);
+}
+.btn-primary:focus,
+.btn-primary.focus {
+  box-shadow: 0 0 0 0.2rem rgba(165, 28, 48, 0.5);
+}
+.btn-outline-primary,
+.btn-outline-primary.disabled,
+.btn-outline-primary:disabled {
+  color: var(--crimson);
+  border-color: var(--crimson);
+}
+.btn-outline-primary:hover,
+.btn-outline-primary:not(:disabled):not(.disabled):active,
+.btn-outline-primary:not(:disabled):not(.disabled).active,
+.show > .btn-outline-primary.dropdown-toggle {
+  color: #fff;
+  background-color: var(--crimson);
+  border-color: var(--crimson);
+}
+
+/* --- components -------------------------------------------------------- */
+pre {
+  background-color: var(--crimson);
+}
+.dropdown-item.active,
+.dropdown-item:active,
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link,
+.page-item.active .page-link,
+.list-group-item.active,
+.progress-bar,
+.custom-control-input:checked ~ .custom-control-label::before,
+.custom-checkbox .custom-control-input:indeterminate ~ .custom-control-label::before,
+.toc .current > .toctree-expand,
+.rst-current-version {
+  background-color: var(--crimson);
+  border-color: var(--crimson);
+}
+.custom-range::-webkit-slider-thumb { background-color: var(--crimson); }
+.custom-range::-moz-range-thumb { background-color: var(--crimson); }
+.custom-range::-ms-thumb { background-color: var(--crimson); }
+
+/* --- dark mode ---------------------------------------------------------- */
+
+/* Neutral near-black surfaces replacing the theme's dark purple (#120c24).
+   Very dark grey, not pure black, to avoid text halation. */
+body.theme-dark {
+  background-color: #121212;
+}
+body.theme-dark table.docutils:not(.field-list) {
+  background-color: #1c1c1c;
+}
+body.theme-dark table.docutils:not(.field-list) thead th {
+  background-color: #1c1c1c;
+  border-color: #2e2e2e;
+}
+body.theme-dark table.docutils:not(.field-list) td,
+body.theme-dark table.docutils:not(.field-list) th {
+  border-color: #2e2e2e;
+}
+
+/* The theme's purple admonition tints, remapped off the purple family:
+   warnings to a dark amber, important/tip to a dark crimson tint. */
+body.theme-dark .admonition.caution,
+body.theme-dark .admonition.warning,
+body.theme-dark .admonition.attention {
+  background-color: #3a2a10;
+}
+body.theme-dark .admonition.important,
+body.theme-dark .admonition.seealso,
+body.theme-dark .admonition.tip {
+  background-color: #3a1218;
+}
+body.theme-dark .toc .toctree-expand { background-color: var(--crimson); }
+
+/* Buttons: dark-grey surfaces, including hover/focus (the theme paints
+   these purple: base #1b1238, hover/focus/active #2e1f5e). */
+body.theme-dark .btn-light {
+  background-color: #1c1c1c;
+  border-color: #2e2e2e;
+}
+body.theme-dark .btn-light:hover,
+body.theme-dark .btn-light:focus,
+body.theme-dark .btn-light:focus-within,
+body.theme-dark .btn-light:not(:disabled):not(.disabled):active,
+body.theme-dark .btn-light:not(:disabled):not(.disabled).active {
+  background-color: #2e2e2e;
+  border-color: #3d3d3d;
+}
+
+/* Search input / input groups: grey instead of purple. */
+body.theme-dark .form-control {
+  background-color: #1c1c1c;
+  border-color: #2e2e2e;
+}
+body.theme-dark .input-group-text { border-color: #2e2e2e; }
+
+/* Dividers: the theme paints every dark-mode border purple (#1b1238) with
+   !important — the sidebar vertical line, hr, .search li, etc. Match its
+   specificity and weight with a grey. */
+body.theme-dark hr,
+body.theme-dark .border,
+body.theme-dark .with-border,
+body.theme-dark .border-top,
+body.theme-dark .border-right,
+body.theme-dark .sidebar-container,
+body.theme-dark .border-bottom,
+body.theme-dark .border-left,
+body.theme-dark .search li {
+  border-color: #2e2e2e !important;
+}
+body.theme-dark blockquote { border-color: #2e2e2e; }

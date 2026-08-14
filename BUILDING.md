@@ -12,6 +12,18 @@
 These instructions set you up to use the GPU-enabled version of the
 `y3_cluster_cpp` analysis pipeline on NERSC Perlmutter.
 
+> **On a Mac?** See [building_macos.md](building_macos.md) instead — a
+> CPU-only recipe (no CUDA, no PAGANI/`gpuintegration`) for Apple Silicon.
+
+**Python runtime dependencies** (needed to *run* the pipeline, not just
+build it): `numpy`, `scipy`, `astropy` (distances in `cp_camb`),
+**`cluster_toolkit`** (Tinker bias, ξ_NL, and the halo-model lensing
+tables in `y3_buzzard/halo_model_cosmosis.py` — installed from the
+[marcpaterno fork](https://github.com/marcpaterno/cluster_toolkit), see
+[the conda-env section](#i-want-to-make-my-own-conda-environment)), and
+`fitsio`/`h5py` for data files. The shared `y3cl_je` conda env already
+has all of them.
+
 > **THIS BUILD IS FRAGILE.** The module versions, PATH layout, and patched
 > external headers below are *all* required. Deviate at your own risk to
 > your sanity. If you make code changes, follow a clean git workflow — see

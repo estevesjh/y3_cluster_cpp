@@ -29,11 +29,64 @@ CosmoSIS `.ini` pipelines that drive these modules live in sibling repos
 under `cosmosis-models/` or `y3_buzzard/` here is local/scratch and not
 canonical — don't treat it as authoritative.
 
+## Code history
+
+The backbone of this pipeline is entirely described in the DES
+cluster-cosmology software paper, arXiv:2309.06593 (ADS
+`2023arXiv230906593A`) — the original CosmoSIS/C++/CUBA suite for cluster
+number counts and population-averaged lensing, validated on DES Y1. That
+paper also describes the C++ design this repo still follows: the
+header-only struct/class "models" composed into integrand templates
+(`CosmoSISScalarIntegrationModule` and kin). That paper is the reference
+pipeline. **Cite it as "DES Cluster et al. (2023)"**, the collaboration
+form — never by ADS first author.
+
+Everything since is layered on that backbone, mostly as speed-ups, by
+Johnny Esteves with Marc Paterno and Jim Annis:
+
+- the GPU/CUDA ports (PAGANI backends, `.cuh` device models);
+- the fast mass integrations — the fixed Gauss–Legendre evaluators
+  (`n_operator_sel_gl_t.hh`, `SelGLCore`) that replaced the per-bin
+  adaptive Cuhre integrals.
+
+On the physics side, the Costanzi et al. (2026) model — "Forward
+analytical model for the optical selection bias on galaxy cluster
+lensing profiles", PhRvD 113, 103508; arXiv:2604.05833 (ADS
+`2026PhRvD.113j3508C`) — extends the backbone with the optical
+selection-bias and projection-lensing treatment, the "Costanzi-2026
+path" referenced throughout this file and the docs: the shifted-Poisson
+HOD + EMG richness kernels behind the `sel_function` tabulation, the
+P[X] operators (`b_sel_marg` → `bsel`), and the
+Sigma_prj/DSigma_prj/shear_prj projection branch.
+
+### Pipeline language (paper reframing)
+
+The user is reframing the pipeline terminology in the paper draft at
+`/Users/jesteves/Documents/Dev/des-y1-cluster-optical-selection/main.tex`
+("Impact of Galaxy Cluster Optical Selection on DES Y1 Cosmology").
+Docs and prose should track the paper's names. The pipeline code itself
+(module/section/variable names) is planned to migrate to the same
+language; until that lands, DataBlock/code key names stay as-is and the
+docs carry both. Mapping:
+
+- Σ^prj is "the two-halo term sourced by correlated line-of-sight
+  structure" with the **selection-affected bias** b_sel(θ); the
+  conventional two-halo term is its unselected-bias limit.
+- code `b_eff` = paper **b_halo**; code `P1` = paper **𝒫[1]**;
+  I₂ ≡ 𝒫[b ξ_NL], I₁ ≡ 𝒫[b ξ_NL σ(θ)].
+- S_i(M, z^tr) = **richness selection function**; 𝒮_i =
+  **observed-richness kernel**; 𝒮_j = **observed-redshift kernel**.
+- **Target-cluster miscentering** (gamma kernel, f_mis/tau_mis) vs
+  **neighbouring-halo miscentering** (single-offset Σ_mis inside the
+  two-halo term, no free parameters).
+- R_excl is a line-of-sight **slab exclusion**; the EMG kernel is the
+  **Costanzi projection kernel**.
+
 ## Build
 
 The project **only builds on Perlmutter GPU compute nodes with a specific non-default
 toolchain**. Do not use the default module versions. Full recipe is in
-`BUILD_PERLMUTTER.md`; summary:
+`BUILDING.md`; summary:
 
 ```bash
 # get a GPU node for test execution
@@ -59,7 +112,7 @@ ctest -j 10
 - The source tree **must live on `/pscratch`**, not `/global/common/software`,
   because the latter is read-only on compute nodes.
 - The bundled `externals/catch2/catch.hpp` needs the `SIGSTKSZ` patch
-  (already applied in this working tree; see `BUILD_PERLMUTTER.md` §3 if it
+  (already applied in this working tree; see `BUILDING.md` §5 if it
   regresses).
 - `Y3_CLUSTER_CPP_DIR` **must** point at the pscratch source root at both
   build and test time — tests use it to locate data files in `data/`.
@@ -97,6 +150,16 @@ Run pipelines from those repos with `Y3_CLUSTER_CPP_DIR` pointing at this
 tree so the built `.so` files under `release-build/src/modules/...` resolve.
 Outputs land in `<ini_basename>_output/` next to the driving `.ini`.
 
+## Docs site (Sphinx)
+
+- Sphinx sources live in `docs/source/` (MyST Markdown, theme
+  `sphinx-wagtail-theme`). Build locally with
+  `sphinx-build -W -b html docs/source docs/build/html` — `-W` matches
+  `fail_on_warning: true` in `.readthedocs.yaml`.
+- Pinned toolchain in `docs/requirements.txt` (works on both the Python 3.9
+  NERSC env and the 3.12 Read the Docs image). Published via Read the Docs;
+  PR #1 (`docs/sphinx-site` branch) tracks the site.
+
 ## Architecture
 
 ### Template + macro module pattern
@@ -115,7 +178,7 @@ instantiates the template and exports `setup/execute/cleanup` via a macro.
    T_CEN, T_MIS, A_CEN, A_MIS, HMF, DEL_SIG, DV_DO_DZ, OMEGA_Z>`. Per-survey
    aliases (e.g. `DefaultModels` = SDSS set) live here. **No HMB type** —
    halo bias is now an `Interp2D` read from datablock section `haloModel/bias`
-   written by `y3_buzzard/haloModelCosmosis.py`.
+   written by `y3_buzzard/halo_model_cosmosis.py`.
 3. **Integrand class template** — e.g. `NOperatorSelScalar<Weight>` in
    `src/models/n_operator_sel_t.hh`. Composes the term evaluations and the
    integrator (cuhre / pagani / fixed-GL) into a thing CosmoSIS can call.
@@ -138,9 +201,11 @@ modules must be added there. GPU modules are all gated on `if (USE_CUDA)`.
 ### Integrator conventions (Costanzi-2026 path)
 
 - **Fixed-GL evaluator is the default**, PAGANI variants are reference-only
-  benchmarks. `BSelMargIntegrand.so` co-computes P1/I1/I2 in one pass;
-  `RedShearPrjEvaluator.so` co-computes Σ_prj/ΔΣ_prj/g_t^prj in one pass
-  (`docs/Prj_lensing.md`).
+  benchmarks. `BSelMargIntegrand.so` co-computes P1/I1/J in one pass
+  (J = I2 − I1 computed directly to avoid cancellation);
+  `SigmaPrjEvaluator`/`DSigmaPrjEvaluator`/`ShearPrjEvaluator`
+  (`src/modules/sigma_prj_cpu/`) are thin wrappers over the caching
+  `sp_detail::ShearPrjCore` (`src/models/sigma_prj_t.hh`).
 - PAGANI variants are ~10³× slower than the fixed-GL path for these
   integrands (0.17 s vs 208 s on the b_sel wall grid) — don't treat them as
   "the production path".
@@ -311,7 +376,7 @@ fails, deliberately).
 
 ## Python side
 
-- `y3_buzzard/haloModelCosmosis.py` publishes `haloModel/bias` (Interp2D) and
+- `y3_buzzard/halo_model_cosmosis.py` publishes `haloModel/bias` (Interp2D) and
   related halo-model outputs consumed by C++ modules. The C++ halo-bias type
   HMB_t is retired; any module that needs b(M,z) reads it from the datablock.
 - Python↔C++ numeric-equivalence harnesses (`compare_*_py_vs_cpp.py`,

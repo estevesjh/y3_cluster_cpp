@@ -1,0 +1,6 @@
+# Pinned docs toolchain.
+# Chosen to work on both Python 3.9 (NERSC shared conda env) and
+# Python 3.12 (Read the Docs build image).
+sphinx==7.4.7
+myst-parser==3.0.1
+sphinx-wagtail-theme==6.6.0

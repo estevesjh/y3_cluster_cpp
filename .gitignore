@@ -1031,3 +1031,7 @@ y1_mock/datablock_0/sigmacritinv/z.txt
 
 # Local scratch / archived stuff
 archive/
+
+# Sphinx documentation
+docs/build/
+!docs/Makefile

@@ -1,0 +1,48 @@
+%% Data flow of the mock_mcmc_buzzard.ini reference pipeline.
+%% Node colors: blue = cosmology quantities, orange = selection effects,
+%% green = cluster observables, grey = likelihood/sampler.
+%% Regenerate the PNG with:
+%%   npx -y @mermaid-js/mermaid-cli -i docs/figs/pipeline_dataflow.mmd \
+%%       -o docs/source/_static/img/pipeline_dataflow.png -b white -s 2
+flowchart TB
+    consistency["consistency"] --> GrowthFactor["GrowthFactor"]
+    GrowthFactor -- "growth_parameters" --> cp_camb["cp_camb"]
+    cp_camb -- "cdm_baryon_power_lin" --> MfTinker["MfTinker"]
+    cp_camb -- "matter_power_lin" --> halo_model["halo_model"]
+    GrowthFactor -- "growth_parameters" --> halo_model
+    cp_camb -- "distances" --> asci["average_sigma_crit_inv"]
+
+    MfTinker -- "mass_function" --> NumCountsSel["NumCountsSel"]
+    MfTinker -- "mass_function" --> Shear1hMisSel["Shear1hMisSel"]
+    MfTinker -- "mass_function" --> b_sel_marg["b_sel_marg"]
+    MfTinker -- "mass_function" --> spfp["shear_prj_frozen_physics"]
+
+    halo_model -- "haloModel/dSigma_nfw" --> Shear1hMisSel
+    halo_model -- "haloModel/bias + xi_nl" --> b_sel_marg
+    halo_model -- "haloModel/bias + xi_nl" --> spfp
+    halo_model -- "haloModel/bias" --> bsel["bsel"]
+
+    sel_function["sel_function"] -- "S_stack" --> NumCountsSel
+    sel_function -- "S_stack" --> Shear1hMisSel
+
+    asci -- "sci_average" --> Shear1hMisSel
+    asci -- "sci_average" --> spfp
+
+    b_sel_marg -- "P1, I1, J" --> bsel
+    bsel -- "b_small, b_large" --> spfp
+
+    NumCountsSel -- "numcountssel/vals (12)" --> likelihoods["likelihoods"]
+    Shear1hMisSel -- "shear1hmissel/vals (180)" --> likelihoods
+    spfp -- "shear_prj/vals (180, alias)" --> likelihoods
+
+    likelihoods -- "log L" --> sampler(["sampler"])
+
+    classDef cosmo fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef sel fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef obs fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef like fill:#e5e7eb,stroke:#374151,color:#111827
+
+    class consistency,GrowthFactor,cp_camb,MfTinker,halo_model,asci cosmo
+    class sel_function,b_sel_marg,bsel sel
+    class NumCountsSel,Shear1hMisSel,spfp obs
+    class likelihoods,sampler like
