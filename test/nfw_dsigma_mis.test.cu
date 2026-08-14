@@ -24,7 +24,14 @@ TEST_CASE("Test NFW Misc Implementation")
   double  RHOM = RHOC*omega_m;
   NFW_DSIGMA_MIS model(conc, RHOM, "gamma");
 
-  double const epsrel = 5.0e-3;
+  // FINDING (real, at the project's standard 1e-3 -- see
+  // docs/nfw_dsigma_mis_defect.md): authored at epsrel=5e-3 because the
+  // (r=10, r_mis=2.0) point below does not pass at 1e-3 (measured
+  // -0.497% vs the cluster_toolkit reference; not a table-domain-edge
+  // artifact -- x=r/rs~35.5, x_mis=r_mis/rs~7.1 are both well inside
+  // the tabulated x in [1e-3, 5e3] range). Kept strict rather than
+  // loosened, per policy: a failing test here is doing its job.
+  double const epsrel = 1.0e-3;
   double const epsabs = 1.0e-12;
 
   // Here we need to fill the vectors rs, rmiss, lnMs and answers 
