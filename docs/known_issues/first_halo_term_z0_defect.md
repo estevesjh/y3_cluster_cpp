@@ -87,8 +87,8 @@ alone since `first_halo_term` itself works correctly for any z passed to it.
 3. Re-run `test/halo_model.test.py` after either change and update the
    measured-deviation table above.
 
-Related: `docs/dsigma_hh_debug_flag.md` and
-`docs/hod_normalization_defect.md`, the sibling known-defect writeups
+Related: `docs/known_issues/dsigma_hh_debug_flag.md` and
+`docs/known_issues/hod_normalization_defect.md`, the sibling known-defect writeups
 this one's structure mirrors; `test/halo_model.test.py::TestBiasModel`
 and `::TestFirstHaloTerm`, which now pass against genuinely independent
 references (`cluster_toolkit.bias.bias_at_nu`,

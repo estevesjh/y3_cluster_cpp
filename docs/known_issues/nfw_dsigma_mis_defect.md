@@ -72,8 +72,8 @@ written; the looser tolerance was never revisited.
 3. Re-run `test/nfw_dsigma_mis.test.cu` after either change and update
    the measured table above.
 
-Related: `docs/radial_series_vs_full_ltmz_defect.md` (the sibling
+Related: `docs/known_issues/radial_series_vs_full_ltmz_defect.md` (the sibling
 miscentered-NFW finding from the same review pass, a much larger
-effect with a known cause); `docs/dsigma_hh_debug_flag.md`,
-`docs/hod_normalization_defect.md`, `docs/first_halo_term_z0_defect.md`
+effect with a known cause); `docs/known_issues/dsigma_hh_debug_flag.md`,
+`docs/known_issues/hod_normalization_defect.md`, `docs/known_issues/first_halo_term_z0_defect.md`
 — the other known-defect writeups this one's structure mirrors.

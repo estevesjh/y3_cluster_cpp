@@ -30,7 +30,7 @@
 // evaluate() only reads the cache.
 //
 // dSigma_hh carries NaN over ~60% of its (R, z) table by construction
-// (see docs/dsigma_hh_debug_flag.md); sanitized to 0 before Interp2D,
+// (see docs/known_issues/dsigma_hh_debug_flag.md); sanitized to 0 before Interp2D,
 // same convention as Shear1h2hMax.cc.
 //
 // Options: bin_index x r_perp cartesian grid (bin slow / R fast),
@@ -291,7 +291,7 @@ public:
 
 private:
   // haloModel/dSigma_hh through Interp2D, with the producer's NaNs
-  // replaced by 0 first (docs/dsigma_hh_debug_flag.md), same convention
+  // replaced by 0 first (docs/known_issues/dsigma_hh_debug_flag.md), same convention
   // as Shear1h2hMax.cc.
   static y3_cluster::Interp2D
   make_sanitized_hh(cosmosis::DataBlock& s)

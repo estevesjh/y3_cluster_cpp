@@ -274,7 +274,7 @@ ctest --output-on-failure
 
 Expect **59/60 passing**. The one failure is `sel_function_test`'s three
 deliberately-red tests pinning the known HOD-normalization defect (see
-`docs/hod_normalization_defect.md` at the repo root — same failure you'd
+`docs/known_issues/hod_normalization_defect.md` at the repo root — same failure you'd
 see on any platform, not macOS-specific).
 
 ## 11. Environment script for new shells

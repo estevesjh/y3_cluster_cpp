@@ -1,7 +1,7 @@
 # ⚠ Shifted-Poisson HOD density is not normalized at low occupation
 
 **Raised 2026-08-13** while writing the first dedicated unit tests for
-`src/pipelines/des_y3/shared/sel_function.py` (previously untested; see
+`src/pipelines/shared/sel_function.py` (previously untested; see
 `test/sel_function.test.py`). The continuous shifted-Poisson density
 `P(lambda_tr | M, z)` — `sel_function._p_hod_scalar`, matching
 `src/models/mor_hod_t.hh`'s `MOR_HOD_t` line for line — does not
@@ -87,5 +87,5 @@ normalization.
 
 Related: `docs/source/science/index.md` "Selection functions" chapter
 (the closed-form derivation this file's tests check against);
-`docs/dsigma_hh_debug_flag.md` (the sibling known-defect writeup this
+`docs/known_issues/dsigma_hh_debug_flag.md` (the sibling known-defect writeup this
 one's structure mirrors).

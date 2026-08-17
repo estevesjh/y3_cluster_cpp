@@ -99,7 +99,7 @@ shape) diverged this much.
 3. Re-run `test/shear1h_cross_backend.test.py` after either change and
    update the measured-deviation table above.
 
-Related: `docs/dsigma_hh_debug_flag.md`,
-`docs/hod_normalization_defect.md`,
-`docs/first_halo_term_z0_defect.md`, the sibling known-defect writeups
+Related: `docs/known_issues/dsigma_hh_debug_flag.md`,
+`docs/known_issues/hod_normalization_defect.md`,
+`docs/known_issues/first_halo_term_z0_defect.md`, the sibling known-defect writeups
 this one's structure mirrors.

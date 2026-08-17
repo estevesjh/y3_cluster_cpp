@@ -23,7 +23,7 @@
 // SelFunction_t, and the miscentred NFW look-up via NFW_DSIGMA_MIS.
 //
 // dSigma_hh carries NaN over ~60% of its (R, z) table by construction
-// (see docs/dsigma_hh_debug_flag.md); the values are sanitized to 0
+// (see docs/known_issues/dsigma_hh_debug_flag.md); the values are sanitized to 0
 // BEFORE being handed to Interp2D, which is exact for a max model
 // (max(1h, 0) = 1h where the 2h term is undefined) and keeps NaN out
 // of the interpolator's stencil. Requires compute_lensing_2h = T.
@@ -196,7 +196,7 @@ public:
 
 private:
   // haloModel/dSigma_hh through Interp2D, with the producer's NaNs
-  // replaced by 0 first (docs/dsigma_hh_debug_flag.md). The datablock
+  // replaced by 0 first (docs/known_issues/dsigma_hh_debug_flag.md). The datablock
   // ndarray is (n_z, n_r) row-major, which is exactly the column-major
   // (x = r_sigma fastest) layout Interp2D's vector constructor wants.
   static y3_cluster::Interp2D
