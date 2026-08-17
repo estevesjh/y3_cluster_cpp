@@ -9,16 +9,14 @@ tensor and interpolate it inside their population integrals.
 
 ## Script
 
-- Source: [`src/modules/sel_function/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/modules/sel_function/sel_function.py)
-  (`y3_cluster_cpp` @ `d7feb75`).
+- Source: [`src/pipelines/shared/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/main/src/pipelines/shared/sel_function.py).
 - Loaded by CosmoSIS as a Python module.
 
-The maintained DES Y3 namespace also contains
-`src/pipelines/shared/sel_function.py`. As of 2026-08-12 it is an
-exact staged copy of this production entry point, and namespace validators
-load it through `shared/sel_kernels.py`. This is not yet a runtime cutover:
-the reference ini continues to load `src/modules/sel_function/sel_function.py`.
-See {doc}`../pipeline_organization` for the compatibility boundary.
+`src/modules/sel_function/sel_function.py` remains a thin compatibility shim
+that imports this shared implementation. The CosmoSIS configurations load
+the shared file directly, and `shared/sel_kernels.py` uses the same module.
+The HOD and lambda quadrature are also shared with `cosmology/bsel.py` via
+`shared/datablock_models.py`.
 
 ## Numerical framework
 
@@ -58,8 +56,8 @@ The recipe, per sample:
    L\sigma_{\rm eff}]$, with
    $\sigma_{\rm eff} = \sqrt{\mu_{\rm sat} +
    (\sigma_\lambda\mu_{\rm sat})^2}$ and $L = 6$; evaluate
-   $P_{\rm HOD}$ on the full $(192, 64, 32)$ tensor in a single
-   `gammaln` call (narrow-Gaussian fallback where
+   $P_{\rm HOD}$ on the full $(192, 64, 32)$ tensor with the continuous
+   shifted-Poisson log-Gamma equation (narrow-Gaussian fallback where
    $\mu_{\rm sat} \le 10^{-8}$).
 2. Evaluate the 8 EMG coefficient splines on the 1-D $z$ grid only
    (saves $\sim 130$ ms/sample), broadcast to
@@ -67,19 +65,62 @@ The recipe, per sample:
 3. Compute the EMG CDF via `erfcx` at the **5 unique bin edges**
    $\{20, 30, 45, 60, 200\}$ and difference, giving all four
    $\mathcal S_i$ tables at once.
-4. Per bin: contract
-   $S_i = \sum_k W_k\, \mathcal S_i\, P_{\rm HOD}$, multiply by
-   $\mathcal S_j(z)$, pack into `S_stack`.
+4. Contract the existing `PHOD * PLOB_LTR` integrand over true richness
+   into one $(\ln M,z)$ surface per unique edge, subtract the lower-edge
+   surface from the upper-edge surface for every configured richness bin,
+   multiply by $\mathcal S_j(z)$, and pack into `S_stack`.
 
 The Python kernels match the C++ models
 (`src/models/mor_hod_t.hh`, `src/models/richness_kernel_t.hh`)
 line-for-line. Full derivation: {doc}`../math/index`.
 
+### Fast execution path
+
+The refactor does not replace the production contraction with a generic
+per-node Python implementation. `execute()` constructs one shared `PHOD`
+datavector for the current sample and passes that object to the existing
+fused `@njit` boundary. Only the normalized scalar fields cross into
+`_compute_lam_nodes_and_P_HOD_nb`, because Numba cannot consume the Python
+dataclass. That kernel computes the adaptive bracket, reuses the cell-level
+HOD quantities across all true-richness nodes, and fills the preallocated
+output arrays in place. The shared `PHOD` NumPy path is the
+readable/reference implementation and is used by `bsel`; the tests compare
+the fast selection path against it.
+
+### Shared ownership and lifecycle
+
+`setup()` owns only values that cannot change with a sampled datablock:
+the configured bin edges, the common `lnM` and `z` grids, the canonical
+Gauss–Legendre nodes, and the per-module projection-spline cache.
+`execute()` reads the current datablock through `DataBlockSource`, constructs
+the current `PHOD`, and runs the fast numerical contraction.
+
+The compatibility helpers `_read_mor`, `_p_hod_scalar`, and `_mu_sat` remain
+available to the full-ltmz reference code and unit tests, but they delegate to
+`datablock_models.HODParameters` and `PHOD`; they do not carry a second HOD
+implementation. The only intentionally separate HOD implementation is the
+fused Numba kernel, retained for the production performance path.
+
+The selection contraction is represented as a small set of 2-D datavectors
+rather than a new observed-richness quadrature grid:
+
+```text
+weighted_hod              (lnM, z, ltr)
+edge_integrals            (lambda_edge, lnM, z)
+richness_selection        (bin, lnM, z)
+S_stack                   (bin, z, lnM)
+```
+
+`edge_integrals` is the integrated `PHOD * PLOB_LTR` quantity. Since the
+observed-richness integral is analytic, `PLOB_LTR` enters through its CDF at
+the two bin edges. This avoids materializing a redundant
+`(lambda_true, lambda_observed)` tensor.
+
 ## CosmoSIS setup
 
 ```ini
 [sel_function]
-file = ${Y3_CLUSTER_CPP_DIR}/src/modules/sel_function/sel_function.py
+file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/shared/sel_function.py
 lam_min = 20.0  30.0  45.0  60.0   20.0  30.0  45.0  60.0   20.0  30.0  45.0  60.0
 lam_max = 30.0  45.0  60.0  200.0  30.0  45.0  60.0  200.0  30.0  45.0  60.0  200.0
 zob_min = 0.20  0.20  0.20  0.20   0.35  0.35  0.35  0.35   0.50  0.50  0.50  0.50
@@ -135,12 +176,31 @@ saves. Measured sweep (2026-05-07, wall-clock per sample):
 Accuracy at `n_lnm = 192` vs `256`: $<0.05\%$ on `NumCountsSel` and
 `Shear1hMisSel`.
 
+### Refactor regression and timing test
+
+`test/sel_function_regression.test.py` runs the current module and the exact
+pre-refactor implementation from Git baseline `80b2fcf` on the same in-memory
+datablock. It checks that `sel_function/S_stack` agrees to `2\times10^{-6}`
+relative tolerance and that the warmed-up median per-sample runtime is no more
+than 50% slower. The test uses a smaller production-shaped grid so it is
+appropriate for CI; the test's timing is a guard against an accidental
+regression, not a replacement for the production-grid benchmark above.
+
+Run it directly with:
+
+```bash
+python test/sel_function_regression.test.py
+```
+
+The test requires the normal CosmoSIS Python environment and a checkout that
+contains the baseline Git commit.
+
 ## DataBlock inputs
 
 | DataBlock input | Meaning | Units / shape | Produced by |
 |---|---|---|---|
 | `cluster_mor/{log10_Mmin, log10_M1 \| log10_ratio, alpha, epsilon, sigma_lambda}` | shifted-Poisson HOD richness–mass parameters | — | sampler (values file) |
-| `plob_ltr_params/*` | EMG projection-kernel coefficient splines (optional; falls back to the table embedded in `y3_buzzard/prj_params.py`) | — | retired `prj_params` module / in-code fallback |
+| `plob_ltr_params/*` | EMG projection-kernel coefficient splines (optional; falls back to `PrjParams.default()`) | — | `prj_params` module / in-code fallback |
 
 ## DataBlock outputs
 
@@ -149,3 +209,5 @@ Accuracy at `n_lnm = 192` vs `256`: $<0.05\%$ on `NumCountsSel` and
 | `sel_function/lnM` | shared mass grid | `(192,)` | `NumCountsSel`, `Shear1hMisSel` |
 | `sel_function/z` | shared redshift grid | `(64,)` | same |
 | `sel_function/S_stack` | packed selection tensor $S_{ij}(\ln M, z)$, layout `(bin, z, lnM)`, C-contiguous | `(12, 64, 192)` | same |
+| `sel_function/lambda_edges` | unique observed-richness bin edges used by the selection wall | `(5,)` | `bsel.py` |
+| `sel_function/lambda_centres` | arithmetic centres of those edges | `(4,)` | `bsel.py` and shear consumers |

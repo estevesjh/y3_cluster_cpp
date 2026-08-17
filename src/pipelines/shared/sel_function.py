@@ -13,8 +13,8 @@ with
                    edges (e.g. {20, 30, 45, 60, 200}) — no table, no cache.
     S_j(z)       — Gaussian CDF difference over the z bin.
     P_HOD        — Shifted-Poisson continuous form (doc Eq. 28), matching
-                   src/models/mor_hod_t.hh. Single gammaln call on the
-                   (n_lnm, n_z, N_q) tensor.
+                   src/models/mor_hod_t.hh. The shared ``PHOD`` owns the
+                   equation; the production path uses its fused Numba form.
 
 Grid:
     lnM  — linear in [lnm_low, lnm_high], n_lnm points (default 256).
@@ -40,10 +40,18 @@ Writes to datablock (section "sel_function"):
 """
 from __future__ import annotations
 import math
+from pathlib import Path
+import sys
 import numpy as np
 from cosmosis.datablock import option_section
 from numba import njit
-from scipy.special import erf, erfcx, gammaln
+from scipy.special import erf, erfcx
+
+_PIPELINES_DIR = str(Path(__file__).resolve().parents[1])
+if _PIPELINES_DIR not in sys.path:
+    sys.path.insert(0, _PIPELINES_DIR)
+from shared import datablock_models as dm
+from cosmology.prj_params import COEFF_NAMES, PrjParams
 
 
 SQRT2 = np.sqrt(2.0)
@@ -224,81 +232,14 @@ def _plob_params(ltr, z, plob_splines, work_dtype=np.float64):
 
 
 def _cdf_lob(lam_ob, mu, sigma, tau, fprj):
-    """CDF of the Costanzi EMG kernel at lam_ob, given (mu, sigma, tau, fprj)
-    already evaluated at (ltr, z).
+    """Compatibility wrapper for :meth:`PrjParams.cdf_from_parameters`.
 
-    CDF(lob | ltr, z) = Phi(z_std) - fprj * tail
-        tail = exp(-tau (lob-mu) + tau^2 sigma^2 / 2) * Phi(tau sigma - z_std)
-             = 0.5 * erfcx(|u|) * exp(-0.5 z_std^2)            (u >= 0)
-             = exp(A) - 0.5 * erfcx(|u|) * exp(-0.5 z_std^2)    (u <  0)
-    with u = (tau sigma - z_std)/sqrt(2),  A = -tau(lob-mu) + 0.5(tau sigma)^2.
-
-    `lam_ob` is a scalar; `mu, sigma, tau, fprj` broadcast (same shape).
-
-    Optimisation notes: scalar kernel path via `np.subtract(out=)` and
-    in-place updates to the single pre-allocated `tail` buffer.  The
-    critical change vs the previous version is dropping the branched
-    `np.where(neg, exp(clip(A)) - tail_base, tail_base)` which
-    evaluated `np.exp(np.clip(A, ...))` on all 524k elements even where
-    the `u>=0` branch was taken; we now only compute `exp(A)` for the
-    `neg` subset.
+    The production path does not call this reference helper; it uses the
+    fused Numba edge kernel below. Keeping this wrapper preserves the tested
+    standalone API without maintaining a second analytical CDF equation.
     """
-    z_std = (lam_ob - mu) / sigma
-    u = (tau * sigma - z_std) * (1.0 / SQRT2)
-    # tail_base = 0.5 * erfcx(|u|) * exp(-0.5 z_std^2).  abs(u) instead of
-    # np.where(neg, -u, u) -- faster and same result since erfcx is even
-    # for our sign convention below.
-    exp_mz2 = np.exp(-0.5 * z_std * z_std)
-    tail = 0.5 * erfcx(np.abs(u)) * exp_mz2                    # shape of mu
-    # Correction in the u<0 branch: tail -> exp(A) - tail_base.
-    # Compute exp(A) ONLY on the negative-u subset (saves 524k exps).
-    neg = u < 0.0
-    if np.any(neg):
-        A_neg = -tau[neg] * (lam_ob - mu[neg]) + 0.5 * (tau[neg] * sigma[neg]) ** 2
-        np.clip(A_neg, -700.0, 700.0, out=A_neg)
-        # tail[neg] = exp(A_neg) - tail[neg]
-        tail[neg] = np.exp(A_neg) - tail[neg]
-    # CDF_Costanzi = Phi(z_std) - fprj * tail.  fuse subtract + clip.
-    out = _phi(z_std)
-    out -= fprj * tail
-    np.clip(out, 0.0, 1.0, out=out)
-    return out
-
-
-def _cdf_lob_stacked_numpy(lam_edges, mu, sigma, tau, fprj):
-    """Vectorised form of _cdf_lob over a 1-D set of lam_ob edges.
-
-    Pre-computes ``tau*sigma``, ``(tau*sigma)^2/2``, ``1/sigma`` once
-    across all edges (small gain, ~5 ms) and keeps the per-edge hot
-    path identical to _cdf_lob.  A true ``(n_edges, *shape)`` stacked
-    ufunc call was tried and found to be SLOWER than the per-edge
-    loop — scipy's erf/erfcx are memory-bandwidth-limited and stacking
-    5 copies into one call costs more in allocation than it saves in
-    dispatch overhead.  Keep the loop + shared arithmetic only.
-
-    Matches ``_cdf_lob`` bit-for-bit at every edge. Kept as a readable
-    closed-form reference (used to validate ``_cdf_lob_stacked_nb`` below,
-    the ~2.7x-faster fused kernel actually used by ``_cdf_lob_stacked``).
-    """
-    tau_sigma = tau * sigma
-    half_ts2  = 0.5 * tau_sigma * tau_sigma
-    inv_sigma = 1.0 / sigma
-    outs = []
-    for lam_ob in lam_edges:
-        lam = float(lam_ob)
-        z_std = (lam - mu) * inv_sigma
-        u = (tau_sigma - z_std) * (1.0 / SQRT2)
-        tail = 0.5 * erfcx(np.abs(u)) * np.exp(-0.5 * z_std * z_std)
-        neg = u < 0.0
-        if np.any(neg):
-            A_neg = -tau[neg] * (lam - mu[neg]) + half_ts2[neg]
-            np.clip(A_neg, -700.0, 700.0, out=A_neg)
-            tail[neg] = np.exp(A_neg) - tail[neg]
-        out = _phi(z_std)
-        out -= fprj * tail
-        np.clip(out, 0.0, 1.0, out=out)
-        outs.append(out)
-    return outs
+    return PrjParams.cdf_from_parameters(
+        lam_ob, mu, sigma, tau, fprj)
 
 
 # --- Numba-fused variant of _cdf_lob_stacked --------------------------------
@@ -493,15 +434,6 @@ def _K_edges_of_bins(lam_edges, ltr, z, plob_splines):
     return cdfs, K_per_bin
 
 
-def _S_i_bin(lam_min, lam_max, ltr, z, plob_splines):
-    """S_i(ltr, z) closed form — kept for parity / debug. Production path
-    goes through _K_edges_of_bins for the full bin set."""
-    mu, sigma, tau, fprj = _plob_params(ltr, z, plob_splines)
-    cdf_hi = _cdf_lob(lam_max, mu, sigma, tau, fprj)
-    cdf_lo = _cdf_lob(lam_min, mu, sigma, tau, fprj)
-    return cdf_hi - cdf_lo
-
-
 def _S_j(ztr, zob_min, zob_max, sigma_z):
     """Gaussian CDF difference over the z-bin."""
     return _phi((zob_max - ztr) / sigma_z) - _phi((zob_min - ztr) / sigma_z)
@@ -514,93 +446,57 @@ def _S_j(ztr, zob_min, zob_max, sigma_z):
 
 POISSON_TOL = 1e-8
 FALLBACK_SIGMA = 1.0e-3
-MIN_SIGMA = 1.0e-6
 Z_PIVOT_DEFAULT = 0.45
 
 
 def _mu_sat(M, z, log10_Mmin, log10_M1, alpha, epsilon, z_pivot):
-    """HOD mean satellite count as a function of (M, z). Broadcasts."""
-    Mmin = 10.0 ** log10_Mmin
-    M1   = 10.0 ** log10_M1
-    dM1  = M1 - Mmin
-    if dM1 <= 0.0:
-        return np.zeros_like(M)
-    dM = np.maximum(M - Mmin, 0.0)
-    base = np.where(dM > 0.0, dM / dM1, 0.0)
-    with np.errstate(invalid='ignore', divide='ignore'):
-        mu = np.where(
-            base > 0.0,
-            np.power(base, alpha) * np.power((1.0 + z) / (1.0 + z_pivot),
-                                             epsilon),
-            0.0,
-        )
-    return mu
+    """Compatibility wrapper around the shared ``PHOD.mu_sat`` method.
+
+    The production path uses the fused Numba kernel below. This helper is
+    retained for the readable/reference callers, but the satellite-occupation
+    equation itself has one owner: :class:`dm.PHOD`.
+    """
+    parameters = dm.HODParameters(
+        log10_Mmin=log10_Mmin,
+        log10_M1=log10_M1,
+        alpha=alpha,
+        epsilon=epsilon,
+        sigma_lambda=0.0,
+        z_pivot=z_pivot,
+    )
+    return dm.PHOD(parameters).mu_sat(M, z)
+
+
+def _as_phod(model):
+    """Normalize legacy MOR inputs to the shared continuous HOD object.
+
+    Older reference callers pass a dictionary, while the pipeline now passes
+    ``PHOD`` directly. Keeping this adapter at the compatibility boundary
+    avoids duplicating HOD parameter construction in every helper without
+    changing the existing reference API.
+    """
+    if isinstance(model, dm.PHOD):
+        return model
+    if isinstance(model, dm.HODParameters):
+        return dm.PHOD(model)
+    return dm.PHOD(dm.HODParameters(
+        log10_Mmin=model['log10_Mmin'],
+        log10_M1=model['log10_M1'],
+        alpha=model['alpha'],
+        epsilon=model['epsilon'],
+        sigma_lambda=model['sigma_lambda'],
+        z_pivot=model.get('z_pivot', Z_PIVOT_DEFAULT),
+    ))
 
 
 def _p_hod_scalar(ltr, lnM, z, mor):
-    """P_HOD(ltr | M, z) — shifted continuous-Poisson form (doc Eq. 28).
-
-    With nu = mu_sat + delta and delta = (sigma_intr * mu_sat)^2:
-
-        P(ltr | M, z) = exp[ -nu + (ltr + delta - 1) ln(nu) - lnGamma(ltr + delta) ]
-
-    Closed-form, no discrete k-sum, no 4-D (k) tensor. Numpy vectorised
-    across the full (n_lnm, n_z, N_q) ltr tensor in a single gammaln call.
-
-    ltr : (..., N_q)    — lambda quadrature nodes for each (M, z) cell
-    lnM : (n_lnm, 1, 1) broadcasts along z, ltr
-    z   : (1, n_z, 1)
-    mor : dict of scalar HOD params
-    """
-    M = np.exp(lnM)                                            # (n_lnm, 1, 1)
-    mu_sat = _mu_sat(M, z,
-                     mor['log10_Mmin'], mor['log10_M1'],
-                     mor['alpha'], mor['epsilon'], mor['z_pivot'])
-    lcentral = np.where(M >= 10.0 ** mor['log10_Mmin'], 1.0, 0.0)
-
-    # delta = (sigma_intr * mu_sat)^2;  nu = mu_sat + delta  (both (n_lnm, n_z, 1))
-    delta = (mor['sigma_lambda'] * mu_sat) ** 2
-    nu = mu_sat + delta
-
-    # Where mu_sat is tiny, the HOD reduces to a delta at lambda_central
-    # (represented as a narrow Gaussian for integration stability).
-    tiny = mu_sat <= POISSON_TOL
-    fallback = (np.exp(-0.5 * ((ltr - lcentral) / FALLBACK_SIGMA) ** 2)
-                / (SQRT2PI * FALLBACK_SIGMA))
-
-    # Continuous shifted Poisson. Shift argument by (lambda_central + delta)
-    # so the "mean" sits at lcentral + mu_sat (matches doc Eq. 28 where
-    # ltr is the latent richness including the central).
-    x = ltr - lcentral + delta                              # broadcast to full tensor
-    log_nu = np.log(np.maximum(nu, 1e-300))
-    # Only valid for x > 0 (i.e. ltr > lcentral - delta); clip and zero out.
-    valid = x > 0.0
-    x_safe = np.where(valid, x, 1.0)
-    log_P = -nu + (x_safe - 1.0) * log_nu - gammaln(x_safe)
-    density = np.where(valid, np.exp(log_P), 0.0)
-
-    # Collapse to narrow Gaussian where mu_sat ~ 0 (limit of shifted Poisson
-    # is ill-defined; matches the C++ fallback branch).
-    density = np.where(tiny, fallback, density)
-    # Physical boundaries: ltr >= 0 AND lambda_sat = ltr - lambda_central >= 0.
-    # Zero out any ltr below lambda_central (or below 0).
-    density = np.where((ltr < 0.0) | (ltr < lcentral), 0.0, density)
-    return density
+    """Compatibility wrapper around the shared :class:`dm.PHOD` model."""
+    return _as_phod(mor)(ltr, lnM, z)
 
 
 # ---------------------------------------------------------------------------
 # Per-bin grid choice
 # ---------------------------------------------------------------------------
-
-def _choose_z_grid(zob_min, zob_max, sigma_z, zt_low, zt_high, L_z, n_z):
-    """Tight z-grid where S_j has support, clipped to the integration volume."""
-    z_lo = max(zt_low,  zob_min - L_z * sigma_z)
-    z_hi = min(zt_high, zob_max + L_z * sigma_z)
-    if z_hi <= z_lo:
-        # Degenerate — tiny fallback grid (S_j is effectively zero everywhere)
-        z_lo, z_hi = zt_low, zt_high
-    return np.linspace(z_lo, z_hi, n_z)
-
 
 def _choose_lnM_grid(lam_min, lam_max, zob_min, zob_max, mor,
                      lnm_low, lnm_high, n_lnm, lam_n_sigma=6.0):
@@ -651,8 +547,8 @@ def _choose_lnM_grid(lam_min, lam_max, zob_min, zob_max, mor,
 # ---------------------------------------------------------------------------
 
 def _gl_nodes(N_q):
-    t, w = np.polynomial.legendre.leggauss(N_q)
-    return t, w
+    """Return the shared canonical Gauss-Legendre rule on ``[-1, 1]``."""
+    return dm.gl_nodes(-1.0, 1.0, N_q)
 
 
 # ---------------------------------------------------------------------------
@@ -704,6 +600,8 @@ def setup(options):
     except Exception:
         cfg['L_lam'] = 6.0
 
+    # The canonical nodes are setup state. ``dm.gl_nodes`` caches the
+    # Legendre rule by node count, so every execute call reuses these arrays.
     t, w = _gl_nodes(cfg['N_q'])
     cfg['gl_t'] = t
     cfg['gl_w'] = w
@@ -732,7 +630,7 @@ def setup(options):
 
 # --- Plob spline helpers (linear in z, flat extrapolation past edges) ------
 
-def _make_plob_splines(block, cache):
+def _make_plob_splines(block, cache=None):
     """Return the 8 EMG coefficient splines over z, cached across samples.
 
     Prefers the datablock section ``plob_ltr_params/*`` if a publisher
@@ -748,23 +646,27 @@ def _make_plob_splines(block, cache):
     keyed on a cheap fingerprint of the raw arrays so the cache still
     self-invalidates correctly if the published values ever do change.
     """
-    import sys as _sys
-    from pathlib import Path as _Path
-    _pipelines_dir = str(_Path(__file__).resolve().parent.parent)
-    if _pipelines_dir not in _sys.path:
-        _sys.path.insert(0, _pipelines_dir)
-    from cosmology.prj_params import PrjParams, COEFF_NAMES
+    # ``cache=None`` preserves the historical one-argument reference API.
+    # CosmoSIS passes the setup-owned cache; offline callers simply get a
+    # correctly typed, uncached result.
+    if cache is None:
+        cache = {}
+    source = (
+        block
+        if isinstance(block, (dm.DataBlockSource, dm.DumpSource))
+        else dm.DataBlockSource(block)
+    )
     try:
         keys = ('z',) + COEFF_NAMES
         fingerprint = tuple(
-            np.asarray(block['plob_ltr_params', k], dtype=float).tobytes()
+            np.asarray(source.array('plob_ltr_params', k), dtype=float).tobytes()
             for k in keys)
     except Exception:
         fingerprint = None
 
     if 'fingerprint' not in cache or cache['fingerprint'] != fingerprint:
         try:
-            params = PrjParams.from_datablock(block)
+            params = PrjParams.from_source(source)
         except Exception:
             params = PrjParams.default()
         cache['fingerprint'] = fingerprint
@@ -773,70 +675,26 @@ def _make_plob_splines(block, cache):
 
 
 def _read_mor(block):
-    """Read HOD parameters, supporting both log10_M1 and log10_ratio forms."""
-    log10_Mmin = float(block['cluster_mor', 'log10_Mmin'])
-    try:
-        log10_ratio = float(block['cluster_mor', 'log10_ratio'])
-        log10_M1 = log10_Mmin + log10_ratio
-    except Exception:
-        log10_M1 = float(block['cluster_mor', 'log10_M1'])
-    z_pivot = Z_PIVOT_DEFAULT
-    try:
-        z_pivot = float(block['cluster_mor', 'z_pivot'])
-    except Exception:
-        pass
-    return dict(
-        log10_Mmin   = log10_Mmin,
-        log10_M1     = log10_M1,
-        alpha        = float(block['cluster_mor', 'alpha']),
-        epsilon      = float(block['cluster_mor', 'epsilon']),
-        sigma_lambda = float(block['cluster_mor', 'sigma_lambda']),
-        z_pivot      = z_pivot,
+    """Return legacy MOR mapping via the shared HOD parameter normalizer."""
+    source = (
+        block
+        if isinstance(block, (dm.DataBlockSource, dm.DumpSource))
+        else dm.DataBlockSource(block)
     )
-
-
-def _compute_lam_nodes_and_P_HOD_numpy(lnM, z, mor, gl_t, gl_w, L=6.0):
-    """Per-(lnM, z) GL bracket + ltr nodes + P_HOD, bin-independent.
-
-    Returns:
-        lam_k       (n_lnm, n_z, n_q)   GL nodes in ltr
-        W_k         (n_lnm, n_z, n_q)   GL weights scaled by (b-a)/2
-        P_Mz        (n_lnm, n_z, n_q)   HOD P(ltr|M,z)
-        degenerate  (n_lnm, n_z)        cells where b <= a (mu_sat ~ 0)
-
-    Kept as a readable closed-form reference (used to validate
-    ``_compute_lam_nodes_and_P_HOD_nb`` below, the ~1.7x-faster fused
-    kernel actually used by ``_compute_lam_nodes_and_P_HOD``).
-    """
-    M = np.exp(lnM)[:, None]
-    zz = z[None, :]
-    mu_sat = _mu_sat(M, zz,
-                     mor['log10_Mmin'], mor['log10_M1'],
-                     mor['alpha'], mor['epsilon'], mor['z_pivot'])
-    lcentral = np.where(M >= 10.0 ** mor['log10_Mmin'], 1.0, 0.0)
-    mu_eff = lcentral + mu_sat
-    sig_eff = np.sqrt(np.maximum(
-        mu_sat + (mor['sigma_lambda'] * mu_sat) ** 2, 0.0))
-
-    a = np.maximum(0.0, mu_eff - L * sig_eff)
-    b = mu_eff + L * sig_eff
-    degenerate = b <= a
-    half = 0.5 * (b - a)
-    mid  = 0.5 * (a + b)
-
-    lam_k = mid[..., None] + half[..., None] * gl_t[None, None, :]
-    W_k   = half[..., None] * gl_w[None, None, :]
-
-    lnM_b = lnM[:, None, None]
-    z_b   = z[None, :, None]
-    P_Mz  = _p_hod_scalar(lam_k, lnM_b, z_b, mor)
-    return lam_k, W_k, P_Mz, degenerate
+    parameters = dm.HODParameters.from_source(source)
+    return {
+        name: getattr(parameters, name)
+        for name in (
+            'log10_Mmin', 'log10_M1', 'alpha', 'epsilon',
+            'sigma_lambda', 'z_pivot',
+        )
+    }
 
 
 # --- Numba-fused variant of _compute_lam_nodes_and_P_HOD --------------------
 #
 # mu_sat/lcentral/delta/nu/degenerate depend only on (lnM, z) -- shape
-# (n_lnm, n_z) -- but the numpy path's P_HOD step (_p_hod_scalar) broadcasts
+# (n_lnm, n_z) -- but a fully vectorized P_HOD call broadcasts
 # them across the full (n_lnm, n_z, N_q) ltr tensor and pays for two
 # expensive per-element special-function calls there:
 #   1. ``fallback`` (a narrow-Gaussian collapse for mu_sat ~ 0) is computed
@@ -921,28 +779,35 @@ def _compute_lam_nodes_and_P_HOD_nb(lnM, z, log10_Mmin, log10_M1, alpha, epsilon
                 if x <= 0.0:
                     P_Mz[k, zi, qi] = 0.0
                     continue
+                # Continuous shifted-Poisson HOD density at this GL node:
+                #   P = exp[-nu + (x - 1) log(nu) - log Gamma(x)]
+                # ``math.lgamma`` is log Gamma(x), used directly for stable
+                # evaluation instead of calculating Gamma(x) itself.
                 log_P = -nu + (x - 1.0) * log_nu - math.lgamma(x)
                 P_Mz[k, zi, qi] = math.exp(log_P)
 
 
 def _compute_lam_nodes_and_P_HOD(lnM, z, mor, gl_t, gl_w, L=6.0):
-    """Per-(lnM, z) GL bracket + ltr nodes + P_HOD, bin-independent.
+    """Use the maintained fused NumPy/Numba quadrature execution path.
 
-    Returns:
-        lam_k       (n_lnm, n_z, n_q)   GL nodes in ltr
-        W_k         (n_lnm, n_z, n_q)   GL weights scaled by (b-a)/2
-        P_Mz        (n_lnm, n_z, n_q)   HOD P(ltr|M,z)
-        degenerate  (n_lnm, n_z)        cells where b <= a (mu_sat ~ 0)
+    The scalar model is owned by :class:`dm.PHOD`; this function retains the
+    established hot kernel because it computes the cell-level HOD quantities
+    once and reuses them across all true richness nodes. The kernel is
+    validated against ``PHOD.make_ltr_quadrature`` by the selection tests.
     """
     n_lnm, n_z, n_q = lnM.size, z.size, gl_t.size
     lam_k = np.empty((n_lnm, n_z, n_q), dtype=np.float64)
     W_k = np.empty((n_lnm, n_z, n_q), dtype=np.float64)
     P_Mz = np.empty((n_lnm, n_z, n_q), dtype=np.float64)
     degenerate = np.empty((n_lnm, n_z), dtype=np.bool_)
+    # The Numba function receives scalar fields because it cannot consume a
+    # Python dataclass. The model normalization still happens once, here, at
+    # the boundary; callers do not need to rebuild a MOR dictionary.
+    parameters = _as_phod(mor).parameters
     _compute_lam_nodes_and_P_HOD_nb(
         np.asarray(lnM, dtype=np.float64), np.asarray(z, dtype=np.float64),
-        float(mor['log10_Mmin']), float(mor['log10_M1']), float(mor['alpha']),
-        float(mor['epsilon']), float(mor['sigma_lambda']), float(mor['z_pivot']),
+        parameters.log10_Mmin, parameters.log10_M1, parameters.alpha,
+        parameters.epsilon, parameters.sigma_lambda, parameters.z_pivot,
         np.asarray(gl_t, dtype=np.float64), np.asarray(gl_w, dtype=np.float64),
         float(L), lam_k, W_k, P_Mz, degenerate)
     return lam_k, W_k, P_Mz, degenerate
@@ -957,7 +822,8 @@ def execute(block, config):
     import time
     t_start = time.perf_counter()
 
-    mor = _read_mor(block)
+    source = dm.DataBlockSource(block)
+    phod = dm.PHOD.from_source(source)
     plob = _make_plob_splines(block, config['_plob_cache'])
 
     n_bins = config['n_bins']
@@ -969,8 +835,12 @@ def execute(block, config):
     lnm_grid = config['lnm_grid']
     z_grid   = config['z_grid']
     t_phod = time.perf_counter()
+    # Keep the fused hot path: PHOD supplies the normalized shared
+    # parameters, while the established Numba kernel performs the large
+    # (lnM, z, lambda_true) contraction without materializing extra arrays.
     lam_k, W_k, P_Mz, degenerate = _compute_lam_nodes_and_P_HOD(
-        lnm_grid, z_grid, mor, config['gl_t'], config['gl_w'])
+        lnm_grid, z_grid, phod, config['gl_t'], config['gl_w'],
+        config['L_lam'])
     dt_phod_ms = 1000.0 * (time.perf_counter() - t_phod)
 
     # S_i(lam_k, z) — closed form via CDF differencing at the unique bin
@@ -996,20 +866,49 @@ def execute(block, config):
     # mu_p, sig_p, tau_p, fprj_p are already broadcast to the full
     # (n_lnm, n_z, n_q) tensor via the mu = a_mu + b_mu * ltr line inside
     # _plob_params (with ltr = lam_k).
-    edges = _unique_edges(config['lam_min'], config['lam_max'])   # e.g. [20,30,45,60,200]
+    # The selection module owns the lambda partition.  Publish it so bsel
+    # and all offline consumers use the same edges instead of maintaining a
+    # second hard-coded copy.
+    edges = _unique_edges(config['lam_min'], config['lam_max'])
+    block['sel_function', 'lambda_edges'] = np.asarray(edges, dtype=float)
+    block['sel_function', 'lambda_centres'] = 0.5 * (edges[:-1] + edges[1:])
     cdfs_at_edge = _cdf_lob_stacked(edges, mu_p, sig_p, tau_p, fprj_p)
 
-    S_pack = np.empty((n_bins, n_z, n_lnm), dtype=np.float64)
-    for k in range(n_bins):
-        lo_i = int(np.searchsorted(edges, config['lam_min'][k]))
-        hi_i = int(np.searchsorted(edges, config['lam_max'][k]))
-        S_i = cdfs_at_edge[hi_i] - cdfs_at_edge[lo_i]
-        S_i = np.sum(W_k * S_i * P_Mz, axis=-1)
-        S_i = np.where(degenerate, 0.0, S_i)
-        S_j_vec = _S_j(z_grid, float(config['zob_min'][k]),
-                       float(config['zob_max'][k]),
-                       float(config['sigma_z'][k]))
-        S_pack[k] = (S_i * S_j_vec[None, :]).T
+    # First contract the PHOD × PLOB_LTR integrand over true richness for
+    # every unique lambda edge. For one edge e, the quantity is
+    #
+    #   E_e(M,z) = integral[d ltr * P_HOD(ltr|M,z)
+    #                         * F_PLOB(edge_e|ltr,z)].
+    #
+    # The result is a 2-D (lnM, z) surface per edge. A configured observed
+    # richness bin is then just E_hi - E_lo, so no second observed-richness
+    # quadrature or per-bin contraction is needed.
+    weighted_hod = W_k * P_Mz
+    edge_integrals = np.empty((edges.size, n_lnm, n_z), dtype=np.float64)
+    for edge_index, cdf in enumerate(cdfs_at_edge):
+        edge_integrals[edge_index] = np.sum(
+            weighted_hod * cdf, axis=-1)
+    edge_integrals = np.where(
+        degenerate[None, :, :], 0.0, edge_integrals)
+
+    lower_edge = np.searchsorted(edges, config['lam_min'])
+    upper_edge = np.searchsorted(edges, config['lam_max'])
+    richness_selection = (
+        edge_integrals[upper_edge] - edge_integrals[lower_edge]
+    )
+
+    # Apply the independent Gaussian photo-z factor to every bin in one
+    # broadcast. The final datavector layout is (bin, z, lnM).
+    redshift_selection = _S_j(
+        z_grid[None, :],
+        config['zob_min'][:, None],
+        config['zob_max'][:, None],
+        config['sigma_z'][:, None],
+    )
+    S_pack = np.ascontiguousarray(
+        (richness_selection * redshift_selection[:, None, :])
+        .transpose(0, 2, 1)
+    )
 
     block['sel_function', 'lnM'] = lnm_grid
     block['sel_function', 'z']   = z_grid

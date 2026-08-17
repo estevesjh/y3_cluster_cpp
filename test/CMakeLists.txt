@@ -284,6 +284,15 @@ add_test(
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/sel_function.test.py
   )
 
+# Full-pipeline regression against the pre-refactor implementation.  This
+# checks both S_stack precision and warmed-up per-sample runtime; it skips
+# itself when the Git baseline is unavailable (for example in a source
+# archive rather than a checkout).
+add_test(
+  NAME sel_function_regression_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/sel_function_regression.test.py
+  )
+
 # y3_buzzard/haloModel.py (previously untested). Characterizes the
 # reported second-halo-term NaN issue (z-axis degeneracy + low-radius
 # NaN fraction in dSigma_hh) as reproducible tests -- see
