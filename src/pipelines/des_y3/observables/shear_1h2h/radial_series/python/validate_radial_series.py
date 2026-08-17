@@ -2,7 +2,7 @@
 """Validation battery for the radial_series implementation.
 
 Four checks, in the order the approved plan requires them
-(docs/module_reorganization_plan.md, "Validation required"):
+(src/pipelines/des_y3/README.md, "Validation required"):
 
 1. derivative fidelity, centred: table-interpolated U_ell^cen versus
    mpmath Taylor derivatives of e^s u_cen(x e^-s) at off-grid points —
@@ -37,13 +37,13 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline
 
 for _p in Path(__file__).resolve().parents:
-    if (_p / "des_y3" / "shared" / "datablock_models.py").is_file():
+    if (_p / "shared" / "datablock_models.py").is_file():
         if str(_p) not in sys.path:
             sys.path.insert(0, str(_p))
         break
 
-from des_y3.shared import datablock_models as dm
-from des_y3.shared import sel_kernels
+from shared import datablock_models as dm
+from shared import sel_kernels
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import nfw_profile_family as pf                       # noqa: E402

@@ -14,13 +14,13 @@ from pathlib import Path
 import numpy as np
 
 for _p in Path(__file__).resolve().parents:
-    if (_p / "des_y3" / "shared" / "datablock_models.py").is_file():
+    if (_p / "shared" / "datablock_models.py").is_file():
         if str(_p) not in sys.path:
             sys.path.insert(0, str(_p))
         break
 
-from des_y3.shared import datablock_models as dm
-from des_y3.shared import sel_kernels
+from shared import datablock_models as dm
+from shared import sel_kernels
 
 TOL = 1e-12
 ZT_LO, ZT_HI = 0.05, 0.80

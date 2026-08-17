@@ -6,11 +6,14 @@ performed exactly, on fixed GL nodes, OUTSIDE the mass operator —
     W_ij(lnM) = int dz  n(M,z) dV/dOmega/dz(z) Omega(z) S_ij(lnM,z)
     N_ij      = int dlnM  W_ij(lnM)                       (f = 1)
 
-with S_ij the tabulated selection tensor from sel_function.py. This is
+with S_ij the tabulated selection tensor from sel_function.py. Omega(z)
+is applied inside `MassZWeights` itself (`shared/datablock_models.py`,
+the `zfac = ... * omega_z_des(self.z_x)` line), not in this file — it's
+folded into the shared W_ij builder, not re-derived per backend. This is
 exactly the computation the production NumCountsSel.so performs
 (nosel_gl_detail::SelGLCore, same GL node placement, same bilinear
 S_stack interpolation), expressed through the shared Python replica
-`des_y3.shared.datablock_models.MassZWeights` — which is why this
+`shared.datablock_models.MassZWeights` — which is why this
 backend agrees with production to machine precision (measured 2.4e-15;
 see README.md). It exists so the namespace carries a readable,
 importable statement of the production algorithm that the full_ltmz
@@ -39,13 +42,13 @@ from pathlib import Path
 import numpy as np
 
 for _p in Path(__file__).resolve().parents:
-    if (_p / "des_y3" / "shared" / "datablock_models.py").is_file():
+    if (_p / "shared" / "datablock_models.py").is_file():
         if str(_p) not in sys.path:
             sys.path.insert(0, str(_p))
         break
 
-from des_y3.shared import datablock_models as dm
-from des_y3.shared import sel_kernels
+from shared import datablock_models as dm
+from shared import sel_kernels
 
 OUTPUT_SECTION = "numcounts_fast_mass"
 

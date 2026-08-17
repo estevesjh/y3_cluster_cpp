@@ -14,7 +14,7 @@ tensor and interpolate it inside their population integrals.
 - Loaded by CosmoSIS as a Python module.
 
 The maintained DES Y3 namespace also contains
-`src/pipelines/des_y3/shared/sel_function.py`. As of 2026-08-12 it is an
+`src/pipelines/shared/sel_function.py`. As of 2026-08-12 it is an
 exact staged copy of this production entry point, and namespace validators
 load it through `shared/sel_kernels.py`. This is not yet a runtime cutover:
 the reference ini continues to load `src/modules/sel_function/sel_function.py`.

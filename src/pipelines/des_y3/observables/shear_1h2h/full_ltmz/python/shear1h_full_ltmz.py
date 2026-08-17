@@ -10,7 +10,7 @@ quadruple composition
 with every selection kernel evaluated at the quadrature nodes (no
 S_ij tabulation, no interpolation) — the same shared full_ltmz
 contraction the counts reference uses
-(des_y3.shared.full_ltmz_core.full_ltmz_mass_weights, here with
+(shared.full_ltmz_core.full_ltmz_mass_weights, here with
 Sigma_crit_inv folded into the z factors), contracted against the
 production miscentred mixture Phi_i (shared lensing_profiles, the
 interpolation-exact haloModel + gamma-table pair). Because Phi is
@@ -47,15 +47,15 @@ from pathlib import Path
 import numpy as np
 
 for _p in Path(__file__).resolve().parents:
-    if (_p / "des_y3" / "shared" / "datablock_models.py").is_file():
+    if (_p / "shared" / "datablock_models.py").is_file():
         if str(_p) not in sys.path:
             sys.path.insert(0, str(_p))
         break
 
-from des_y3.shared import datablock_models as dm
-from des_y3.shared import full_ltmz_core
-from des_y3.shared import lensing_profiles as lp
-from des_y3.shared import sel_kernels
+from shared import datablock_models as dm
+from shared import full_ltmz_core
+from shared import lensing_profiles as lp
+from shared import sel_kernels
 
 OUTPUT_SECTION = "shear1h_full_ltmz"
 

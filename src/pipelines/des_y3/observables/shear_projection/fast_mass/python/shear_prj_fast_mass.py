@@ -62,14 +62,14 @@ from pathlib import Path
 import numpy as np
 
 for _p in Path(__file__).resolve().parents:
-    if (_p / "des_y3" / "shared" / "datablock_models.py").is_file():
+    if (_p / "shared" / "datablock_models.py").is_file():
         if str(_p) not in sys.path:
             sys.path.insert(0, str(_p))
         break
 
-from des_y3.shared import datablock_models as dm
-from des_y3.shared import lensing_profiles as lp
-from des_y3.shared import sel_kernels, z_kernel
+from shared import datablock_models as dm
+from shared import lensing_profiles as lp
+from shared import sel_kernels, z_kernel
 
 DSIGMA_SECTION = "dsigma_prj_fast_mass"
 SHEAR_SECTION = "shear_prj_fast_mass"
@@ -188,6 +188,9 @@ class ShearPrjFastMass:
             geom = w_theta * 2.0 * np.pi * np.sin(theta)
 
             # b_sel(theta): plateau interpolation in zob + sigmoid.
+            # Bracket-search port of sigma_prj_t.hh:829-851
+            # (interp_b_asymptotes_) — finds the bs_zob table nodes
+            # bracketing this slice's zob; unrelated to the theta grid.
             j = 0
             while j + 1 < bs_zob.size and bs_zob[j + 1] < zob:
                 j += 1

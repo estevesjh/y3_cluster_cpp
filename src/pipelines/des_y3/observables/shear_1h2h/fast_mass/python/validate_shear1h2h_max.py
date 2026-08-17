@@ -25,15 +25,15 @@ from pathlib import Path
 import numpy as np
 
 for _p in Path(__file__).resolve().parents:
-    if (_p / "des_y3" / "shared" / "datablock_models.py").is_file():
+    if (_p / "shared" / "datablock_models.py").is_file():
         if str(_p) not in sys.path:
             sys.path.insert(0, str(_p))
         break
 
-from des_y3.shared import datablock_models as dm
-from des_y3.shared import full_ltmz_core as flc
-from des_y3.shared import lensing_profiles as lp
-from des_y3.shared import sel_kernels
+from shared import datablock_models as dm
+from shared import full_ltmz_core as flc
+from shared import lensing_profiles as lp
+from shared import sel_kernels
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from shear1h2h_max import compute_shear_max, z_resolved_weights  # noqa: E402

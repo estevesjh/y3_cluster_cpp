@@ -3,7 +3,7 @@
 The approved layout proposal requires new implementations to *reuse* the
 maintained shared model layer instead of copying HOD / richness / photo-z
 constructors. The Python side of that layer is
-``src/pipelines/des_y3/shared/sel_function.py`` (which itself mirrors
+``src/pipelines/shared/sel_function.py`` (which itself mirrors
 ``mor_hod_t.hh`` and ``richness_kernel_t.hh``); this helper loads it once
 by path — it is a module file, not a package — and caches it.
 
@@ -25,7 +25,7 @@ from pathlib import Path
 def repo_root():
     """Locate the y3_cluster_cpp root from this file's position."""
     for p in Path(__file__).resolve().parents:
-        if (p / "src" / "pipelines" / "des_y3" / "shared" / "sel_function.py").is_file():
+        if (p / "src" / "pipelines" / "shared" / "sel_function.py").is_file():
             return p
     raise ImportError(
         "sel_kernels: could not locate the y3_cluster_cpp repository root")
@@ -37,11 +37,13 @@ def load():
     if name in sys.modules:
         return sys.modules[name]
     root = repo_root()
-    # sel_function.py imports y3_buzzard.prj_params — make sure the repo
-    # root is importable even when PYTHONPATH does not already include it.
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-    path = root / "src" / "pipelines" / "des_y3" / "shared" / "sel_function.py"
+    # sel_function.py imports cosmology.prj_params — make sure
+    # src/pipelines is importable even when PYTHONPATH does not
+    # already include it.
+    pipelines_dir = root / "src" / "pipelines"
+    if str(pipelines_dir) not in sys.path:
+        sys.path.insert(0, str(pipelines_dir))
+    path = root / "src" / "pipelines" / "shared" / "sel_function.py"
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
@@ -73,6 +75,6 @@ def mor_from_source(source):
 
 def plob_splines_default():
     """The frozen Y3 EMG coefficient splines (PrjParams.default())."""
-    load()  # ensures repo root is on sys.path for the y3_buzzard import
-    from y3_buzzard.prj_params import PrjParams
+    load()  # ensures src/pipelines is on sys.path for the cosmology import
+    from cosmology.prj_params import PrjParams
     return PrjParams.default().splines()

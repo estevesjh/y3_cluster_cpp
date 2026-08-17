@@ -4,14 +4,14 @@ Publishes a single packed tensor on a shared (lnM, z) grid that all 12
 wall-grid bins live on. The downstream C++ integrand (SelFunction_t)
 slices the plane for its bin and serves it via Interp2D.
 
-    S_ij(lnM, z) = S_i(lnM, z) * K_j(z)
-                 = [ sum_k W_k K_i(lam_k, z) P_HOD(lam_k | M, z) ] * K_j(z)
+    S_ij(lnM, z) = S_i(lnM, z) * S_j(z)
+                 = [ sum_k W_k S_i(lam_k, z) P_HOD(lam_k | M, z) ] * S_j(z)
 
 with
-    K_i(ltr, z)  — closed-form bin-integrated richness kernel (plob_ltr EMG).
+    S_i(ltr, z)  — closed-form bin-integrated richness kernel (plob_ltr EMG).
                    Computed on the fly by CDF differencing at unique bin
                    edges (e.g. {20, 30, 45, 60, 200}) — no table, no cache.
-    K_j(z)       — Gaussian CDF difference over the z bin.
+    S_j(z)       — Gaussian CDF difference over the z bin.
     P_HOD        — Shifted-Poisson continuous form (doc Eq. 28), matching
                    src/models/mor_hod_t.hh. Single gammaln call on the
                    (n_lnm, n_z, N_q) tensor.
@@ -20,7 +20,7 @@ Grid:
     lnM  — linear in [lnm_low, lnm_high], n_lnm points (default 256).
     z    — linear in [zt_low, zt_high], n_z_shared points (default 64).
            Individual bins hard-zero outside |ztr - zob_mid| > L_z sigma_z
-           via the K_j factor.
+           via the S_j factor.
 
 Reads (ini options):
     sel_function/{lam_min, lam_max, zob_min, zob_max, sigma_z}   per-bin
@@ -122,7 +122,7 @@ def _plob_z_axis(shape, n_z):
 def _plob_params(ltr, z, plob_splines, work_dtype=np.float64):
     """Evaluate the 4 EMG params (mu, sigma, tau, fprj) at (ltr, z).
 
-    Centralises the (ltr, z) closed-form costs so the per-bin K_i loop
+    Centralises the (ltr, z) closed-form costs so the per-bin S_i loop
     can reuse the output via CDF differencing (see _K_edges_of_bins).
 
     Fast path: when ``z`` is a 1-D array of shape ``(N_z,)`` and ``ltr``
@@ -472,7 +472,7 @@ def _cdf_lob_stacked(lam_edges, mu, sigma, tau, fprj):
 
 
 def _K_edges_of_bins(lam_edges, ltr, z, plob_splines):
-    """Compute K_i for every bin in one shot by differencing the CDF at the
+    """Compute S_i for every bin in one shot by differencing the CDF at the
     shared bin edges.
 
     lam_edges : 1-D array of unique bin edges in increasing order, length
@@ -488,13 +488,13 @@ def _K_edges_of_bins(lam_edges, ltr, z, plob_splines):
         [_cdf_lob(x_e, mu, sigma, tau, fprj) for x_e in lam_edges],
         axis=-1,
     )
-    # K_i = CDF(edge_{i+1}) - CDF(edge_i)
+    # S_i = CDF(edge_{i+1}) - CDF(edge_i)
     K_per_bin = cdfs[..., 1:] - cdfs[..., :-1]
     return cdfs, K_per_bin
 
 
-def _K_i_bin(lam_min, lam_max, ltr, z, plob_splines):
-    """K_i(ltr, z) closed form — kept for parity / debug. Production path
+def _S_i_bin(lam_min, lam_max, ltr, z, plob_splines):
+    """S_i(ltr, z) closed form — kept for parity / debug. Production path
     goes through _K_edges_of_bins for the full bin set."""
     mu, sigma, tau, fprj = _plob_params(ltr, z, plob_splines)
     cdf_hi = _cdf_lob(lam_max, mu, sigma, tau, fprj)
@@ -502,7 +502,7 @@ def _K_i_bin(lam_min, lam_max, ltr, z, plob_splines):
     return cdf_hi - cdf_lo
 
 
-def _K_j(ztr, zob_min, zob_max, sigma_z):
+def _S_j(ztr, zob_min, zob_max, sigma_z):
     """Gaussian CDF difference over the z-bin."""
     return _phi((zob_max - ztr) / sigma_z) - _phi((zob_min - ztr) / sigma_z)
 
@@ -593,11 +593,11 @@ def _p_hod_scalar(ltr, lnM, z, mor):
 # ---------------------------------------------------------------------------
 
 def _choose_z_grid(zob_min, zob_max, sigma_z, zt_low, zt_high, L_z, n_z):
-    """Tight z-grid where K_j has support, clipped to the integration volume."""
+    """Tight z-grid where S_j has support, clipped to the integration volume."""
     z_lo = max(zt_low,  zob_min - L_z * sigma_z)
     z_hi = min(zt_high, zob_max + L_z * sigma_z)
     if z_hi <= z_lo:
-        # Degenerate — tiny fallback grid (K_j is effectively zero everywhere)
+        # Degenerate — tiny fallback grid (S_j is effectively zero everywhere)
         z_lo, z_hi = zt_low, zt_high
     return np.linspace(z_lo, z_hi, n_z)
 
@@ -738,7 +738,7 @@ def _make_plob_splines(block, cache):
     Prefers the datablock section ``plob_ltr_params/*`` if a publisher
     populated it (e.g. the ``prj_params`` cosmosis shim); otherwise
     falls back to the canonical in-code table from
-    :class:`y3_buzzard.prj_params.PrjParams`.
+    :class:`cosmology.prj_params.PrjParams`.
 
     ``plob_ltr_params`` is republished unconditionally every sample by
     the ``prj_params`` shim (nothing samples it), so rebuilding 8
@@ -748,7 +748,12 @@ def _make_plob_splines(block, cache):
     keyed on a cheap fingerprint of the raw arrays so the cache still
     self-invalidates correctly if the published values ever do change.
     """
-    from y3_buzzard.prj_params import PrjParams, COEFF_NAMES
+    import sys as _sys
+    from pathlib import Path as _Path
+    _pipelines_dir = str(_Path(__file__).resolve().parent.parent)
+    if _pipelines_dir not in _sys.path:
+        _sys.path.insert(0, _pipelines_dir)
+    from cosmology.prj_params import PrjParams, COEFF_NAMES
     try:
         keys = ('z',) + COEFF_NAMES
         fingerprint = tuple(
@@ -959,7 +964,7 @@ def execute(block, config):
 
     # Single shared (lnM, z) grid across all bins → compute P_HOD and the
     # GL bracket ONCE. Individual bins hard-zero outside their z-window in
-    # K_j. The K_i static cache covers the whole z-range already. The grid
+    # S_j. The S_i static cache covers the whole z-range already. The grid
     # itself is built once in setup() (static envelope/size options only).
     lnm_grid = config['lnm_grid']
     z_grid   = config['z_grid']
@@ -968,10 +973,10 @@ def execute(block, config):
         lnm_grid, z_grid, mor, config['gl_t'], config['gl_w'])
     dt_phod_ms = 1000.0 * (time.perf_counter() - t_phod)
 
-    # K_i(lam_k, z) — closed form via CDF differencing at the unique bin
+    # S_i(lam_k, z) — closed form via CDF differencing at the unique bin
     # edges. plob_ltr_params are frozen Y3 splines, so mu/sigma/tau/fprj
     # evaluation on (lam_k, z) is pure numpy broadcasting; differencing
-    # 5 edge CDFs gives the 4 unique K_i tables in one shot.
+    # 5 edge CDFs gives the 4 unique S_i tables in one shot.
     #
     # Pass the 1-D z_grid (not a pre-broadcast (n_lnm, n_z, n_q) tensor)
     # so _plob_params can evaluate the 8 splines on 64 z-nodes only and
@@ -998,13 +1003,13 @@ def execute(block, config):
     for k in range(n_bins):
         lo_i = int(np.searchsorted(edges, config['lam_min'][k]))
         hi_i = int(np.searchsorted(edges, config['lam_max'][k]))
-        K_i = cdfs_at_edge[hi_i] - cdfs_at_edge[lo_i]
-        S_i = np.sum(W_k * K_i * P_Mz, axis=-1)
+        S_i = cdfs_at_edge[hi_i] - cdfs_at_edge[lo_i]
+        S_i = np.sum(W_k * S_i * P_Mz, axis=-1)
         S_i = np.where(degenerate, 0.0, S_i)
-        K_j_vec = _K_j(z_grid, float(config['zob_min'][k]),
+        S_j_vec = _S_j(z_grid, float(config['zob_min'][k]),
                        float(config['zob_max'][k]),
                        float(config['sigma_z'][k]))
-        S_pack[k] = (S_i * K_j_vec[None, :]).T
+        S_pack[k] = (S_i * S_j_vec[None, :]).T
 
     block['sel_function', 'lnM'] = lnm_grid
     block['sel_function', 'z']   = z_grid

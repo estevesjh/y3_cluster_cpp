@@ -222,7 +222,7 @@ def full_ltmz_mass_weights(bins, mor, plob_splines, hmf, dv, *,
         k_i = cdfs[hi] - cdfs[lo]
         s_kq = np.sum(w_k * k_i * p_mz, axis=-1)
         s_kq = np.where(degenerate, 0.0, s_kq)
-        k_j = sf._K_j(z_x, float(bins["zob_min"][b]),
+        k_j = sf._S_j(z_x, float(bins["zob_min"][b]),
                       float(bins["zob_max"][b]), float(bins["sigma_z"][b]))
         weights[b] = (base_kq * s_kq) @ k_j
     return lnm_x, lnm_w, weights
@@ -272,7 +272,7 @@ def full_ltmz_mass_z_weights(bins, mor, plob_splines, hmf, dv, *,
         k_i = cdfs[hi] - cdfs[lo]
         s_kq = np.sum(w_k * k_i * p_mz, axis=-1)
         s_kq = np.where(degenerate, 0.0, s_kq)
-        k_j = sf._K_j(z_x, float(bins["zob_min"][b]),
+        k_j = sf._S_j(z_x, float(bins["zob_min"][b]),
                       float(bins["zob_max"][b]), float(bins["sigma_z"][b]))
         w2d[b] = base_kq * s_kq * k_j[None, :]
     return lnm_x, lnm_w, z_x, w2d

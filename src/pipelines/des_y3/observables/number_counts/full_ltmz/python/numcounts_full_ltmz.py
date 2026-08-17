@@ -1,7 +1,7 @@
 """Full (lambda_true, lnM, z) reference number counts — `full_ltmz`.
 
 The readable reference calculation for the DES Y3 cluster counts
-(docs/module_reorganization_plan.md, strategy `full_ltmz`): the expected
+(src/pipelines/des_y3/README.md, strategy `full_ltmz`): the expected
 count in richness bin i and photo-z bin j is the explicit triple integral
 
     N_ij = int dz int dlnM int dlambda_tr
@@ -64,14 +64,14 @@ from pathlib import Path
 import numpy as np
 
 for _p in Path(__file__).resolve().parents:
-    if (_p / "des_y3" / "shared" / "datablock_models.py").is_file():
+    if (_p / "shared" / "datablock_models.py").is_file():
         if str(_p) not in sys.path:
             sys.path.insert(0, str(_p))
         break
 
-from des_y3.shared import datablock_models as dm
-from des_y3.shared import full_ltmz_core
-from des_y3.shared import sel_kernels
+from shared import datablock_models as dm
+from shared import full_ltmz_core
+from shared import sel_kernels
 
 OUTPUT_SECTION = "numcounts_full_ltmz"
 
@@ -86,7 +86,7 @@ def compute_counts(bins, mor, plob_splines, hmf, dv, *,
     datablock_models conventions. Returns (n_bins,) expected counts.
 
     The (lambda_true, z) contraction itself lives in the shared
-    full_ltmz core (des_y3.shared.full_ltmz_core), which the shear
+    full_ltmz core (shared.full_ltmz_core), which the shear
     full_ltmz backend contracts against its radial profile instead of
     against 1.
     """

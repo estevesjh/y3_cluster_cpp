@@ -22,12 +22,12 @@ from pathlib import Path
 import numpy as np
 
 for _p in Path(__file__).resolve().parents:
-    if (_p / "des_y3" / "shared" / "datablock_models.py").is_file():
+    if (_p / "shared" / "datablock_models.py").is_file():
         if str(_p) not in sys.path:
             sys.path.insert(0, str(_p))
         break
 
-from des_y3.shared import datablock_models as dm  # noqa: E402
+from shared import datablock_models as dm  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from shear_prj_fast_mass import ShearPrjFastMass  # noqa: E402
