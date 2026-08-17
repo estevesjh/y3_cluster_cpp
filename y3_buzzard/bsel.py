@@ -2,23 +2,7 @@
 
 This is the Python closing stage of the Costanzi-2026 b_sel pipeline.
 Reads the three datablock sections written by the CPP scalar integrands
-(b_sel_marg_P1 / b_sel_marg_I1 / b_sel_marg_I2), closes the form for
-b_zero / b_infty per (lob_bin, zob_bin, ltr), builds the scale-dependent
-sigmoid in theta, marginalises over ltr, and writes the 3-D lookup
-`b_sel_marginalised/vals` for the downstream sigma_prj integrand.
-
-Matches the Python reference in ``richness_selection.sel_bias.SelBias``:
-  * ``b_eff(lob, zob)`` via the mass-weighted halo-bias integral
-      int dM n(M, z) P(ltr=lob | M, z) M b(M, z)
-      -------------------------------------------
-          int dM n(M, z) P(ltr=lob | M, z) M
-    HMF read from datablock section ``mass_function/dndlnmh``; bias from
-    ``halomodel/bias``.
-  * ltr marginalisation weighted by the EMG plob_ltr kernel
-    P(lob | ltr, z), with coefficients sourced from
-    :class:`y3_buzzard.prj_params.PrjParams` (the canonical Y3 fit baked
-    into Python so no file I/O is needed), multiplied by the HOD prior
-      prior(ltr, z) = int dM n(M, z) P(ltr | M, z) * M
+(b_sel_marg_P1 / b_sel_marg_I1 / b_sel_marg_I2).
 
 Datablock reads:
     b_sel_marg_P1/vals       -- shape (1, N_zob * N_lambda_bin)
