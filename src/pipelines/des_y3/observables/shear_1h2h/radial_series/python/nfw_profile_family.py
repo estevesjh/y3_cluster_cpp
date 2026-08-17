@@ -4,6 +4,14 @@ Conventions are pinned to ``src/models/nfw_dsigma_mis.hh`` exactly
 (concentration c = 4, rho_crit = 2.77533742639e11 Msun/Mpc^3, 200c halo
 boundary, Wright & Brainerd normalisation, gamma miscentering kernel):
 
+IMPORTANT MODEL LIMITATION: ``c = 4`` is fixed for every mass and redshift.
+This family therefore has no concentration--mass or concentration--redshift
+evolution.  In particular, ``r_s(M) = r_200(M) / 4`` and the dimensionless
+shape ``u`` is reused for all M and z.  This is the assumption that makes an
+offline table reusable, but it also means that the table cannot reproduce a
+production profile built with a varying ``c(M, z)`` relation.  Exact redshift
+weight contraction in the consumer does not remove this limitation.
+
     DSigma_cen(R, M)        =            A0(y) * u_cen(x)
     DSigma_mis(R, r_mis, M) = rho_mult * A0(y) * u_mis(x, x_mis)
 
@@ -22,7 +30,7 @@ Everything sample-dependent enters through ``rho_mult`` (Omega_m, the
 mean-density normalisation of the miscentred component), the mixture
 weight ``f_mis``, and the query coordinates — never through the shape of
 ``u``; that separation is what licenses the offline U_ell tables
-(docs/module_reorganization_plan.md, "Offline unit-profile table").
+(src/pipelines/des_y3/README.md, "Offline unit-profile table").
 """
 from __future__ import annotations
 
@@ -33,6 +41,10 @@ from pathlib import Path
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
 
+# Strong approximation shared by the offline table and C++ evaluator:
+# concentration has no mass evolution and no redshift evolution.  Do not
+# silently compare this fixed-c family with haloModel/dSigma_nfw, whose
+# production concentration varies with M and z.
 CONC = 4.0
 RHOC = 2.77533742639e11
 MPC2_TO_PC2 = 1.0e-12
@@ -54,7 +66,7 @@ def repo_root():
 
 
 def r_s_of_lnM(lnM):
-    """Scale radius r_s(M) [Mpc/h] — replica of NFW_DSIGMA_MIS::r_s."""
+    """Scale radius r_s(M) [Mpc/h] at the fixed c=4 approximation."""
     return np.cbrt(3.0 * np.exp(np.asarray(lnM, dtype=float))
                    / (800.0 * np.pi * RHOC)) / CONC
 
@@ -69,7 +81,7 @@ def lnM_of_y(y):
 
 
 def A0_of_y(y):
-    """Fixed amplitude A0(y) = 2 e^y delta_c rho_c * 1e-12."""
+    """Fixed-c amplitude A0(y) = 2 e^y delta_c rho_c * 1e-12."""
     return 2.0 * np.exp(np.asarray(y, dtype=float)) * DELTA_C * RHOC \
         * MPC2_TO_PC2
 

@@ -6,6 +6,8 @@
   "profile": {
     "family": "NFW centred (Wright & Brainerd 2000) + gamma-kernel miscentred, exactly the src/models/nfw_dsigma_mis.hh conventions",
     "concentration": 4.0,
+    "concentration_evolution": "none: c = 4 for every mass and redshift",
+    "profile_scope": "fixed-shape approximation; not valid for a varying c(M,z) profile without a separate concentration-dependent model",
     "rho_crit_msun_mpc3": 277533742639.0,
     "delta_c": 5271.147547112249,
     "boundary": "200c on rho_crit; r_s = r_200 / c",
@@ -34,7 +36,7 @@
   "numerics": {
     "computation_grid_spacing": 0.0125,
     "sigma_off_quadrature": "split GL 64+64, phi0=0.1, cubic squeeze; rel err <= ~6e-11",
-    "sbar": "cumulative Simpson + analytic linear head",
+    "sbar": "cubic-spline antiderivative + analytic linear head",
     "derivatives": "9-point central stencils along the exact (ln x, ln v) diagonal of e^s u",
     "gamma_average": "composite Simpson over the uniform ln v grid (matrix product); O(h^3) local error at the offset = radius crease, analytic below-grid tail"
   },

@@ -11,9 +11,15 @@
 //   u_mix,ell = (1 - f_mis) U_ell^cen + f_mis Omega_m U_ell^mis
 //
 // with A0(y) = 2 e^y delta_c rho_crit 1e-12 and the NFW_DSIGMA_MIS
-// conventions (c = 4, rho_crit = RHOC, gamma kernel).  No derivative is
-// recomputed inside an MCMC sample; evaluate() only interpolates the
-// offline tables and restores the analytic amplitude.
+// conventions (c = 4, rho_crit = RHOC, gamma kernel).  IMPORTANT: c = 4 is
+// fixed for every mass and redshift.  There is no concentration--mass or
+// concentration--redshift evolution in this profile family.  The redshift
+// contraction is exact only for the population weights; it does not restore
+// the missing c(M, z) dependence.  This backend is therefore a fixed-shape
+// approximation and must not be treated as an exact replacement for the
+// production haloModel/dSigma_nfw profile when that concentration varies.
+// No derivative is recomputed inside an MCMC sample; evaluate() only
+// interpolates the offline tables and restores the analytic amplitude.
 //
 // Differences vs the Python backend, by design:
 //   - table interpolation is GSL bilinear (Interp2D/Interp1D, the
@@ -51,7 +57,9 @@ namespace y3_cluster {
   namespace des_y3 {
 
     // Fixed-convention helpers shared with the offline generator
-    // (nfw_profile_family.py); the unit test cross-checks the composite
+    // (nfw_profile_family.py).  These intentionally use c=4 for all M and z;
+    // changing this to a varying concentration would invalidate the current
+    // U_ell tables.  The unit test cross-checks the composite
     // amplitude against NFW_DSIGMA_MIS itself so the two cannot drift
     // apart silently.
     inline double

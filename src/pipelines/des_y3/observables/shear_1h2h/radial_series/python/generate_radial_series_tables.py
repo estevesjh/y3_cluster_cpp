@@ -2,9 +2,21 @@
 """Offline generator for the radial_series unit-profile tables U_ell.
 
 Implements the "Offline unit-profile table" section of
-docs/module_reorganization_plan.md for the fixed one-halo profile family
+src/pipelines/des_y3/README.md for the fixed one-halo profile family
 (centred NFW + gamma-kernel miscentred NFW, conventions of
 nfw_profile_family.py / src/models/nfw_dsigma_mis.hh):
+
+IMPORTANT MODEL LIMITATION: this is a fixed-shape approximation.  The NFW
+concentration is hard-coded to c = 4 for every halo, so there is no
+concentration--mass evolution and no concentration--redshift evolution.
+Consequently r_s(M) is computed as r_200(M) / 4, and the dimensionless
+profile u and its normalization are independent of the sample's M and z
+except through the common scale-radius coordinate.  The exact redshift
+contraction performed by the consumer applies to the population weights; it
+does not restore the missing c(M, z) dependence.  If the target profile uses
+the production concentration relation, do not treat this table as an exact
+replacement: evaluate the radial profile directly or introduce a validated
+concentration-dependent representation.
 
     U_ell(x, x_mis) = (1 / ell! A0(y)) d^ell/dy^ell [ A0(y) u(R e^-y, r_mis e^-y) ]
 
@@ -325,6 +337,11 @@ def main():
                       "miscentred, exactly the src/models/nfw_dsigma_mis.hh "
                       "conventions",
             "concentration": pf.CONC,
+            "concentration_evolution":
+                "none: c = 4 for every mass and redshift",
+            "profile_scope":
+                "fixed-shape approximation; not valid for a varying c(M,z) "
+                "profile without a separate concentration-dependent model",
             "rho_crit_msun_mpc3": pf.RHOC,
             "delta_c": pf.DELTA_C,
             "boundary": "200c on rho_crit; r_s = r_200 / c",
@@ -357,7 +374,7 @@ def main():
             "sigma_off_quadrature": f"split GL {N_PHI_IN}+{N_PHI_OUT}, "
                                     f"phi0={PHI0}, cubic squeeze; "
                                     "rel err <= ~6e-11",
-            "sbar": "cumulative Simpson + analytic linear head",
+            "sbar": "cubic-spline antiderivative + analytic linear head",
             "derivatives": "9-point central stencils along the exact "
                            "(ln x, ln v) diagonal of e^s u",
             "gamma_average": "composite Simpson over the uniform ln v "
