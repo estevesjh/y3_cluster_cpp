@@ -5216,7 +5216,13 @@ namespace Catch {
 
 #ifdef CATCH_PLATFORM_MAC
 
+#if defined(__i386__) || defined(__x86_64__)
 #define CATCH_TRAP() __asm__("int $3\n" : :) /* NOLINT */
+#else                                       // Apple Silicon: no int3 opcode.
+#include <signal.h>
+
+#define CATCH_TRAP() raise(SIGTRAP)
+#endif
 
 #elif defined(CATCH_PLATFORM_LINUX)
 // If we can use inline assembler, do it because this allows us to break
