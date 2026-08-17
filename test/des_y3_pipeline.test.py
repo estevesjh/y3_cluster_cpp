@@ -24,9 +24,9 @@ for _p in (RADIAL_PY, NUMCOUNTS_FULL_LTMZ_PY, SHEAR_FAST_MASS_PY,
           SHEAR_FULL_LTMZ_PY):
     sys.path.insert(0, str(_p))
 
-from des_y3.shared import datablock_models as dm  # noqa: E402
-from des_y3.shared import lensing_profiles as lp  # noqa: E402
-from des_y3.shared import sel_kernels  # noqa: E402
+from shared import datablock_models as dm  # noqa: E402
+from shared import lensing_profiles as lp  # noqa: E402
+from shared import sel_kernels  # noqa: E402
 import generate_radial_series_tables as generator  # noqa: E402
 import nfw_profile_family as pf  # noqa: E402
 from shear1h_radial_series import (  # noqa: E402
@@ -300,7 +300,7 @@ class TestShear1h2hMax(unittest.TestCase):
 
     The available dump has halo_model run with compute_lensing_2h = F --
     haloModel/dSigma_hh has 3 open defects (see
-    docs/dsigma_hh_debug_flag.md), so any traditional 1h+2h *sum* is
+    docs/known_issues/dsigma_hh_debug_flag.md), so any traditional 1h+2h *sum* is
     provisional until they are fixed. This test therefore exercises only
     the defect-free limit the module's own validate_shear1h2h_max.py
     calls its "2h -> 0 sanity" check: with the two-halo term forced to
@@ -340,7 +340,7 @@ class TestShear1h2hMax(unittest.TestCase):
 
     @unittest.skipUnless(HAS_DUMP_PRJ2H, _SKIP_MSG_PRJ2H)
     def test_full_model_is_finite_and_two_halo_contributes(self):
-        # With a real (NaN-heavy, see docs/dsigma_hh_debug_flag.md)
+        # With a real (NaN-heavy, see docs/known_issues/dsigma_hh_debug_flag.md)
         # haloModel/dSigma_hh table: the max-model composition must still
         # produce finite output (the NaN-sanitize-before-interpolate
         # convention keeps NaN out of the profile), and it must genuinely

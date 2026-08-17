@@ -11,7 +11,7 @@
 // (dSigma_nfw, bias, dSigma_hh) -- i.e. effectively the whole
 // real_pipeline_extract.ini with compute_lensing_2h = T. That is out of
 // scope for a unit test, and per CLAUDE.md's dSigma_hh caveat
-// (docs/dsigma_hh_debug_flag.md: 60% NaN by construction, degenerate z
+// (docs/known_issues/dsigma_hh_debug_flag.md: 60% NaN by construction, degenerate z
 // axis, dummy exclusion parameters), any number derived that way would
 // be pinning a known-buggy table rather than testing physics.
 //
@@ -84,7 +84,7 @@ namespace {
   }
 
   // Synthetic haloModel/dSigma_hh(R, z) table with the SAME defect shape
-  // documented in docs/dsigma_hh_debug_flag.md: NaN at low R (here the
+  // documented in docs/known_issues/dsigma_hh_debug_flag.md: NaN at low R (here the
   // entire R = 0.5 row -- 4/9 of this small table, the same "undefined
   // at low R" pattern as the real table's ~60%). Built with the identical
   // Interp2D(xs, ys, vector<double>) overload

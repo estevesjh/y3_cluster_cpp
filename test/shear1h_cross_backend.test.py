@@ -9,7 +9,7 @@ every other cell, per the matrix in docs/source/pipeline_organization.md:
     radial_series -> Python, C++ (offline U_ell tables + moments)
     max model     -> Python, C++, CUDA        (traditional 1h+2h; ΔΣ_hh has
                                                an open debugging flag, see
-                                               docs/dsigma_hh_debug_flag.md)
+                                               docs/known_issues/dsigma_hh_debug_flag.md)
 
 The reference is the C++ full_ltmz backend (Shear1hFullLtmz.so, adaptive
 Cuhre eps_rel=1e-4). Its values, the CUDA full_ltmz backend's
@@ -19,7 +19,7 @@ Cuhre eps_rel=1e-4). Its values, the CUDA full_ltmz backend's
 them needs a full CosmoSIS pipeline run of the compiled .so modules
 (the max model additionally needs `compute_lensing_2h = T`, which the
 repo's checked-in fiducial dump was NOT generated with -- see
-docs/dsigma_hh_debug_flag.md), and CUDA needs a GPU.
+docs/known_issues/dsigma_hh_debug_flag.md), and CUDA needs a GPU.
 
 Provenance: `shear_gpu_smoke.ini`/`shear_extra_backends.ini` (2026-08-12
 job 56790321 companion runs, and a 2026-08-14 companion run for the
@@ -37,7 +37,7 @@ production's own saved output, are all computed/read LIVE from this
 repo's checked-in fiducial dump (docs/figs/real_pipeline_extract_output).
 
 Note on radial_series vs full_ltmz (FINDING, real -- see
-docs/radial_series_vs_full_ltmz_defect.md): `nfw_profile_family.py`
+docs/known_issues/radial_series_vs_full_ltmz_defect.md): `nfw_profile_family.py`
 hardcodes `CONC = 4.0` as a module-level constant, used for BOTH the
 profile shape function and its amplitude normalization (r_s(M), A0(y)),
 rather than reading the per-sample Child18 concentration
@@ -71,9 +71,9 @@ sys.path.insert(0, str(_SHEAR1H2H / "full_ltmz" / "python"))
 sys.path.insert(0, str(_SHEAR1H2H / "fast_mass" / "python"))
 sys.path.insert(0, str(_SHEAR1H2H / "radial_series" / "python"))
 
-from des_y3.shared import datablock_models as dm  # noqa: E402
-from des_y3.shared import lensing_profiles as lp  # noqa: E402
-from des_y3.shared import sel_kernels  # noqa: E402
+from shared import datablock_models as dm  # noqa: E402
+from shared import lensing_profiles as lp  # noqa: E402
+from shared import sel_kernels  # noqa: E402
 from shear1h_full_ltmz import compute_shear as compute_shear_full_ltmz  # noqa: E402
 from shear1h_fast_mass import compute_shear as compute_shear_fast_mass  # noqa: E402
 import nfw_profile_family as pf  # noqa: E402
@@ -349,7 +349,7 @@ class TestShear1hCrossBackend(unittest.TestCase):
 
     def test_cpp_radial_series_matches_cpp_full_ltmz(self):
         # FINDING (real, at the project's standard 1e-3 tolerance -- see
-        # docs/radial_series_vs_full_ltmz_defect.md): radial_series's
+        # docs/known_issues/radial_series_vs_full_ltmz_defect.md): radial_series's
         # raw DeltaSigma disagrees with the full_ltmz reference by
         # 56-86%, growing with richness bin (i.e. with mass).
         # nfw_profile_family.py hardcodes CONC = 4.0 for both the
@@ -375,7 +375,7 @@ class TestShear1hCrossBackend(unittest.TestCase):
         # >= DSigma_cl always, so the selection-weighted integral of the
         # max model can only be >= the pure-1h fast_mass integral, for
         # every (bin, R) -- true regardless of the ΔΣ_hh open defect
-        # (docs/dsigma_hh_debug_flag.md).
+        # (docs/known_issues/dsigma_hh_debug_flag.md).
         fast_cpp_proxy = self.source.array("shear1hmissel", "vals")
         self.assertTrue(np.all(CPP_MAX_MODEL >= fast_cpp_proxy * (1.0 - 1e-9)))
 

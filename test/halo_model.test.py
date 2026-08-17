@@ -28,7 +28,7 @@ Covers:
     exactly this reason -- see the "units are Msun/pc^2" comment at
     haloModel.py's first_halo_term).
   - TestFirstHaloTermRedshiftHandling: the REAL finding from this pass
-    (see docs/first_halo_term_z0_defect.md) -- halo_model_cosmosis.py's
+    (see docs/known_issues/first_halo_term_z0_defect.md) -- halo_model_cosmosis.py's
     execute() hardcodes z=0 when calling first_halo_term, even though it
     has a real per-z grid it uses for everything else, so the published
     Sigma_nfw/dSigma_nfw/concentration tables are the z=0 1-halo term at
@@ -37,7 +37,7 @@ Covers:
     identity at the hardcoded fiducial cosmology (Om0=0.3, H0=70).
   - lensingModel.second_halo_term / ct_2hTerm: the reported issue. Pins,
     with real (not synthetic) P(k), the two specific defects
-    docs/dsigma_hh_debug_flag.md already describes from manual dump
+    docs/known_issues/dsigma_hh_debug_flag.md already describes from manual dump
     inspection -- the z-axis degeneracy and the low-radius NaN fraction
     -- as reproducible tests, plus the dummy exclusion-halo parameters.
     These tests currently PASS because they assert the *current* (buggy)
@@ -329,7 +329,7 @@ class TestSecondHaloTerm(unittest.TestCase):
         cls.R = np.logspace(np.log10(0.1), np.log10(35.0), 40)  # cMpc/h
 
     def test_dummy_exclusion_parameters_match_the_documented_values(self):
-        # docs/dsigma_hh_debug_flag.md #3: lensingModel.second_halo_term
+        # docs/known_issues/dsigma_hh_debug_flag.md #3: lensingModel.second_halo_term
         # hardcodes Md=1e14, cd=5 (NOT ct_2hTerm's own class default of
         # Md=1e13, cd=4), tied to a fixed halo rather than the mass being
         # integrated over. Read directly off the source rather than
@@ -341,7 +341,7 @@ class TestSecondHaloTerm(unittest.TestCase):
         self.assertIn("cd=5", src.replace(" ", ""))
 
     def test_z_axis_is_currently_degenerate(self):
-        # docs/dsigma_hh_debug_flag.md #2: pk_to_sigma's per-z loop calls
+        # docs/known_issues/dsigma_hh_debug_flag.md #2: pk_to_sigma's per-z loop calls
         # _pk_to_sigma(Rp, k, pk) without ever indexing pk by z, so every
         # z-slice of Sigma_hh (and therefore Wp) comes out bit-identical
         # regardless of the real z-dependent power spectrum passed in.
@@ -358,7 +358,7 @@ class TestSecondHaloTerm(unittest.TestCase):
             np.testing.assert_array_equal(lm.Wp[0], lm.Wp[iz])
 
     def test_dsigma_hh_has_a_large_low_radius_nan_fraction_sigma_hh_does_not(self):
-        # docs/dsigma_hh_debug_flag.md #1: ct_2hTerm.pk_to_dsigma NaNs out
+        # docs/known_issues/dsigma_hh_debug_flag.md #1: ct_2hTerm.pk_to_dsigma NaNs out
         # every negative dSigma (np.where(dSigma < 0, nan, dSigma)) -- a
         # real, by-construction feature of the exclusion-subtraction
         # convention, not a transient failure -- and only dSigma is
@@ -446,7 +446,7 @@ class TestSecondHaloTermVsClenspy(unittest.TestCase):
     for the linear one. This test loads the same linear P(k) for both
     "production" and the CLensPy reference, so it is internally
     consistent -- but the measured deviation table below (and in
-    docs/dsigma_hh_debug_flag.md) reflects the linear-P(k) fallback
+    docs/known_issues/dsigma_hh_debug_flag.md) reflects the linear-P(k) fallback
     case specifically. A production run with `nonlinear_pk_path`
     configured would feed second_halo_term a genuinely nonlinear P(k),
     and the deviation size would differ (the z-degeneracy bug itself
@@ -524,7 +524,7 @@ class TestSecondHaloTermVsClenspy(unittest.TestCase):
         np.testing.assert_allclose(self.SIGMA_BENCHMARK_Z0, sigma_ct, rtol=2e-2)
 
     def test_xi_genuinely_varies_with_z_unlike_production(self):
-        # Directly quantifies docs/dsigma_hh_debug_flag.md finding #2
+        # Directly quantifies docs/known_issues/dsigma_hh_debug_flag.md finding #2
         # ("Sigma_hh is bit-identical at every z") using a genuinely
         # independent calculation fed the SAME real P(k,z): the true
         # two-halo correlation function is NOT remotely z-independent.
@@ -534,7 +534,7 @@ class TestSecondHaloTermVsClenspy(unittest.TestCase):
 
     def test_production_sigma_hh_deviates_from_true_z_dependent_value(self):
         # Quantifies the practical size of the z=0-everywhere defect
-        # (docs/dsigma_hh_debug_flag.md #2, pinned structurally by
+        # (docs/known_issues/dsigma_hh_debug_flag.md #2, pinned structurally by
         # TestSecondHaloTerm.test_z_axis_is_currently_degenerate) against
         # a genuinely independent, common-P(k) reference: how far is
         # production's (z-invariant) Sigma_hh from what CLensPy says

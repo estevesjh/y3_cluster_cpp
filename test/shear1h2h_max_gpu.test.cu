@@ -48,7 +48,7 @@ TEST_CASE("Shear1h2hMaxGpu: max(1h, 2h) reduction matches a hand-computed "
   // (that physics is exercised separately, in the TEST_CASE above and in
   // the pre-existing nfw_dsigma_mis_test); bias/two are synthetic,
   // deliberately not sourced from haloModel/dSigma_hh, which has 3 open
-  // defects (60% NaN by construction; docs/dsigma_hh_debug_flag.md) and
+  // defects (60% NaN by construction; docs/known_issues/dsigma_hh_debug_flag.md) and
   // no available real-pipeline dump has compute_lensing_2h = T to source
   // real values from.
   double const one_k = 3.0;

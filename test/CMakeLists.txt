@@ -275,7 +275,7 @@ add_test(
   )
 
 # sel_function.py's own kernels (previously untested -- see
-# docs/hod_normalization_defect.md). Three sub-tests are DELIBERATELY
+# docs/known_issues/hod_normalization_defect.md). Three sub-tests are DELIBERATELY
 # red at the default 1e-3 tolerance (a real HOD-normalization finding,
 # not a test miscalibration); ctest will report this target as FAILED
 # until that model defect is resolved or explicitly accepted.
@@ -287,7 +287,7 @@ add_test(
 # y3_buzzard/haloModel.py (previously untested). Characterizes the
 # reported second-halo-term NaN issue (z-axis degeneracy + low-radius
 # NaN fraction in dSigma_hh) as reproducible tests -- see
-# docs/dsigma_hh_debug_flag.md. Skips its second-halo-term class
+# docs/known_issues/dsigma_hh_debug_flag.md. Skips its second-halo-term class
 # gracefully if the real_pipeline_extract_output dump isn't present.
 add_test(
   NAME halo_model_test

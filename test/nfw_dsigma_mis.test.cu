@@ -25,7 +25,7 @@ TEST_CASE("Test NFW Misc Implementation")
   NFW_DSIGMA_MIS model(conc, RHOM, "gamma");
 
   // FINDING (real, at the project's standard 1e-3 -- see
-  // docs/nfw_dsigma_mis_defect.md): authored at epsrel=5e-3 because the
+  // docs/known_issues/nfw_dsigma_mis_defect.md): authored at epsrel=5e-3 because the
   // (r=10, r_mis=2.0) point below does not pass at 1e-3 (measured
   // -0.497% vs the cluster_toolkit reference; not a table-domain-edge
   // artifact -- x=r/rs~35.5, x_mis=r_mis/rs~7.1 are both well inside

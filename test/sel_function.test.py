@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for src/pipelines/des_y3/shared/sel_function.py.
+"""Unit tests for src/pipelines/shared/sel_function.py.
 
 This module had zero dedicated test coverage before this file: every
 des_y3 backend that reads sel_function/S_stack (numcounts_fast_mass,
@@ -13,7 +13,7 @@ docs/source/science/index.md's "Selection functions" chapter notation:
     S_i(lambda_tr, z)         observed-richness kernel (script S) --
                               sel_function.py's _K_i_bin/_K_edges_of_bins
     S_j(z^tr)                 observed-redshift kernel (script S) --
-                              sel_function.py's _K_j
+                              sel_function.py's _S_j
     P(lambda_ob | ltr, z)     the Costanzi projection kernel (raw density)
     P(lambda_tr | M, z)       mass-richness relation (shifted-Poisson HOD
                               in production) -- sel_function.py's
@@ -48,7 +48,7 @@ from scipy import integrate, special
 from scipy.stats import norm
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "src" / "pipelines" / "des_y3" / "shared"))
+sys.path.insert(0, str(REPO / "src" / "pipelines" / "shared"))
 sys.path.insert(0, str(REPO))
 
 import sel_kernels  # noqa: E402
@@ -282,13 +282,13 @@ class TestFusedNumbaCdfKernel(unittest.TestCase):
 
 
 class TestObservedRedshiftKernel(unittest.TestCase):
-    """S_j(z^tr): sel_function._K_j."""
+    """S_j(z^tr): sel_function._S_j."""
 
     def test_matches_independent_gaussian_cdf_difference(self):
         for ztr, zlo, zhi, sig in ((0.30, 0.20, 0.35, 0.03),
                                    (0.425, 0.35, 0.50, 0.03),
                                    (0.60, 0.50, 0.65, 0.05)):
-            got = float(sf._K_j(np.array([ztr]), zlo, zhi, sig)[0])
+            got = float(sf._S_j(np.array([ztr]), zlo, zhi, sig)[0])
             expected = norm.cdf((zhi - ztr) / sig) - norm.cdf((zlo - ztr) / sig)
             self.assertAlmostEqual(got, expected, places=12)
 
@@ -424,7 +424,7 @@ class TestSelectionTensorFactorization(unittest.TestCase):
         b = 0
         S_i = np.sum(W_k * k_per_bin[..., b] * P_Mz, axis=-1)
         S_i = np.where(degenerate, 0.0, S_i)
-        S_j_vec = sf._K_j(z_grid, 0.20, 0.35, 0.03)
+        S_j_vec = sf._S_j(z_grid, 0.20, 0.35, 0.03)
 
         S_ij_direct = S_i * S_j_vec[None, :]
         for k in range(lnm_grid.size):

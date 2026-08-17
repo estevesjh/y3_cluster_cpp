@@ -40,7 +40,7 @@
 // this is NOT yet apples-to-apples with the legacy Python reference
 // (richness_selection.nfw.NFWMiscentered, c=5).  This test therefore
 // does NOT compare against that legacy reference.  Instead its golden
-// values come from des_y3/shared/lensing_profiles.py::
+// values come from shared/lensing_profiles.py::
 // NfwDsigmaMisProduction(kernel="single"), the repo's already-existing
 // c=4/rho_crit-convention-exact replica of this same C++ class (same
 // data/nfw_off_center table files, same clamped-bilinear scheme) used
@@ -179,7 +179,7 @@ TEST_CASE("ShearPrjCore's DSigma_mis convention (c=4, single kernel) matches the
   struct Point {
     double R, r_mis, lnM, expected;
   };
-  // Golden values from des_y3/shared/lensing_profiles.py::
+  // Golden values from shared/lensing_profiles.py::
   // NfwDsigmaMisProduction(kernel="single")(R, r_mis, lnM, rho_mult=omega_m)
   // -- the c=4/rho_crit-convention replica of this same class, not the
   // legacy c=5 richness_selection reference (see file header).

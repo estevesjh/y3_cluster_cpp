@@ -53,8 +53,8 @@ sys.path.insert(0, str(REPO / "src" / "pipelines"))
 sys.path.insert(0, str(REPO / "src" / "pipelines" / "des_y3" / "observables"
                        / "number_counts" / "full_ltmz" / "python"))
 
-from des_y3.shared import datablock_models as dm  # noqa: E402
-from des_y3.shared import sel_kernels  # noqa: E402
+from shared import datablock_models as dm  # noqa: E402
+from shared import sel_kernels  # noqa: E402
 from numcounts_full_ltmz import compute_counts  # noqa: E402
 
 DUMP_DIR = REPO / "docs" / "figs" / "real_pipeline_extract_output"
