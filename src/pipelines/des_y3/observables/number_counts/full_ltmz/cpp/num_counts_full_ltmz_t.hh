@@ -7,7 +7,7 @@
 //                            · K_j(zt) · K_i(lt, zt) · P_HOD(lt | M, zt)
 //
 // This is the C++ backend of the des_y3 `full_ltmz` strategy
-// (docs/module_reorganization_plan.md): unlike the older
+// (src/pipelines/des_y3/README.md): unlike the older
 // NumCountsFullScalarIntegrand diagnostic it includes the Gaussian
 // photo-z kernel K_j and the Costanzi EMG observed-richness kernel K_i,
 // so it computes the same quantity as the production fast path

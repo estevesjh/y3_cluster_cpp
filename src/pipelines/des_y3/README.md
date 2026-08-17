@@ -1,144 +1,302 @@
-# `src/pipelines/des_y3` — new maintained DES Y3 implementations
+# DES Y3 observable implementations
 
-This tree is the namespace approved in
-[docs/module_reorganization_plan.md](../../../docs/module_reorganization_plan.md)
-for *new* implementations belonging to the maintained DES Y3 observable
-family. The validation baseline it is measured against is recorded in
-[docs/des_y3_maintenance_manifest.md](../../../docs/des_y3_maintenance_manifest.md).
-
-Layout is `observable -> integration strategy -> language/backend`:
+This directory contains the maintained DES Y3 implementations. The layout is
 
 ```text
-des_y3/
-├── shared/                      Python replicas of the shared model layer
-│                                (HMF_t, DV_DO_DZ_t, OMEGA_Z_DES, SelGLCore),
-│                                convention-exact against src/models/*.hh
-└── observables/
-    ├── number_counts/
-    │   ├── fast_mass/python/    exact z contraction, W(lnM) outside the operator
-    │   └── full_ltmz/
-    │       ├── python/          fixed-GL reference (per-(M,z) lt brackets)
-    │       ├── cpp/             NumCountsFullLtmz.so (adaptive Cuhre)
-    │       └── cuda/            NumCountsFullLtmzGpu.so (PAGANI)
-    ├── shear_1h2h/
-    │   ├── fast_mass/
-    │   │   ├── python/          exact z contraction + direct GL mass sum;
-    │   │   │                    shear1h2h_max.py = traditional max model
-    │   │   ├── cpp/             Shear1hFastMass.so (SelGLCore + mixture),
-    │   │   │                    Shear1h2hMax.so (traditional max model)
-    │   │   └── cuda/            Shear1h2hMaxGpu.so (miscentred-NFW kernel
-    │   │                        contraction, rest host-side)
-    │   ├── full_ltmz/
-    │   │   ├── python/          explicit (lt, lnM, z) x production profile
-    │   │   ├── cpp/             Shear1hFullLtmz.so (adaptive Cuhre per (bin,R))
-    │   │   └── cuda/            Shear1hFullLtmzGpu.so (PAGANI)
-    │   └── radial_series/
-    │       ├── python/          offline U_ell generator + moment evaluator
-    │       └── cpp/             Shear1hRadialSeries.so (same data, GSL interp)
-    └── shear_projection/
-        ├── fast_mass/
-        │   ├── python/          exact-z port of ShearPrjCore (no freeze)
-        │   ├── cpp/             ShearPrjFastMass.so (one core, both observables)
-        │   └── cuda/            ShearPrjFrozenGpu.so (frozen machinery, kernel contraction)
-        └── full_ltmz/cuda/      DSigmaPrjFullLtmzGpu.so (PAGANI over ln θ, z, lnM)
+observable / numerical strategy / language or backend
 ```
 
-Ground rules (from the approved proposal):
+The strategy-level READMEs are the main entry points. Each one explains the
+mathematics first and then describes the Python, C++, and CUDA implementations
+that realize the same observable or approximation.
 
-- Nothing here moves, wraps, or replaces a production entry point. The
-  production stages (`sel_function`, `NumCountsSel`, `Shear1hMisSel`,
-  `b_sel_marg`, `bsel`, `shear_prj_frozen_physics`) stay where they are.
-- Existing C++ module and integration templates are immutable dependencies.
-- Directories exist only when they contain a runnable implementation or a
-  substantive design document; empty language placeholders are not created.
-- Each implementation documents its integration variables, DataBlock
-  contract, composed models, numerical tolerance against its reference, and
-  its status (production / reference / experimental / planned) in its own
-  `README.md`.
+## The three model families
 
-The offline `radial_series` derived data lives under
-[`data/radial_series/`](../../../data/radial_series/) and is generated once
-by the generator in `observables/shear_1h2h/radial_series/python/`; it is
-never regenerated inside an MCMC sample.
+### Cluster number counts
 
-## Reference pipeline choices (2026-08-12)
+The count in observed richness bin \(i\) and observed-redshift bin \(j\) is
 
-The plan owner's chosen default backend per observable — the cell each
-is measured/compared against elsewhere unless a specific strategy is
-called out otherwise. See the matrix below for the full accuracy/timing
-comparison across every strategy/backend cell.
+$$
+N_{ij} = \int dz\,d\ln M\,d\lambda_{\rm tr}\;
+n(M,z)\frac{dV}{d\Omega dz}\Omega(z)
+S_j(z)S_i(\lambda_{\rm tr},z)
+P_{\rm HOD}(\lambda_{\rm tr}\mid M,z).
+$$
+
+The kernels describe the halo population, the richness--mass relation, the
+mapping from true richness to observed richness, and the photometric-redshift
+selection. The count model has no radial coordinate. Start with
+[number-count strategies](observables/number_counts/README.md).
+
+### One-halo and traditional one-plus-two-halo shear
+
+The maintained one-halo shear uses a production miscentred mixture,
+
+$$
+\Delta\Sigma_{1h}(R,M,z) =
+(1-f_{\rm mis})\Delta\Sigma_{\rm cen}(R,M,z)
+ + f_{\rm mis}\Delta\Sigma_{\rm mis}(R,M,z).
+$$
+
+The lensing observable inserts this profile into the count integral and
+weights it by the inverse critical surface density,
+
+$$
+O_{ij}(R)=\int dz\,d\ln M\,d\lambda_{\rm tr}\;
+\mathcal W_{ij}(M,z,\lambda_{\rm tr})
+\Sigma_{\rm crit}^{-1}(z)\Delta\Sigma_{1h}(R,M,z).
+$$
+
+The `fast_mass` directory also contains the traditional max model used for a
+one-plus-two-halo comparison,
+
+$$
+\Delta\Sigma_{\rm max}(R,M,z)=
+\max\left[\Delta\Sigma_{1h}(R,M,z),
+b(M,z)\Delta\Sigma_{hh}(R,z)\right].
+$$
+
+This is separate from the selection-affected projection observable below.
+Start with [one-halo shear strategies](observables/shear_1h2h/README.md).
+
+### Projection shear
+
+Projection shear models correlated line-of-sight structure around the lens.
+The exact implementation keeps the angular offset \(\theta\), true redshift,
+and halo mass coupled through the selection-affected bias, nonlinear
+correlation function, slab exclusion, and miscentred profile:
+
+$$
+\Delta\Sigma_{\rm prj,ij}(R)=
+\int d\theta\;2\pi\sin\theta\int d\ln M\;
+\left[
+W^{\rm rnd}_{ij}(M)
++b_{{\rm sel},ij}(\theta)W^{\rm cl}_{ij}(\theta,M)
+\right]
+\Delta\Sigma_{\rm mis}(R,\tau;M),
+\qquad
+\tau=\theta D_A(z_{{\rm ob},j}).
+$$
+
+The weights \(W^{\rm rnd}_{ij}\) and \(W^{\rm cl}_{ij}\) are defined in the
+projection strategy README. They contain the random and clustered channels,
+the selection-dependent \(b_{{\rm sel},ij}(\theta)\), the line-of-sight
+correlation, photo-\(z\) weighting, and the exclusion geometry. These weights
+are distinct from the number-count \(S_i,S_j\) kernels. The path is named
+`shear_projection`; module names use `ShearPrj`. Start with
+[projection-shear strategies](observables/shear_projection/README.md).
+
+## Numerical strategies
+
+| Strategy | Numerical idea | Main use |
+| --- | --- | --- |
+| `full_ltmz` | Keep \((\lambda_{\rm tr},z,\ln M)\) explicit. Use fixed Gauss--Legendre, adaptive Cuhre, or adaptive PAGANI depending on backend. | Independent reference and convergence checks. |
+| `fast_mass` | Build the redshift/selection weight first, then integrate or sum over mass. For projection, retain the coupled angular geometry in the shared core. | Maintained CPU path and fast Python reference. |
+| `radial_series` | Expand a fixed radial profile around the population mean of \(y=\ln r_s\), with precomputed \(U_\ell\) functions. | One-halo shear candidate only. |
+
+The first two strategies are exact representations of their stated
+observable definitions, up to quadrature and interpolation. `radial_series`
+is a fixed-profile approximation: its current table assumes \(c=4\) for all
+mass and redshift and therefore must not be compared with a varying
+production concentration relation as if it were exact.
+
+## Language and backend inventory
+
+| Observable / strategy | Python | C++ | CUDA |
+| --- | --- | --- | --- |
+| Number counts / `full_ltmz` | Fixed-GL reference; adaptive mass reference in shared code | Adaptive Cuhre | Adaptive PAGANI |
+| Number counts / `fast_mass` | Importable production-algorithm replica | Thin `SelGLCore` wrapper, production identity | Not warranted for this 1-D mass contraction |
+| One-halo shear / `full_ltmz` | Fixed-GL reference; adaptive mass reference in shared code | Adaptive Cuhre | Adaptive PAGANI |
+| One-halo shear / `fast_mass` | Production-algorithm replica | Thin `SelGLCore` wrapper | CUDA max-model contraction |
+| One-halo shear / `radial_series` | Table generator and evaluator | Table reader and evaluator | Not implemented |
+| Projection shear / `full_ltmz` | Not implemented in this namespace | Not implemented in this namespace | Adaptive PAGANI |
+| Projection shear / `fast_mass` | Exact-\(z\) reference | Shared exact core | Frozen-production GPU contraction |
+
+The CUDA rows are not always the same mathematical observable as the CPU
+reference: the projection GPU path intentionally ports the frozen production
+algorithm, while the projection full-ltmz GPU path is the independent adaptive
+reference.
+
+## Folder inventory
+
+```text
+src/pipelines/
+├── shared/                     survey-agnostic selection/mass-weight layer
+│   ├── datablock_models.py     HMF, volume, area, lensing weights, GL nodes
+│   ├── full_ltmz_core.py       explicit selection contraction
+│   ├── lensing_profiles.py     production profile adapters
+│   ├── sel_function.py         maintained richness/photo-z selection tensor
+│   ├── sel_kernels.py          maintained richness/photo-z kernels
+│   └── z_kernel.py             projection photo-z kernel
+├── cosmology/                  survey-agnostic halo-model physics
+│   ├── halo_model.py           1h+2h lensing, Tinker et al. bias
+│   ├── concentration.py        mass-concentration relations
+│   ├── nfw_model.py            analytic Wright & Brainerd NFW
+│   ├── prj_params.py           frozen Costanzi-2026 EMG coefficients
+│   ├── bsel.py                 selection-bias closure
+│   └── sigma_crit_inv.py       Sigma_crit^-1(z_lens, R)
+└── des_y3/
+    └── observables/
+        ├── README.md
+        ├── number_counts/
+        │   ├── README.md
+        │   ├── fast_mass/README.md
+        │   └── full_ltmz/README.md
+        ├── shear_1h2h/
+        │   ├── README.md
+        │   ├── fast_mass/README.md
+        │   ├── full_ltmz/README.md
+        │   └── radial_series/README.md
+        └── shear_projection/
+            ├── README.md
+            ├── fast_mass/README.md
+            └── full_ltmz/README.md
+```
+
+`shared/` and `cosmology/` are siblings of `des_y3/`, not nested under it —
+both predate this namespace conceptually (they mirror production model
+classes 1:1) and are meant to be reused as-is by future non-Y3 pipelines;
+see `src/pipelines/cosmology/README.md` for that directory's contents and
+why it copies rather than moves its `y3_buzzard/` sources.
+
+Each strategy README contains a second table that inventories the actual
+source files in its Python, C++, and CUDA directories. A missing language
+directory means that backend is not implemented, not that documentation was
+omitted.
+
+## Reference pipeline choices
+
+The maintained smoke pipeline uses the following CPU backends:
 
 | Observable | Strategy | Backend |
-|---|---|---|
-| Number counts | `fast_mass` | C++ (`NumCountsSel.so`, by identity) |
-| One-halo miscentred shear | `fast_mass` | C++ (`Shear1hFastMass.so`, bitwise = production) |
-| Traditional 1h+2h shear (max model) | `fast_mass` | C++ (`Shear1h2hMax.so`) |
-| Projection shear | `fast_mass` | C++ (`ShearPrjFastMass.so`) |
+| --- | --- | --- |
+| Number counts | `fast_mass` | C++ `NumCountsSel.so` identity path |
+| One-halo miscentred shear | `fast_mass` | C++ `Shear1hFastMass.so`, identity with production |
+| Projection shear | `fast_mass` | C++ `ShearPrjFastMass.so`, exact-\(z\) reference |
 
-If GPU nodes are available, the max model and projection shear arms
-additionally run on CUDA:
+The traditional max model and the frozen projection GPU path are optional
+performance variants, not replacements for the exact reference definitions.
 
-| Observable | Strategy | Backend |
-|---|---|---|
-| Traditional 1h+2h shear (max model) | `fast_mass` | CUDA (`Shear1h2hMaxGpu.so`) |
-| Projection shear | `fast_mass` | CUDA (`ShearPrjFrozenGpu.so`, frozen machinery) |
+## Production reference stages (maintenance manifest)
 
-## The matrix: accuracy and timing per measurement mode (2026-08-12)
+Everything in this namespace is validated against six existing production
+stages, none of which move or change as part of any work here (see
+"Rules that bite if ignored" in the top-level `CLAUDE.md`). This is the
+current validation baseline, audited against `y3_cluster_cpp` commit
+`29949bdfecda00eea938eae194ac9f3a1d5fad1e` (2026-08-11) and the external
+pipeline pin below; **the module source is authoritative for exact
+DataBlock keys, shapes, and units** — treat this table as a map of where
+to look, not a substitute for reading `NumCounts.cc`/`Shear1hMis.cc`/etc.
+directly.
 
-**Accuracy policy** (plan owner): the reference is the **adaptive**
-`full_ltmz` calculation (`full_ltmz_core.full_ltmz_mass_integral_adaptive`:
-vectorised adaptive mass integral, reported error ≤ 1e-6; mass limits
-with the lower bound at richness → 0 — the inverse scaling relation is
-invalid where scatter dominates — and the upper bound from the inverted
-scaling relation at 4·λ_max). A fixed-GL implementation is never the
-reference; it is certified against the adaptive one (3.5e-5 counts,
-4.9e-5 shear) and then used as the fast stand-in. Production agreement
-is a separate *algorithm-identity* check. All numbers: real pipeline,
-fiducial widePlanck point, pinned 12-bin wall; times per MCMC sample.
+| Pipeline stage | Language | Source | Build target / runtime file |
+| --- | --- | --- | --- |
+| `sel_function` | Python | `src/modules/sel_function/sel_function.py` | No CMake target; run in place |
+| `NumCountsSel` | C++ | `NumCounts.cc` driving `NumCountsSelGL` (`n_operator_sel_gl_t.hh`) | `src/modules/num_counts_sel/` → `NumCountsSel.so` |
+| `Shear1hMisSel` | C++ | `Shear1hMis.cc` driving `Shear1hMisSelGL` (`n_operator_sel_gl_t.hh`) | `src/modules/num_counts_sel/` → `Shear1hMisSel.so` |
+| `b_sel_marg` | C++ | `BSelMargIntegrand.cc` driving `P_operator` (`p_operator_t.hh`) | `src/modules/b_sel_marg_cpu/` → `BSelMargIntegrand.so` |
+| `bsel` | Python | `y3_buzzard/bsel.py` (physics copy: `src/pipelines/cosmology/bsel.py`) | No CMake target; run in place |
+| `shear_prj_frozen_physics` | C++ | `ShearPrjFrozenPhysics.cc` driving `ShearPrjFrozenPhysics` (`sigma_prj_frozen_t.hh`) | `src/modules/sigma_prj_cpu/` → `ShearPrjFrozenPhysics.so` |
 
-### Number counts (12 bins; production `NumCountsSel.so` = 6 ms)
+The pinned module order for the authoritative external pipeline is
+`consistency GrowthFactor cp_camb MfTinker halo_model
+average_sigma_crit_inv sel_function NumCountsSel Shear1hMisSel
+b_sel_marg bsel shear_prj_frozen_physics likelihoods`. `sel_function`,
+`b_sel_marg`, and `bsel` are prerequisite selection stages, not
+competing integration strategies for the final count or shear observable.
 
-| Strategy / backend | Time | Error vs fiducial | Notes |
-|---|---|---|---|
-| `full_ltmz` / Python adaptive | 25 s | **reference** (reported err ≤ 1e-6) | |
-| `full_ltmz` / Python (fixed GL) | 83 ms | 3.5e-5 | certified by the adaptive reference |
-| `full_ltmz` / C++ (Cuhre, eps 1e-4) | 3.1 s | 4.9e-4 | inside fiducial band |
-| `full_ltmz` / CUDA (PAGANI, A100) | 2.0 s | 5.1e-4 | 6.0e-5 from C++ twin |
-| `fast_mass` / Python | 5 ms | 7.6e-4 | identity 2.4e-15 vs production |
-| `fast_mass` / C++ | 6 ms | 7.6e-4 | **is** production `NumCountsSel.so` |
-| `fast_mass` / CUDA | — | — | not warranted (1-D sum) |
-| `radial_series` | n/a | n/a | counts need no radial operator (f = 1) |
+External pipeline pin (run-management repo `estevesjh/des-nersc-cluster-scripts`,
+commit `9fd24ddc075d394af4e20241bda716ac4d529fcb`):
+`cosmosis-models/mock_mcmc_buzzard.ini` (pipeline) and
+`cosmosis-models/mock_mcmc_widePlanck_values.ini` (values; no separate
+priors file — the values file carries the sampled boxes). The full commit
+hash, not the branch name, defines the pin.
 
-### One-halo miscentred shear (12 bins × 10 radii; production `Shear1hMisSel.so` = 9 ms)
+Configuration-grid contract at that pin (setup-time options, not
+per-sample DataBlock values):
 
-| Strategy / backend | Time | Error vs fiducial | Notes |
-|---|---|---|---|
-| `full_ltmz` / Python adaptive | 35 s | **reference** (reported err ≤ 1e-6) | |
-| `full_ltmz` / Python (fixed GL) | 149 ms | 4.9e-5 | certified by the adaptive reference |
-| `full_ltmz` / C++ (Cuhre, eps 1e-4) | 51 s | 3.3e-4 | 120 adaptive triples; all converged |
-| `full_ltmz` / CUDA (PAGANI, A100) | 32 s | 3.4e-4 | 8.4e-5 from the C++ Cuhre twin (job 56790321) |
-| `fast_mass` / Python | 74 ms | 8.4e-4 | identity 3.1e-15 vs production |
-| `fast_mass` / C++ (`Shear1hFastMass.so`) | 9 ms | 8.4e-4 | bitwise = production `Shear1hMisSel.so`; namespace label/section |
-| `radial_series` / Python (ℓ≤2) | 6 ms | 3.7e-3 total | tabulation + truncation + interp, same-profile fiducial |
-| `radial_series` / C++ (`Shear1hRadialSeries.so`) | 7 ms | 3.7e-3 + 1.6e-4 | interp-scheme difference vs Python |
-| `radial_series` / CUDA | — | — | not warranted (3 table lookups per point) |
-| **max model** (traditional 1h+2h) / C++ (`Shear1h2hMax.so`) ⚠ | **11 ms** | 6.0e-15 vs Python (identity); inherits its 8.3e-4 vs the adaptive reference | z-resolved weights + max(1h, b·2h), all tables via Interp2D; ΔΣ_hh NaNs sanitized before interpolation |
-| **max model** (traditional 1h+2h) / CUDA (`Shear1h2hMaxGpu.so`) ⚠ | **8 ms** | 6.4e-15 vs the C++ twin (identity) | one kernel, one thread per (bin, R, lnM) node: the miscentred-NFW piece (the transcendental-heavy cost driver, ~11.5k evaluations on the production grid) over `y3_cuda::NFW_DSIGMA_MIS` (device-resident table), reduced over z with `atomicAdd` into the (bin, R) accumulator; everything else (HMF/selection weight, 2-halo ΔΣ_hh/bias tables) stays host-side, same as the C++ class. Modest ~1.4× over the C++ backend — the actual compute here is small enough that kernel-launch/H2D-transfer overhead eats most of the theoretical parallel win |
-| **max model** (traditional 1h+2h) / Python ⚠ | 83 ms | 8.3e-4 fast path; 4.9e-5 GL — vs its adaptive z-resolved reference; **ΔΣ_hh itself needs debugging, see docs/dsigma_hh_debug_flag.md** | `shear1h2h_max`: max(ΔΣ_cl, b·ΔΣ_hh); z stays inside the mass integral (2h is z-dependent); needs `compute_lensing_2h = T`; 2h NaNs at low R zero-filled |
+| Stage | Grid |
+| --- | --- |
+| `sel_function` | Twelve equal-length `lam_min`/`lam_max`/`zob_min`/`zob_max`/`sigma_z`; shared `(lnM,z)` table, `n_lnm=192`, `n_z_shared=64` |
+| `NumCountsSel` | `bin_index=0..11`; fixed-GL `n_lnm=96`, `n_z=64`; output length 12 |
+| `Shear1hMisSel` | 12 `bin_index` × 15 `r_perp` (bin slow, radius fast); output length 180; `method=exact` |
+| `b_sel_marg` | Zipped 12-point `(zo_low,zo_high,lambda_bin)` wall, richness fastest; length 12 per section |
+| `bsel` | `lob=(25,37.5,52.5,130)`, `zob=(0.275,0.425,0.575)`, legacy 32-node `theta` |
+| `shear_prj_frozen_physics` | Zipped 180-point `(lambda_bin,zo_low,zo_high,radii)` wall; 12×15, bin slow/radius fast |
 
-### Projection shear (180-point wall; production `ShearPrjFrozenPhysics.so` = 82 ms)
+This snapshot supersedes the retired `docs/module_reorganization_plan.md`
+(design proposal, approved 2026-08-11, fully implemented — its Phase 1/2
+process content is no longer forward-looking) and
+`docs/des_y3_maintenance_manifest.md` (the original, more detailed
+per-stage DataBlock I/O audit); both are kept in `archive/` for history,
+not tracked by git.
 
-| Strategy / backend | Time | Error vs reference | Notes |
-|---|---|---|---|
-| `full_ltmz` / CUDA (`DSigmaPrjFullLtmzGpu.so`, PAGANI over (ln θ, z, lnM)) | 95 s (eps 1e-3) | median 9.5e-4 vs refined GL; max 2.2% at innermost radii (open convergence study) | the angle/z/mass-resolved integration of the *current* observable definition; found the production-knob GL grids under-resolve wall edges by up to 2.3% |
-| `full_ltmz` (extended definition) | — | — | **open decision**: unfreeze ξ_NL's z argument and/or resolve the richness selection inside the θ integral (extends the observable, plan owner's call) |
-| `fast_mass` / Python (exact z, no freeze) | 270 ms | best available reference | identity 1.0e-11 vs C++ |
-| `fast_mass` / C++ (`ShearPrjFastMass.so`) | 154 ms | best available reference | 9.9e-12 vs exact `dsigma_prj` evaluator (same core); both observables in one pass |
-| `fast_mass` / frozen production | 82 ms | 5.5e-5 from exact | the frozen-physics approximation, measured |
-| `fast_mass` / CUDA (`ShearPrjFrozenGpu.so`, frozen machinery) | **8.3 ms** | 1.5e-11 vs production frozen (machine precision) | the mock_buzzard frozen algorithm with the ΔΣ_mis cache + mass contraction as one CUDA kernel; ~10× over the 82 ms production module; runs on a nearly-full shared GPU (few-MB footprint) |
-| `radial_series` | — | — | planned: U_ℓ(x, x_θ) tables with the θ coordinate retained (plan §radial_series) |
+## Known follow-up work
 
-Caution on the Cuhre knobs: `eps_rel = 1e-3` is 9× faster (0.36 s) but
-silently ~1% wrong in the lowest-richness bins (the near-delta HOD
-ridge; see the cpp README) — the 1e-4 setting is the validated one.
-Full validation records live in each implementation's README.
+Tracked backlog surfaced by review, not yet implemented in this namespace:
+
+- **Upstream CUDA sync**: reuse the device headers/kernels from
+  `marcpaterno/y3_cluster_cpp#3` (`b_sel.cuh`, `emg_des_t.cuh`,
+  `gamma_1h_nfw.cuh`, `mor_shifted_poisson_t.cuh`, `nfw_dsigma_mis.cuh`,
+  `nfw_sigma_mis.cuh`, `p_operator_gpu_t.cuh`, `sigma_photoz_table_t.cuh`,
+  the `gpu_prj_costanzi2026` module) in this namespace's CUDA drivers,
+  once merged. Exception: keep the CPU `bsel`/`BSelMargIntegrand`
+  fixed-GL path for anything needing b_sel — do not adopt `b_sel.cuh`,
+  it's ~10^3x slower for this integrand.
+- **Concentration**: `radial_series`'s offline `U_ell` table is valid for
+  any concentration (it's purely a function of the dimensionless
+  `x`/`x_mis` coordinates), but `nfw_profile_family.py`'s
+  `r_s_of_lnM`/`y_of_lnM` and `lensing_profiles.py`'s `CONC=4.0` hardcode
+  the *consumer's* M→r_s mapping. Plumb the real per-sample concentration
+  (e.g. `haloModel/concentration`) into that mapping instead.
+- **`generate_radial_series_tables.py`**: remove `sbar_off_grid`/the
+  cumulative off-center integration (biased below `R_min`); use the
+  existing `data/nfw_off_center` lookup/analytic profile directly.
+  Re-benchmark the finite-difference stencils against spline
+  differentiation or direct analytic derivatives.
+- **`validate_radial_series.py`**: check the centered case against the
+  closed-form analytic NFW at high precision, and the miscentered case
+  against one hardcoded high-precision reference grid value.
+- **`shear1h_radial_series_t.hh`**: make `ell_max` a CosmoSIS-config int
+  (already true in the Python backend); document `rho_mult`/`mu2_`/`mu3_`.
+- Drop the unused `#include "models/p_operator_cuhre_t.hh"` in
+  `Shear1h2hMax.cc` (it only needs the `gl_nodes` helper from that
+  header) once a smaller GL-utility header is available.
+- **HMF**: not yet ported into `src/pipelines/cosmology/`; explicitly
+  deferred (see that directory's README).
+
+## Unified timing and precision table
+
+These measurements are from the pinned 12-bin DES Y3 wall at the fiducial
+point. Counts use 12 bins; one-halo shear uses 12 bins × 10 radii; projection
+uses 180 wall points. Times are milliseconds per sample unless stated
+otherwise. “Error” always means error against the reference named in the
+comparison column; identity numbers are separate backend-equivalence checks.
+
+| Observable | Strategy / backend | Language / hardware | Cost | Precision or comparison |
+| --- | --- | --- | ---: | --- |
+| Counts | `full_ltmz`, adaptive | Python | 25 s | Fiducial reference; reported error \(\le 10^{-6}\) |
+| Counts | `full_ltmz`, fixed GL | Python | 83 ms | \(3.5\times10^{-5}\) vs adaptive |
+| Counts | `full_ltmz`, Cuhre | C++ CPU | 3.1 s | \(4.9\times10^{-4}\) vs fixed-GL reference |
+| Counts | `full_ltmz`, PAGANI | CUDA / A100 | 2.0 s | \(5.1\times10^{-4}\) vs fixed-GL reference |
+| Counts | `fast_mass` | Python | 5 ms | \(7.6\times10^{-4}\) vs adaptive; \(2.4\times10^{-15}\) vs production |
+| Counts | `fast_mass` | C++ CPU | 6 ms | \(7.6\times10^{-4}\) vs adaptive; production identity |
+| One-halo shear | `full_ltmz`, adaptive | Python | 35 s | Fiducial reference; reported error \(\le 10^{-6}\) |
+| One-halo shear | `full_ltmz`, fixed GL | Python | 149 ms | \(4.9\times10^{-5}\) vs adaptive |
+| One-halo shear | `full_ltmz`, Cuhre | C++ CPU | 51 s | \(3.3\times10^{-4}\) vs Python reference |
+| One-halo shear | `full_ltmz`, PAGANI | CUDA / A100 | 32 s | \(3.4\times10^{-4}\) vs C++ reference |
+| One-halo shear | `fast_mass` | Python | 74 ms | \(8.4\times10^{-4}\) vs adaptive; \(3.1\times10^{-15}\) vs production |
+| One-halo shear | `fast_mass` | C++ CPU | 9 ms | \(8.4\times10^{-4}\) vs adaptive; production identity |
+| One-halo shear | `radial_series` | Python | 6 ms | \(3.7\times10^{-3}\) for its fixed-profile fiducial |
+| One-halo shear | `radial_series` | C++ CPU | 7 ms | \(3.7\times10^{-3}\) plus \(1.6\times10^{-4}\) interpolation difference |
+| Max model | `fast_mass` | C++ CPU | 11 ms | \(8.3\times10^{-4}\) vs adaptive; \(6.0\times10^{-15}\) vs Python |
+| Max model | `fast_mass` | CUDA / A100 | 8 ms | \(6.4\times10^{-15}\) vs C++ twin |
+| Projection | `full_ltmz`, PAGANI | CUDA / A100 | 95 s | Median \(9.5\times10^{-4}\), maximum \(2.2\%\) vs refined GL; convergence open |
+| Projection | `fast_mass`, exact \(z\) | Python | 270 ms | \(1.6\times10^{-11}\) vs exact evaluator; \(5.5\times10^{-5}\) vs frozen production |
+| Projection | `fast_mass`, exact \(z\) | C++ CPU | 154 ms | \(9.9\times10^{-12}\) vs exact evaluator |
+| Projection | frozen GPU path | CUDA / A100 | 8.3 ms | \(1.5\times10^{-11}\) vs frozen production; not the exact-\(z\) reference |
+
+The table is a benchmark record, not a universal performance guarantee. CPU
+timings depend on the Perlmutter node and build; GPU timings depend on the
+device and occupancy. Full validation notes and the exact comparison policy
+are kept in the strategy READMEs and the validation documents under `docs/`.

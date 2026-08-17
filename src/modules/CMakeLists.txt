@@ -45,7 +45,7 @@ add_subdirectory(sigma_prj_cpu)
 # used to validate the n_operator_sel family on the same datablock layout.
 add_subdirectory(num_counts_full)
 
-# des_y3 Phase 2 backends (docs/module_reorganization_plan.md): new
+# des_y3 Phase 2 backends (src/pipelines/des_y3/README.md): new
 # maintained implementations live under src/pipelines/des_y3 and are
 # registered here with explicit binary dirs.
 add_subdirectory(
