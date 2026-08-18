@@ -162,12 +162,7 @@ class ShearPrjFastMass:
         sci = dm.SigmaCritInv(source)
         dsmis = lp.NfwDsigmaMisProduction(kernel="single")
 
-        bs_lob = source.array("b_sel_marginalised", "lob")
-        bs_zob = source.array("b_sel_marginalised", "zob")
-        b_small = np.asarray(source.array("b_sel_marginalised", "b_small"),
-                             dtype=float).reshape(bs_zob.size, bs_lob.size)
-        b_large = np.asarray(source.array("b_sel_marginalised", "b_large"),
-                             dtype=float).reshape(bs_zob.size, bs_lob.size)
+        bsel = dm.BSelBins.from_source(source)
 
         chi = lambda z: np.interp(np.clip(z, self._dist_z[0],
                                           self._dist_z[-1]),
@@ -175,8 +170,11 @@ class ShearPrjFastMass:
 
         self._results = {}
         for s in self.slices:
-            lobc = float(self.lob_centers[s["lb"]])
             zob = s["zob"]
+            lobc, zob_row, bs, bl = bsel.find_exact_row(s["lb"], zob=zob)
+            if not np.isclose(zob_row, zob):
+                raise ValueError("bsel row does not match the shear wall")
+            lobc = float(lobc)
             chi_o = float(chi(zob))
             d_a_o = chi_o / (1.0 + zob)
             r_excl = float(lp.r_lambda(lobc)) * (1.0 + zob)
@@ -187,19 +185,7 @@ class ShearPrjFastMass:
                 cfg["n_per_seg"], cfg["r_max_cmpch"])
             geom = w_theta * 2.0 * np.pi * np.sin(theta)
 
-            # b_sel(theta): plateau interpolation in zob + sigmoid.
-            # Bracket-search port of sigma_prj_t.hh:829-851
-            # (interp_b_asymptotes_) — finds the bs_zob table nodes
-            # bracketing this slice's zob; unrelated to the theta grid.
-            j = 0
-            while j + 1 < bs_zob.size and bs_zob[j + 1] < zob:
-                j += 1
-            j0 = j if j + 1 < bs_zob.size else bs_zob.size - 2
-            j1 = j0 + 1
-            f = np.clip((zob - bs_zob[j0]) / (bs_zob[j1] - bs_zob[j0])
-                        if bs_zob[j1] > bs_zob[j0] else 0.0, 0.0, 1.0)
-            bs = (1 - f) * b_small[j0, s["lb"]] + f * b_small[j1, s["lb"]]
-            bl = (1 - f) * b_large[j0, s["lb"]] + f * b_large[j1, s["lb"]]
+            # Exact wall row; no interpolation in zob.
             theta_lam = float(lp.r_lambda(lobc)) * (1.0 + zob) / chi_o
             k_sig, theta0 = 2.5 / theta_lam, 0.5 * theta_lam
             bsel = bs + (bl - bs) / (1.0 + np.exp(-k_sig * (theta - theta0)))

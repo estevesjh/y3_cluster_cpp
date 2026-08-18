@@ -192,14 +192,20 @@ TEST_CASE("ShearPrjFrozenGpu.so matches its CPU counterpart "
   sample.put_val("average_sigma_crit_inv", "sci_average",
                  read_column(D + "/average_sigma_crit_inv/sci_average.txt"));
 
-  auto const bs_lob = read_column(D + "/b_sel_marginalised/lob.txt");
-  auto const bs_zob = read_column(D + "/b_sel_marginalised/zob.txt");
-  sample.put_val("b_sel_marginalised", "lob", bs_lob);
-  sample.put_val("b_sel_marginalised", "zob", bs_zob);
+  sample.put_val("b_sel_marginalised", "lambda_bin",
+                 read_column(D + "/b_sel_marginalised/lambda_bin.txt"));
+  sample.put_val("b_sel_marginalised", "zo_low",
+                 read_column(D + "/b_sel_marginalised/zo_low.txt"));
+  sample.put_val("b_sel_marginalised", "zo_high",
+                 read_column(D + "/b_sel_marginalised/zo_high.txt"));
+  sample.put_val("b_sel_marginalised", "lob",
+                 read_column(D + "/b_sel_marginalised/lob.txt"));
+  sample.put_val("b_sel_marginalised", "zob",
+                 read_column(D + "/b_sel_marginalised/zob.txt"));
   sample.put_val("b_sel_marginalised", "b_small",
-                 read_2d(D, "b_sel_marginalised/b_small.txt", bs_lob.size()));
+                 read_column(D + "/b_sel_marginalised/b_small.txt"));
   sample.put_val("b_sel_marginalised", "b_large",
-                 read_2d(D, "b_sel_marginalised/b_large.txt", bs_lob.size()));
+                 read_column(D + "/b_sel_marginalised/b_large.txt"));
 
   std::string const cp = D + "/cosmological_parameters/values.txt";
   sample.put_val("cosmological_parameters", "omega_m", read_scalar(cp, "omega_m"));

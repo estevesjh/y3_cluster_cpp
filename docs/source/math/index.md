@@ -862,7 +862,7 @@ f^{\mathrm{prj}}\left.
 \right|_{\Delta\lambda_i}.
 $$
 
-The latent-richness dependence is explicit: $\lambda^{\mathrm{tr}}$ enters
+The true richness dependence is explicit: $\lambda^{\mathrm{tr}}$ enters
 every Gaussian argument through the shifted residual
 $\lambda_i^{\min/\max} - \lambda^{\mathrm{tr}} - \Delta\mu$.
 

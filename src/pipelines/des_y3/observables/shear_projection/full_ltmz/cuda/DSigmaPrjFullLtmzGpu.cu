@@ -38,6 +38,7 @@
 #include "common/cuda/Volume.cuh"
 
 #include "models/dv_do_dz_t.cuh"
+#include "models/bsel_bins_t.hh"
 #include "models/hmf_t.cuh"
 #include "models/nfw_dsigma_mis.cuh"
 #include "models/z_kernel_data.hh"
@@ -68,7 +69,7 @@ private:
 
   // Host-side copies for set_grid_point geometry.
   std::vector<double> h_dist_z_, h_d_c_;
-  std::vector<double> h_bs_lob_, h_bs_zob_, h_b_small_, h_b_large_;
+  std::optional<y3_cluster::sp_detail::BSelBins> bsel_;
 
   // Per-wall-point scalars (host-set, device-read).
   double zob_{0}, chi_o_{0}, d_a_o_{0}, r_excl_{0}, cur_R_{0};
@@ -116,15 +117,7 @@ public:
     using doubles = std::vector<double>;
     h_dist_z_ = s.view<doubles>("distances", "z");
     h_d_c_ = s.view<doubles>("distances", "d_c");
-    h_bs_lob_ = s.view<doubles>("b_sel_marginalised", "lob");
-    h_bs_zob_ = s.view<doubles>("b_sel_marginalised", "zob");
-    auto flat = [&s](char const* key) {
-      auto const nd = s.view<cosmosis::ndarray<double>>(
-        "b_sel_marginalised", key);
-      return std::vector<double>(nd.begin(), nd.end());
-    };
-    h_b_small_ = flat("b_small");
-    h_b_large_ = flat("b_large");
+    bsel_.emplace(s);
   }
 
   void
@@ -133,28 +126,15 @@ public:
     int const lob_bin = static_cast<int>(pt[0]);
     zob_ = 0.5 * (pt[1] + pt[2]);
     cur_R_ = pt[3];
-    double const lobc = lob_centers_.at(lob_bin % lob_centers_.size());
+    auto const bsel_bin = bsel_->at(lob_bin, zob_);
+    double const lobc = bsel_bin.lob;
     chi_o_ = host_chi(zob_);
     d_a_o_ = chi_o_ / (1.0 + zob_);
     r_excl_ = std::pow(lobc / 100.0, 0.2) * (1.0 + zob_);
 
-    // b_sel plateaus: bracket zob in the 3-node table, linear, clamped
-    // (interp_b_asymptotes_ semantics).
-    int const n_zob = static_cast<int>(h_bs_zob_.size());
-    int const n_lob = static_cast<int>(h_bs_lob_.size());
-    int j = 0;
-    while (j + 1 < n_zob && h_bs_zob_[j + 1] < zob_) ++j;
-    int const j0 = (j + 1 < n_zob) ? j : n_zob - 2;
-    int const j1 = j0 + 1;
-    double f = (h_bs_zob_[j1] > h_bs_zob_[j0])
-                 ? (zob_ - h_bs_zob_[j0]) /
-                     (h_bs_zob_[j1] - h_bs_zob_[j0])
-                 : 0.0;
-    f = std::min(1.0, std::max(0.0, f));
-    b_small_ = (1 - f) * h_b_small_[j0 * n_lob + lob_bin] +
-               f * h_b_small_[j1 * n_lob + lob_bin];
-    b_large_ = (1 - f) * h_b_large_[j0 * n_lob + lob_bin] +
-               f * h_b_large_[j1 * n_lob + lob_bin];
+    // Exact wall row; no interpolation in zob.
+    b_small_ = bsel_bin.b_small;
+    b_large_ = bsel_bin.b_large;
     double const theta_lam =
       std::pow(lobc / 100.0, 0.2) * (1.0 + zob_) / chi_o_;
     k_sig_ = 2.5 / theta_lam;

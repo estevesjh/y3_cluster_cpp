@@ -7,10 +7,9 @@ constructors. The Python side of that layer is
 ``mor_hod_t.hh`` and ``richness_kernel_t.hh``); this helper loads it once
 by path — it is a module file, not a package — and caches it.
 
-``src/modules/sel_function/sel_function.py`` (the CosmoSIS module entry
-point) is currently an exact copy of the same file, kept until
-downstream consumers are confirmed migrated; this helper reads only the
-shared-folder copy.
+``src/modules/sel_function/sel_function.py`` is only the CosmoSIS module
+shim. It imports this shared implementation, so there is one selection
+kernel source for both the module entry point and offline consumers.
 
 Also provides small Source-protocol equivalents of its DataBlock readers
 so offline validators can replay a test-sampler dump.
@@ -52,25 +51,23 @@ def load():
 
 
 def mor_from_source(source):
-    """HOD parameter dict from a Source — mirror of sel_function._read_mor."""
-    sf = load()
-    log10_mmin = source.scalar("cluster_mor", "log10_Mmin")
-    try:
-        log10_m1 = log10_mmin + source.scalar("cluster_mor", "log10_ratio")
-    except Exception:
-        log10_m1 = source.scalar("cluster_mor", "log10_M1")
-    try:
-        z_pivot = source.scalar("cluster_mor", "z_pivot")
-    except Exception:
-        z_pivot = sf.Z_PIVOT_DEFAULT
-    return dict(
-        log10_Mmin=log10_mmin,
-        log10_M1=log10_m1,
-        alpha=source.scalar("cluster_mor", "alpha"),
-        epsilon=source.scalar("cluster_mor", "epsilon"),
-        sigma_lambda=source.scalar("cluster_mor", "sigma_lambda"),
-        z_pivot=z_pivot,
-    )
+    """Return the legacy MOR dictionary through the shared HOD adapter.
+
+    The downstream full-ltmz reference functions still use dictionary
+    indexing. Parameter normalization itself belongs to ``HODParameters`` so
+    this compatibility function does not maintain a second datablock reader.
+    """
+    load()  # keep the historical side effect of making src/pipelines importable
+    from shared import datablock_models as dm
+
+    parameters = dm.HODParameters.from_source(source)
+    return {
+        name: getattr(parameters, name)
+        for name in (
+            "log10_Mmin", "log10_M1", "alpha", "epsilon",
+            "sigma_lambda", "z_pivot",
+        )
+    }
 
 
 def plob_splines_default():

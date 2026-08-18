@@ -30,7 +30,7 @@ immutable models rather than editing them in place.
 | `nfw_model.py` | `y3_buzzard/nfwModel.py` | Analytical Wright & Brainerd (2000) NFW Sigma/DeltaSigma |
 | `hydro_mc.py` | `y3_buzzard/hydro_mc.py` | Vendored Ragagnin+2020 mass-definition/concentration conversion library (external code, verbatim) |
 | `prj_params.py` | `y3_buzzard/prj_params.py` | Frozen Costanzi-2026 EMG projection-effect coefficients (`PrjParams`) |
-| `bsel.py` | `y3_buzzard/bsel.py` | Selection-bias closure: assembles `b_sel_marginalised` from the C++ P1/I1/J outputs; only change from the original is importing `PrjParams` from this directory instead of `y3_buzzard` |
+| `bsel.py` | `y3_buzzard/bsel.py` | Canonical exact-wall selection-bias closure. Reads shared `lambda_edges` and `PHOD`, then writes one `b_small/b_large` pair per C++ `(lambda_bin, zo_low, zo_high)` row; the Buzzard path is a compatibility shim. |
 | `sigma_crit_inv.py` | `y3_buzzard/buildSigmaCritInv.py` | Sigma_crit^-1(z_lens, R) from the beta lookup table + cosmological shift; only change from the original is dropping an unused `setup_bins.zmeans` import |
 
 `y3_buzzard/massconcen.py` is a byte-for-byte duplicate of

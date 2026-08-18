@@ -92,17 +92,24 @@ namespace {
               cosmosis::ndarray<double>(std::vector<double>{0.5, 0.5, 0.5, 0.5},
                                         {2, 2}));
 
-    // b_sel_marginalised: constant plateaus (b_small=1, b_large=3) so the
-    // sigmoid's exact bracketing fraction is irrelevant.
+    // b_sel_marginalised: one exact wall row per lambda bin.  The test wall
+    // below uses zo=[0,0.6], so zob=0.3 and must match this row exactly.
+    db.put_val("b_sel_marginalised", "lambda_bin",
+              std::vector<int>{0, 1, 2, 3});
+    db.put_val("b_sel_marginalised", "zo_low",
+              std::vector<double>{0.0, 0.0, 0.0, 0.0});
+    db.put_val("b_sel_marginalised", "zo_high",
+              std::vector<double>{0.6, 0.6, 0.6, 0.6});
+    db.put_val("b_sel_marginalised", "zob",
+              std::vector<double>{0.3, 0.3, 0.3, 0.3});
     db.put_val("b_sel_marginalised", "lob",
               std::vector<double>{25.0, 37.5, 52.5, 130.0});
-    db.put_val("b_sel_marginalised", "zob", std::vector<double>{0.0, 0.6});
     db.put_val(
       "b_sel_marginalised", "b_small",
-      cosmosis::ndarray<double>(std::vector<double>(8, 1.0), {2, 4}));
+      std::vector<double>{1.0, 1.0, 1.0, 1.0});
     db.put_val(
       "b_sel_marginalised", "b_large",
-      cosmosis::ndarray<double>(std::vector<double>(8, 3.0), {2, 4}));
+      std::vector<double>{3.0, 3.0, 3.0, 3.0});
     return db;
   }
 
@@ -114,8 +121,8 @@ TEST_CASE("DSigmaPrjFullLtmzGpu integrand is exactly zero outside the photo-z wi
   DSigmaPrjFullLtmzGpu integrand(db);
   integrand.set_sample(db);
 
-  // zob = 0.3 (zo_low == zo_high); lob_bin = 0; R = 0.3 cMpc/h.
-  std::array<double, 4> const pt{0.0, 0.3, 0.3, 0.3};
+  // zob = 0.3 from zo=[0,0.6]; lob_bin = 0; R = 0.3 cMpc/h.
+  std::array<double, 4> const pt{0.0, 0.0, 0.6, 0.3};
   integrand.set_grid_point(pt);
 
   // zt = 5.0 is many photo-z widths away from zob = 0.3 for any
@@ -133,7 +140,7 @@ TEST_CASE("DSigmaPrjFullLtmzGpu integrand matches its documented formula assembl
 
   double const zob = 0.3;
   double const R = 0.3;
-  std::array<double, 4> const pt{0.0, zob, zob, R};   // lob_bin = 0
+  std::array<double, 4> const pt{0.0, 0.0, 0.6, R};  // lob_bin = 0
   integrand.set_grid_point(pt);
 
   double const theta = 0.05;     // well outside the ~1.2e-3 rad exclusion

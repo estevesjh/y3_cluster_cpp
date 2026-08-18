@@ -10,8 +10,10 @@ from disk:
 
     from cosmology.prj_params import PrjParams
     params = PrjParams.default()
-    raw    = params.as_dict()           # bsel.py-style dict of 1-D arrays
+    raw    = params.as_dict()           # legacy serialization helper
     splines = params.splines()          # sel_function.py-style ius dict
+    density = params.p_lob_given_ltr(lob, ltr, z)
+    cdf     = params.cdf_lob(lob, ltr, z)
 
 A CosmoSIS module shim at the bottom (``setup``/``execute``/``cleanup``)
 publishes the same arrays into the ``plob_ltr_params`` datablock section
@@ -24,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Mapping
 
 import numpy as np
+from scipy.special import erf, erfc, erfcx
 
 _Z = (
     0.1, 0.15000000000000002, 0.2, 0.25, 0.30000000000000004, 0.35, 0.4,
@@ -67,7 +70,7 @@ def _arr(values) -> np.ndarray:
 
 @dataclass(frozen=True)
 class PrjParams:
-    """EMG coefficient table on a shared z grid."""
+    """EMG coefficients and analytical PLOB_LTR density/CDF model."""
 
     z: np.ndarray
     a_tau: np.ndarray
@@ -108,6 +111,36 @@ class PrjParams:
             **{k: _arr(block[section, k]) for k in COEFF_NAMES},
         )
 
+    @classmethod
+    def from_source(cls, source, section: str = "plob_ltr_params") -> "PrjParams":
+        """Read the coefficient table through a shared datablock adapter.
+
+        ``source`` may wrap either a live CosmoSIS datablock or a saved
+        test-sampler dump. Keeping this constructor here lets callers pass a
+        typed ``PrjParams`` object through the numerical pipeline instead of
+        rebuilding the table as a string-keyed dictionary.
+        """
+        return cls(
+            z=_arr(source.array(section, "z")),
+            **{k: _arr(source.array(section, k)) for k in COEFF_NAMES},
+        )
+
+    @classmethod
+    def from_source_or_default(
+        cls, source, section: str = "plob_ltr_params"
+    ) -> "PrjParams":
+        """Read a complete datablock table, or use the frozen default.
+
+        The normal pipeline may publish ``plob_ltr_params`` explicitly, while
+        lightweight fixtures and older pipelines may omit the section. A
+        partial table is not mixed with the default: it falls back as a whole
+        so every EMG coefficient always comes from one consistent model.
+        """
+        required_keys = ("z",) + COEFF_NAMES
+        if all(source.has(section, key) for key in required_keys):
+            return cls.from_source(source, section)
+        return cls.default()
+
     def as_dict(self) -> dict[str, np.ndarray]:
         out = {"z": self.z}
         for k in COEFF_NAMES:
@@ -117,7 +150,159 @@ class PrjParams:
     def interp_linear(self, name: str, z_query) -> np.ndarray:
         if name not in COEFF_NAMES:
             raise KeyError(f"unknown coefficient {name!r}; expected one of {COEFF_NAMES}")
-        return np.interp(z_query, self.z, getattr(self, name))
+        query = np.asarray(z_query, dtype=float)
+        values = np.interp(
+            query.reshape(-1), self.z, getattr(self, name)
+        )
+        return values.reshape(query.shape)
+
+    @staticmethod
+    def _align_redshift(ltr, z):
+        """Place a one-dimensional redshift grid on the true-richness axis.
+
+        The fast selection layout is ``(lnM, z, ltr)``. NumPy would otherwise
+        align a bare ``(n_z,)`` array with the last axis, so reshape it before
+        the coefficient interpolation. Scalar redshifts need no adjustment.
+        """
+        if z.ndim != 1 or ltr.ndim <= 1:
+            return z
+        if ltr.shape[-2] == z.size:
+            axis = ltr.ndim - 2
+        else:
+            matches = [index for index, size in enumerate(ltr.shape)
+                       if size == z.size]
+            axis = matches[0] if matches else None
+        if axis is None:
+            return z
+        shape = tuple(z.size if index == axis else 1
+                      for index in range(ltr.ndim))
+        return z.reshape(shape)
+
+    def emg_parameters(self, ltr, z):
+        """Return ``(mu, sigma, tau, fprj)`` for true richness and redshift.
+
+        These four equations are shared by the EMG density and its CDF. They
+        live on ``PrjParams`` so callers do not each maintain a second copy of
+        the projection calibration formulas.
+        """
+        ltr = np.asarray(ltr, dtype=float)
+        z = np.asarray(z, dtype=float)
+        z = self._align_redshift(ltr, z)
+        safe_ltr = np.maximum(ltr, 1.0e-12)
+
+        # The coefficient table is linear in redshift and clamped at its
+        # endpoints, matching the C++ Interp1D convention.
+        a_tau = self.interp_linear("a_tau", z)
+        b_tau = self.interp_linear("b_tau", z)
+        a_mu = self.interp_linear("a_mu", z)
+        b_mu = self.interp_linear("b_mu", z)
+        a_sig = self.interp_linear("a_sig", z)
+        b_sig = self.interp_linear("b_sig", z)
+        a_fprj = self.interp_linear("a_fprj", z)
+        b_fprj = self.interp_linear("b_fprj", z)
+
+        mu = a_mu + b_mu * ltr
+        sigma = np.maximum(b_sig * safe_ltr**a_sig, 1.0e-12)
+        tau = np.maximum(b_tau / safe_ltr**a_tau, 1.0e-12)
+        fprj = np.clip(
+            b_fprj / (1.0 + np.exp(-ltr))**a_fprj,
+            0.0,
+            1.0,
+        )
+        return mu, sigma, tau, fprj
+
+    @staticmethod
+    def cdf_from_parameters(lob, mu, sigma, tau, fprj):
+        """Evaluate the analytical Gaussian/EMG mixture CDF.
+
+        ``mu``, ``sigma``, ``tau``, and ``fprj`` are assumed to have already
+        been evaluated at ``(ltr, z)``. Keeping this low-level form lets the
+        optimized selection path reuse its own fast parameter arrays while
+        the model formula remains defined in one place.
+
+        For ``u = (tau*sigma - x)/sqrt(2)``, the EMG tail is evaluated as
+
+        ``0.5 * erfcx(abs(u)) * exp(-x**2 / 2)`` for ``u >= 0`` and
+        ``exp(A) - tail`` for ``u < 0``,
+
+        where ``x = (lob - mu)/sigma`` and
+        ``A = -tau*(lob - mu) + (tau*sigma)**2/2``.
+        """
+        lob = np.asarray(lob, dtype=float)
+        mu = np.asarray(mu, dtype=float)
+        sigma = np.asarray(sigma, dtype=float)
+        tau = np.asarray(tau, dtype=float)
+        fprj = np.asarray(fprj, dtype=float)
+
+        standardized = (lob - mu) / sigma
+        u = (tau * sigma - standardized) / np.sqrt(2.0)
+        tail = (
+            0.5 * erfcx(np.abs(u))
+            * np.exp(-0.5 * standardized**2)
+        )
+        negative_u = u < 0.0
+        exponent = (
+            -tau * (lob - mu)
+            + 0.5 * (tau * sigma)**2
+        )
+        np.clip(exponent, -700.0, 700.0, out=exponent)
+        tail = np.where(negative_u, np.exp(exponent) - tail, tail)
+
+        result = 0.5 * (1.0 + erf(standardized / np.sqrt(2.0)))
+        result -= fprj * tail
+        return np.clip(result, 0.0, 1.0)
+
+    def cdf_lob(self, lob, ltr, z):
+        """Evaluate ``P(lambda_ob <= lob | ltr, z)`` analytically."""
+        mu, sigma, tau, fprj = self.emg_parameters(ltr, z)
+        return self.cdf_from_parameters(lob, mu, sigma, tau, fprj)
+
+    def p_lob_given_ltr(self, lob, ltr, z):
+        """Evaluate the analytical EMG density ``P(lob | ltr, z)``.
+
+        The coefficient table defines the four EMG parameters at true
+        richness ``ltr`` and redshift ``z``:
+
+        ``mu    = a_mu  + b_mu  * ltr``
+        ``sigma = b_sig * ltr**a_sig``
+        ``tau   = b_tau / ltr**a_tau``
+        ``fprj  = b_fprj / (1 + exp(-ltr))**a_fprj``.
+
+        The returned density is the analytical Gaussian/EMG mixture:
+
+        ``P(lob | ltr, z) = (1 - fprj) * Gaussian(lob; mu, sigma)``
+        ``                    + fprj * EMG(lob; mu, sigma, tau)``.
+
+        All arguments broadcast through NumPy. In particular, ``lob`` and
+        ``z`` may be scalars while ``ltr`` is a Gauss-Legendre vector.
+        Redshift coefficients use the same linear, edge-clamped lookup as the
+        C++ ``Interp1D`` convention.
+        """
+        lob = np.asarray(lob, dtype=float)
+        mu, sigma, tau, fprj = self.emg_parameters(ltr, z)
+
+        # Gaussian core of the projection model.
+        standardized = (lob - mu) / sigma
+        gaussian = (
+            np.exp(-0.5 * standardized**2)
+            / (sigma * np.sqrt(2.0 * np.pi))
+        )
+
+        # Exponentially modified Gaussian (EMG) tail. Clip only the exponent
+        # used by exp so extreme valid inputs do not overflow the vectorized
+        # calculation; erfc itself remains analytical and unapproximated.
+        exp_argument = 0.5 * tau * (
+            2.0 * mu + tau * sigma**2 - 2.0 * lob
+        )
+        erfc_argument = (
+            mu + tau * sigma**2 - lob
+        ) / (np.sqrt(2.0) * sigma)
+        emg = (
+            0.5 * tau
+            * np.exp(np.clip(exp_argument, -700.0, 700.0))
+            * erfc(erfc_argument)
+        )
+        return (1.0 - fprj) * gaussian + fprj * emg
 
     def splines(self) -> dict:
         """Lazily build and cache `InterpolatedUnivariateSpline(k=1, ext=3)`
