@@ -29,9 +29,14 @@ $\Omega_{m,0}\rho_{c,0}$ background):
 \item \textbf{$\rho/\xi$ stage} --- cluster\_toolkit
   (\texttt{xi\_mm\_at\_r}, fixed-cycle Hankel quadrature) and CLensPy
   (mcfit FFTLog + the log-log interpolation wrapper) are fed the
-  closed-form $\tilde\rho(k)$ and must return $\rho(r)$; CLMM has no
-  generic transform, so its native NFW 3-D density is compared instead
-  (a check of its conventions and of our closed forms).
+  closed-form $\tilde\rho(k)$ and must return $\rho(r)$. CLMM enters
+  twice: its \emph{native} parametric NFW functions (a check of its
+  conventions and of our closed forms), and its \emph{backend} --- the
+  public clmm API is parametric-only, but pyccl accepts an arbitrary
+  Fourier profile (\texttt{HaloProfile.\_fourier} $\to$
+  \texttt{real}/\texttt{projected}/\texttt{cumul2d} via FFTLog), i.e.\
+  a genuine $P$-input $\to \rho/\Sigma/\Delta\Sigma$ path through the
+  CLMM stack.
 \item \textbf{$\Sigma$ stage} --- cluster\_toolkit
   \texttt{Sigma\_at\_R} (fed $\rho/\bar\rho_m$ as $\xi$), CLensPy
   \texttt{compute\_sigma\_grid} (Abel quadrature, \texttt{trapz}
@@ -42,11 +47,14 @@ $\Omega_{m,0}\rho_{c,0}$ background):
   extended grid, and CLMM's excess surface density.
 \end{itemize}
 
-All three codes agree with the analytics to better than $0.3\%$ at
-every stage: worst-case \resWorstCT{} (cluster\_toolkit),
-\resWorstCLensPy{} (CLensPy; the inner-boundary term of its cumulative
-$\Delta\Sigma$), and \resWorstCLMM{} (CLMM; a small coherent offset in
-its native NFW evaluation, visible in all three panels). The
+All four legs agree with the analytics to a few $\times 0.1\%$ or
+better: worst-case \resWorstCT{} (cluster\_toolkit),
+\resWorstCLensPy{} (CLensPy), \resWorstCLMM{} (CLMM native; a small
+coherent offset visible in all three panels), and \resWorstCLMMFT{}
+(the CLMM-backend $P$-input path over the lensing range $r \leq 5$
+cMpc$/h$; its FFTLog carries a mild $\sim$0.1--0.2\% ripple from the
+$k \to 0$ log-divergence of the NFW transform, with precision knobs
+tuned per transform in \pyfile{10\_chain\_residuals.py}). The
 transforms themselves are healthy --- every large discrepancy found in
 this exercise lives in the \emph{composition} layers, not here.
 

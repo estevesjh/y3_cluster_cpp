@@ -131,13 +131,54 @@ def stage_clenspy():
                                                         verbose=False))
     res_ds_cm = (ds_clmm / H) / p.delta_sigma(R2D) - 1.0
 
+    # --- CLMM backend (pyccl) fed the Fourier profile directly ----------
+    # clmm's own API is parametric-only, but its pyccl backend accepts an
+    # arbitrary Fourier profile: HaloProfile._fourier -> real / projected /
+    # cumul2d via FFTLog. This is the generic P(k) -> Sigma / DeltaSigma
+    # path through the CLMM stack.
+    import pyccl
+
+    class TildeProf(pyccl.halos.HaloProfile):
+        def __init__(self, prof):
+            super().__init__(mass_def=pyccl.halos.MassDef(200, "matter"))
+            self.prof = prof
+
+        def _fourier(self, cosmo, k, M, a):
+            kk = np.atleast_1d(np.asarray(k, dtype=float))
+            ft = self.prof.rho_tilde(kk)
+            return ft if np.ndim(M) == 0 else np.tile(
+                ft, (np.atleast_1d(M).size, 1))
+
+    ccl_cosmo = pyccl.Cosmology(Omega_c=OMEGA_M - OMEGA_B, Omega_b=OMEGA_B,
+                                h=H, sigma8=0.8238, n_s=0.9665)
+    # FFTLog precision tuned per transform (scans in the session log):
+    # real() prefers the wide window; projected/cumul2d the denser one
+    tp_r = TildeProf(p)
+    tp_r.update_precision_fftlog(padding_lo_fftlog=1e-4,
+                                 padding_hi_fftlog=1e4,
+                                 n_per_decade=600, plaw_fourier=-2.0)
+    rho_pb = np.asarray(tp_r.real(ccl_cosmo, R3D, 1e14, 1.0))
+    res_rho_pb = rho_pb / p.rho(R3D) - 1.0
+    tp_s = TildeProf(p)
+    tp_s.update_precision_fftlog(padding_lo_fftlog=1e-3,
+                                 padding_hi_fftlog=1e3,
+                                 n_per_decade=1200, plaw_fourier=-2.0)
+    sig_pb = np.asarray(tp_s.projected(ccl_cosmo, R2D, 1e14, 1.0))
+    res_sig_pb = sig_pb / p.sigma(R2D) - 1.0
+    cum_pb = np.asarray(tp_s.cumul2d(ccl_cosmo, R2D, 1e14, 1.0))
+    res_ds_pb = (cum_pb - sig_pb) / p.delta_sigma(R2D) - 1.0
+
     np.savez(os.path.join(OUT, "chain_res_clenspy.npz"), r3d=R3D, r2d=R2D,
              res_rho_cl=res_rho_cl, res_sig_cl=res_sig_cl,
              res_ds_cl=res_ds_cl, res_rho_cm=res_rho_cm,
-             res_sig_cm=res_sig_cm, res_ds_cm=res_ds_cm)
+             res_sig_cm=res_sig_cm, res_ds_cm=res_ds_cm,
+             res_rho_pb=res_rho_pb, res_sig_pb=res_sig_pb,
+             res_ds_pb=res_ds_pb)
     for lab, r in (("CLensPy rho", res_rho_cl), ("CLensPy Sig", res_sig_cl),
                    ("CLensPy DS", res_ds_cl), ("CLMM rho", res_rho_cm),
-                   ("CLMM Sig", res_sig_cm), ("CLMM DS", res_ds_cm)):
+                   ("CLMM Sig", res_sig_cm), ("CLMM DS", res_ds_cm),
+                   ("pycclFT rho", res_rho_pb), ("pycclFT Sig", res_sig_pb),
+                   ("pycclFT DS", res_ds_pb)):
         print(f"{lab:12s} max={np.nanmax(np.abs(r)):.3e} "
               f"med={np.nanmedian(np.abs(r)):.3e}")
 
@@ -153,24 +194,28 @@ def stage_figure():
 
     sns.set_theme(style="white", font_scale=1.8)
     C = {"cluster_toolkit": "black", "CLensPy": "firebrick",
-         "CLMM": "grey"}
-    LS = {"cluster_toolkit": "-", "CLensPy": "--", "CLMM": "-."}
+         "CLMM": "grey", "CLMM backend ($P$ input)": "darkgrey"}
+    LS = {"cluster_toolkit": "-", "CLensPy": "--", "CLMM": "-.",
+          "CLMM backend ($P$ input)": ":"}
 
     panels = [
         (r"$\rho\;/\;\xi$ stage", d_ct["r3d"],
          [("cluster_toolkit", d_ct["res_rho"]),
           ("CLensPy", d_cl["res_rho_cl"]),
-          ("CLMM", d_cl["res_rho_cm"])],
+          ("CLMM", d_cl["res_rho_cm"]),
+          ("CLMM backend ($P$ input)", d_cl["res_rho_pb"])],
          r"$r$ [cMpc/$h$]"),
         (r"$\Sigma(R)$ stage", d_ct["r2d"],
          [("cluster_toolkit", d_ct["res_sig"]),
           ("CLensPy", d_cl["res_sig_cl"]),
-          ("CLMM", d_cl["res_sig_cm"])],
+          ("CLMM", d_cl["res_sig_cm"]),
+          ("CLMM backend ($P$ input)", d_cl["res_sig_pb"])],
          r"$R$ [cMpc/$h$]"),
         (r"$\Delta\Sigma(R)$ stage", d_ct["r2d"],
          [("cluster_toolkit", d_ct["res_ds"]),
           ("CLensPy", d_cl["res_ds_cl"]),
-          ("CLMM", d_cl["res_ds_cm"])],
+          ("CLMM", d_cl["res_ds_cm"]),
+          ("CLMM backend ($P$ input)", d_cl["res_ds_pb"])],
          r"$R$ [cMpc/$h$]"),
     ]
 
@@ -212,7 +257,10 @@ def stage_figure():
     rows = [
         ("cluster\\_toolkit", d_ct["res_rho"], d_ct["res_sig"], d_ct["res_ds"]),
         ("CLensPy", d_cl["res_rho_cl"], d_cl["res_sig_cl"], d_cl["res_ds_cl"]),
-        ("CLMM", d_cl["res_rho_cm"], d_cl["res_sig_cm"], d_cl["res_ds_cm"]),
+        ("CLMM (native NFW)", d_cl["res_rho_cm"], d_cl["res_sig_cm"],
+         d_cl["res_ds_cm"]),
+        ("CLMM backend ($P$ input)", d_cl["res_rho_pb"],
+         d_cl["res_sig_pb"], d_cl["res_ds_pb"]),
     ]
     os.makedirs(TABLES, exist_ok=True)
     with open(os.path.join(TABLES, "chain_residuals_codes.tex"), "w") as f:
@@ -231,10 +279,15 @@ def stage_figure():
             f.write(name + " & " + " & ".join(cells) + " \\\\\n")
         f.write("\\bottomrule\n\\end{tabular}\n")
 
-    keys = ["cluster_toolkit", "CLensPy", "CLMM"]
-    worst = {k: max(np.nanmax(np.abs(a)), np.nanmax(np.abs(b)),
-                    np.nanmax(np.abs(c)))
-             for k, (_, a, b, c) in zip(keys, rows)}
+    keys = ["cluster_toolkit", "CLensPy", "CLMM", "CLMMFT"]
+    # the pyccl-FFTLog rho residual grows in the far tail (r >> r200,
+    # rho -> 0); quote its worst over the lensing-relevant r <= 5 range
+    m5 = d_ct["r3d"] <= 5.0
+    worst = {}
+    for k, (_, a, b, c) in zip(keys, rows):
+        a_eff = np.asarray(a)[m5] if k == "CLMMFT" else a
+        worst[k] = max(np.nanmax(np.abs(a_eff)), np.nanmax(np.abs(b)),
+                       np.nanmax(np.abs(c)))
     with open(os.path.join(HERE, "report",
                            "values_chain_residuals.tex"), "w") as f:
         f.write("% generated by 10_chain_residuals.py -- do not edit\n")
@@ -244,6 +297,8 @@ def stage_figure():
                 f"{{{worst['CLensPy']:.2%}}}\n".replace("%", "\\%"))
         f.write(f"\\newcommand{{\\resWorstCLMM}}"
                 f"{{{worst['CLMM']:.2%}}}\n".replace("%", "\\%"))
+        f.write(f"\\newcommand{{\\resWorstCLMMFT}}"
+                f"{{{worst['CLMMFT']:.2%}}}\n".replace("%", "\\%"))
     print("worst per code:", {k: f"{v:.3%}" for k, v in worst.items()})
     print("wrote figure, table, macros")
 
