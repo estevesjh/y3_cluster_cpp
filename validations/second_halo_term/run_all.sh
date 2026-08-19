@@ -8,7 +8,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 CONDA=/opt/homebrew/Caskroom/miniforge/base/envs/y3cl_je_macos/bin/python
-CLENSPY=/Users/jesteves/Documents/Dev/github/CLensPy/.venv/bin/python
+# -B: never write __pycache__ bytecode into the CLensPy repo
+CLENSPY="/Users/jesteves/Documents/Dev/github/CLensPy/.venv/bin/python -B"
 
 TAG="${1:-before}"   # before | after
 

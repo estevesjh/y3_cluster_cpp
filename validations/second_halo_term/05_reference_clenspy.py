@@ -16,8 +16,11 @@ Run with the CLensPy venv:
   (their own test used a single power of (1+z); the 4-way comparison
   arbitrates -- both conversions are stored.)
 
-Everything CLensPy-side uses TwoHaloTerm directly (LensingProfile has known
-rho_m and 1e12 unit bugs -- see the report's CLensPy issue list).
+Everything CLensPy-side uses TwoHaloTerm directly: LensingProfile
+normalizes its sigma vs deltasigma two-halo paths inconsistently (rho_m
+applied on one, the bare 1e12 pc^2<->Mpc^2 conversion on the other -- see
+the report's CLensPy issue list), so the raw TwoHaloTerm + explicit
+conversions here are the trustworthy route.
 """
 
 import os

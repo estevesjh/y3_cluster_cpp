@@ -48,10 +48,12 @@ ombh2=0.022420145751, omch2=0.11997421699944, mnu=0, w=-1 (the dump's
 | clmm | Mpc physical | Msun | Msun/Mpc^2 physical; comoving bridge ΔΣ_com(R_com) = ΔΣ_phys(R_com/(1+z))/(1+z)^2 | Omega_dm0 = Omega_m − Omega_b |
 
 Every `.npz` carries `units_*` strings; `07_compare.py` checks them
-before comparing. CLensPy is **under test** here, not gospel — its
-`LensingProfile` has known rho_m/1e12 unit bugs (see the report's
-CLensPy issue list); the harness uses `TwoHaloTerm` + its own
-conversions only.
+before comparing. The 1e12 factors are the pc^2 <-> Mpc^2 area
+conversion (1 Mpc^2 = 1e12 pc^2). CLensPy is **under test** here, not
+gospel — its `LensingProfile` normalizes the sigma and deltasigma
+two-halo paths inconsistently (rho_m applied on one path, not the
+other; see the report's CLensPy issue list); the harness uses
+`TwoHaloTerm` + its own conversions only.
 
 ## Scripts
 

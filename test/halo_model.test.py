@@ -328,74 +328,79 @@ class TestSecondHaloTerm(unittest.TestCase):
         cls.k_h, cls.p_k, cls.z = _load_matter_power_lin()
         cls.R = np.logspace(np.log10(0.1), np.log10(35.0), 40)  # cMpc/h
 
-    def test_dummy_exclusion_parameters_match_the_documented_values(self):
-        # docs/known_issues/dsigma_hh_debug_flag.md #3: lensingModel.second_halo_term
-        # hardcodes Md=1e14, cd=5 (NOT ct_2hTerm's own class default of
-        # Md=1e13, cd=4), tied to a fixed halo rather than the mass being
-        # integrated over. Read directly off the source rather than
-        # re-typing the numbers, so this test breaks loudly if the
-        # hardcoded call site ever changes without this file being updated.
+    def test_call_site_parameters_and_repaired_internals(self):
+        # The call site still hardcodes Md=1e14, cd=5 -- now documented as
+        # the parameters of cluster_toolkit's inner-edge NFW extension (and
+        # of the optional 'sandwich' stabilizer), NOT physics exclusion.
+        # Read directly off the source rather than re-typing the numbers,
+        # so this test breaks loudly if the hardcoded call site ever
+        # changes without this file being updated.
         import inspect
         src = inspect.getsource(hm.lensingModel.second_halo_term)
         self.assertIn("Md=1e14", src.replace(" ", ""))
         self.assertIn("cd=5", src.replace(" ", ""))
+        # Issue #4 fix pins: the Md/10 inconsistency in _to_dsigma is gone
+        # (it broke the sandwich's exact cancellation and produced the
+        # negatives the old NaN clip then masked) ...
+        self.assertNotIn("Md/10", inspect.getsource(hm.ct_2hTerm._to_dsigma))
+        # ... the NaN clip itself is gone ...
+        self.assertNotIn("np.nan", inspect.getsource(hm.ct_2hTerm.pk_to_dsigma))
+        # ... and the validated default DeltaSigma method is the direct
+        # interior-mean integration (validations/second_halo_term:
+        # D_direct = 0.44% vs D_sandwich = 65% against the converged
+        # anchor; sandwich stays selectable for comparison).
+        self.assertEqual(hm.ct_2hTerm(0.3).dsigma_method, "direct")
 
-    def test_z_axis_is_currently_degenerate(self):
-        # docs/known_issues/dsigma_hh_debug_flag.md #2: pk_to_sigma's per-z loop calls
-        # _pk_to_sigma(Rp, k, pk) without ever indexing pk by z, so every
-        # z-slice of Sigma_hh (and therefore Wp) comes out bit-identical
-        # regardless of the real z-dependent power spectrum passed in.
-        # This test PASSES today because it asserts that (undesirable but
-        # real) behavior -- it is meant to start FAILING the day the z
-        # loop is fixed to pass pk[i], at which point this test itself
-        # needs to be replaced by one that checks genuine z-variation.
+    def test_z_axis_varies_with_growth(self):
+        # Issue #4 #2 is fixed: pk_to_sigma now indexes pk[i] per z (the
+        # legacy buildWpGammat.py behavior), so Sigma_hh/Wp must vary with
+        # z following the growth of P(k, z). CLensPy measured
+        # xi(r=1, z=0)/xi(r=1, z=4) ~ 15.5 on this fixture; assert a
+        # conservative > 5 so emulator-level P(k) drift can't flake this.
         lm = hm.lensingModel(self.R, omega_m=0.3, odelta=200)
         lm.second_halo_term(self.z, self.k_h, self.p_k)
 
         self.assertGreater(self.z.size, 1)
+        sigma_hh = lm.Sigma["2h"]
         for iz in range(1, self.z.size):
-            np.testing.assert_array_equal(lm.Sigma["2h"][0], lm.Sigma["2h"][iz])
-            np.testing.assert_array_equal(lm.Wp[0], lm.Wp[iz])
+            self.assertFalse(np.array_equal(sigma_hh[0], sigma_hh[iz]))
+        # monotone decreasing with z at a mid-grid radius (pure growth)
+        imid = self.R.size // 2
+        col = sigma_hh[:, imid]
+        self.assertTrue(np.all(np.diff(col) < 0.0))
+        self.assertGreater(col[0] / col[-1], 5.0)
+        # Wp is xi_2halo on the same loop -- same requirement
+        self.assertGreater(lm.Wp[0, imid] / lm.Wp[-1, imid], 5.0)
 
-    def test_dsigma_hh_has_a_large_low_radius_nan_fraction_sigma_hh_does_not(self):
-        # docs/known_issues/dsigma_hh_debug_flag.md #1: ct_2hTerm.pk_to_dsigma NaNs out
-        # every negative dSigma (np.where(dSigma < 0, nan, dSigma)) -- a
-        # real, by-construction feature of the exclusion-subtraction
-        # convention, not a transient failure -- and only dSigma is
-        # clipped this way; Sigma_hh has no such step.
+    def test_tables_finite_everywhere(self):
+        # Issue #4 #1 is fixed: no NaN clip -- both tables must be finite
+        # at every (z, R), and physical negatives (none expected for the
+        # pure 2h term at these radii with linear P(k)) are not masked.
         lm = hm.lensingModel(self.R, omega_m=0.3, odelta=200)
         lm.second_halo_term(self.z, self.k_h, self.p_k)
 
         sigma_hh = lm.Sigma["2h"]
         dsigma_hh = lm.dSigma["2h"]
         self.assertEqual(int(np.sum(~np.isfinite(sigma_hh))), 0)
+        self.assertEqual(int(np.sum(~np.isfinite(dsigma_hh))), 0)
+        self.assertEqual(int(np.sum(~np.isfinite(lm.Wp))), 0)
+        # DeltaSigma of the pure 2h term is positive well inside the
+        # profile (R > 3 cMpc/h) at every z
+        rmask = self.R > 3.0
+        self.assertTrue(np.all(dsigma_hh[:, rmask] > 0.0))
 
-        nan_frac = float(np.mean(~np.isfinite(dsigma_hh)))
-        # Documented as ~60% on the original dump; assert it is a large,
-        # non-trivial fraction (not exactly pinned, since a different R
-        # grid/cosmology shifts the exact number) so this test still
-        # catches "the NaN clipping silently stopped happening" as well
-        # as "it got dramatically worse".
-        self.assertGreater(nan_frac, 0.2)
-        self.assertLess(nan_frac, 0.9)
-
-        # Wherever finite, dSigma_hh must be non-negative (the clipping
-        # threshold itself, trivially true by construction -- pinned so a
-        # refactor of the clipping logic can't silently invert the sign
-        # convention).
-        finite = np.isfinite(dsigma_hh)
-        self.assertTrue(np.all(dsigma_hh[finite] >= 0.0))
-
-        # The NaN region is the LOW-radius half of the grid (the doc's
-        # "everything below R ~ 2.48 cMpc/h"), not scattered randomly --
-        # i.e. once a radius is finite, every larger radius at that z is
-        # also finite. A random/scattered NaN pattern would indicate a
-        # different failure mode than the documented one.
-        for iz in range(dsigma_hh.shape[0]):
-            row = dsigma_hh[iz]
-            finite_idx = np.flatnonzero(np.isfinite(row))
-            if finite_idx.size:
-                self.assertTrue(np.all(np.isfinite(row[finite_idx[0]:])))
+    def test_pk_to_dsigma_does_not_mutate_sigma(self):
+        # Issue #4 latent bug: the old loop did `sigma += NFW` on a VIEW of
+        # self.Sigma[i], silently contaminating the published Sigma_hh with
+        # the dummy NFW profile. Pin purity: pk_to_dsigma (both methods)
+        # must leave Sigma bit-identical.
+        for method in ("direct", "sandwich"):
+            p2h = hm.ct_2hTerm(0.311049, Md=1e14, cd=5, bias=1.0,
+                               dsigma_method=method)
+            p2h.pk_to_sigma(self.R, self.k_h, self.p_k, self.z)
+            before = p2h.Sigma.copy()
+            p2h.pk_to_dsigma(self.R, self.k_h, self.p_k, self.z)
+            np.testing.assert_array_equal(before, p2h.Sigma)
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
@@ -500,6 +505,14 @@ class TestSecondHaloTermVsClenspy(unittest.TestCase):
         0.6080780391771377, 0.39947380758469997, 0.23666903728521788,
     ])
 
+    # CLensPy's DeltaSigma(R, z) [Msun h/pc^2] at R_HUNIT_CLUSTER and
+    # z-index 5, generated with the same recipe as SIGMA_BENCHMARK
+    # (two_halo.deltasigma(R_hunit / h, z[5]) * conv).
+    DSIGMA_BENCHMARK_Z_CLUSTER = np.array([
+        0.336900195821343, 0.35178956480416695, 0.352110647324702,
+        0.3353431478570815, 0.3013412165890731, 0.25304881480172176,
+    ])
+
     @classmethod
     def setUpClass(cls):
         cls.k_h, cls.p_k, cls.z = _load_matter_power_lin()
@@ -532,23 +545,140 @@ class TestSecondHaloTermVsClenspy(unittest.TestCase):
             abs(self.XI_AT_R1_Z0 - self.XI_AT_R1_ZMAX) / abs(self.XI_AT_R1_Z0),
             0.5)
 
-    def test_production_sigma_hh_deviates_from_true_z_dependent_value(self):
-        # Quantifies the practical size of the z=0-everywhere defect
-        # (docs/known_issues/dsigma_hh_debug_flag.md #2, pinned structurally by
-        # TestSecondHaloTerm.test_z_axis_is_currently_degenerate) against
-        # a genuinely independent, common-P(k) reference: how far is
-        # production's (z-invariant) Sigma_hh from what CLensPy says
-        # Sigma_2h actually is at a representative DES cluster redshift.
+    def test_production_sigma_hh_matches_clenspy_at_cluster_z(self):
+        # Re-signed after the issue #4 fix (this test used to assert a
+        # LARGE deviation -- the z-degeneracy defect; production now
+        # indexes P(k, z) per z). Production's Sigma_hh at the pinned
+        # cluster redshift must match the CLensPy benchmark. Tolerance 3%:
+        # 2% measured CLensPy-vs-cluster_toolkit xi method difference
+        # (rtol=2e-2 pins above) + headroom for the NSIZE=50 Rfix grid
+        # (measured total: 0.77% on this fixture).
         lm = hm.lensingModel(self.R_HUNIT_CLUSTER, omega_m=self.OMEGA_M, odelta=200)
         lm.second_halo_term(self.z, self.k_h, self.p_k)
-        sigma_hh_production = lm.Sigma["2h"][0]  # any row -- all identical
+        np.testing.assert_allclose(lm.Sigma["2h"][self.IZ_CLUSTER],
+                                   self.SIGMA_BENCHMARK_Z_CLUSTER, rtol=3e-2)
 
-        frac_diff = ((sigma_hh_production - self.SIGMA_BENCHMARK_Z_CLUSTER)
-                     / self.SIGMA_BENCHMARK_Z_CLUSTER)
-        # A real, substantial deviation -- not asserting a tight match
-        # (there isn't one; that is exactly the defect), just recording
-        # its size so a future fix has a number to check against.
-        self.assertGreater(np.abs(frac_diff).min(), 0.05)
+    def test_production_dsigma_hh_matches_clenspy_at_cluster_z(self):
+        # New with the issue #4 fix: production's DeltaSigma_hh (default
+        # 'direct' interior-mean method, no NaN clip, no dummy-halo
+        # dependence) against the CLensPy benchmark at the same radii/z.
+        # Measured 1.0% on this fixture; 3% tolerance for the same budget
+        # as the Sigma pin.
+        lm = hm.lensingModel(self.R_HUNIT_CLUSTER, omega_m=self.OMEGA_M, odelta=200)
+        lm.second_halo_term(self.z, self.k_h, self.p_k)
+        np.testing.assert_allclose(lm.dSigma["2h"][self.IZ_CLUSTER],
+                                   self.DSIGMA_BENCHMARK_Z_CLUSTER, rtol=3e-2)
+
+    def test_production_wp_matches_clenspy_xi_per_z(self):
+        # The published Wp table IS xi_2halo interpolated onto the R grid;
+        # after the fix it must reproduce the pinned per-z CLensPy xi
+        # benchmarks (which production, pre-fix, missed by up to 60% and
+        # z-degenerately). Tolerance 4%: the 2% xi method difference plus
+        # log-interpolation off the 50-point Rfix grid at the smallest
+        # pinned radius (measured total: 2.4%, identical at every z --
+        # linear growth cancels exactly in the ratio).
+        lm = hm.lensingModel(self.R_HUNIT_XI, omega_m=self.OMEGA_M, odelta=200)
+        lm.second_halo_term(self.z, self.k_h, self.p_k)
+        for iz, xi_cl in self.XI_BENCHMARK.items():
+            np.testing.assert_allclose(lm.Wp[iz], xi_cl, rtol=4e-2)
+
+
+class TestTransformChainAnalytic(unittest.TestCase):
+    """First-principles pins of every transform the 2h producer uses,
+    against profiles whose whole chain is closed-form (no dump, no
+    external reference -- see validations/second_halo_term/common/
+    analytic_profiles.py, itself quadrature-self-checked). Bounds are
+    2x the errors measured by validations/second_halo_term (02/03).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, str(REPO / "validations" / "second_halo_term" / "common"))
+        import analytic_profiles as ap
+        cls.ap = ap
+        cls.RHO_M = 0.311049 * 2.77533742639e11
+        cls.R128 = np.logspace(np.log10(0.1), np.log10(20.0), 128)
+        cls.gauss = ap.GaussianProfile(rho0=5.0 * cls.RHO_M, s=1.0)
+        r200 = (3.0 * 1e14 / (4.0 * np.pi * 200.0 * cls.RHO_M)) ** (1.0 / 3.0)
+        dc = (200.0 / 3.0) * 5.0 ** 3 / (np.log(6.0) - 5.0 / 6.0)
+        cls.nfw = ap.NFWProfile(rho_s=dc * cls.RHO_M, r_s=r200 / 5.0, c=5.0)
+
+    def test_ct_xi_mm_recovers_analytic_density_from_its_transform(self):
+        # P -> xi stage: feeding a closed-form 3D Fourier transform must
+        # return the density itself (the xi <-> P convention is the same
+        # integral). The NFW transform is the production-like case
+        # (power-law-tailed, like a real P(k)); measured 1.8e-4 over
+        # r in [0.05, 20]. (A Gaussian FT is NOT pinned here:
+        # cluster_toolkit's fixed-cycle Hankel quadrature genuinely
+        # degrades at r << s for flat-cored transforms -- 85% at
+        # r = 0.01 s -- while mcfit's FFTLog handles it at 1e-8; measured
+        # and documented in validations/second_halo_term.)
+        # NOTE: cluster_toolkit caches its internal GSL spline workspace by
+        # array size -- calling xi_mm_at_r with a different k length in the
+        # same process errors out (NaNs under halo_model_cosmosis's GSL
+        # abort-handler workaround, which an earlier test in this file
+        # installs). Keep len(k) equal to the dump grid (506) used by the
+        # other tests here.
+        k = np.logspace(-4, np.log10(50.0), 506)
+        r = np.logspace(np.log10(0.05), np.log10(20.0), 40)
+        xi = ct.xi.xi_mm_at_r(r, k, self.nfw.rho_tilde(k))
+        self.assertEqual(int(np.sum(~np.isfinite(xi))), 0)
+        # measured 0.18% on this 506-pt kmax=50 grid (the k truncation
+        # costs cusp accuracy at the smallest r; 1200-pt kmax=1e3 gives
+        # 1.8e-4)
+        np.testing.assert_allclose(xi, self.nfw.rho(r), rtol=3e-3)
+
+    def test_ct_sigma_at_r_recovers_analytic_projection(self):
+        # xi -> Sigma stage (Abel projection). Measured 3.7e-4 (Gaussian),
+        # 2.8e-4 (NFW). len(r_xi) = 200 matches the Rfix grid another test
+        # in this file already fed Sigma_at_R (same GSL spline-workspace
+        # size caveat as the xi_mm test above).
+        r_xi = np.logspace(-3, 3, 200)
+        for prof in (self.gauss, self.nfw):
+            xi_in = np.maximum(prof.rho(r_xi) / self.RHO_M, 1e-140)
+            sig = ct.deltasigma.Sigma_at_R(self.R128, r_xi, xi_in,
+                                           1e14, 5.0, 0.311049)
+            sig_true = prof.sigma(self.R128) / 1e12
+            mask = sig_true > 1e-6 * sig_true.max()
+            # measured 0.81% on this 200-pt r_xi grid (0.037% at 1000 pts;
+            # same grid-resolution budget as the rtol=2e-2 Abel test above)
+            np.testing.assert_allclose(sig[mask], sig_true[mask], rtol=1.5e-2)
+
+    def test_dsigma_direct_recovers_analytic_delta_sigma(self):
+        # Sigma -> DeltaSigma stage: the shipped production method
+        # (ct_2hTerm._dsigma_direct) on an extended exact Sigma grid.
+        # Measured 2.1e-3 (Gaussian s=1), 3.8e-4 (NFW) for R >= 0.5.
+        r_ext = np.logspace(-3, np.log10(20.0), 300)
+        m = self.R128 >= 0.5
+        for prof in (self.gauss, self.nfw):
+            ds = hm.ct_2hTerm._dsigma_direct(r_ext, prof.sigma(r_ext) / 1e12,
+                                             self.R128)
+            ds_true = prof.delta_sigma(self.R128) / 1e12
+            np.testing.assert_allclose(ds[m], ds_true[m], rtol=1e-2)
+
+    def test_sandwich_is_dummy_halo_independent(self):
+        # The 'sandwich' stabilizer's defining property (the user's
+        # stabilization claim, confirmed by the harness): with a
+        # CONSISTENT Md everywhere, the dummy halo cancels -- two very
+        # different dummy choices must give the same DeltaSigma up to
+        # cluster_toolkit numerics. (The old Md/10 bug broke exactly
+        # this.) Measured 1.2% of peak on this 128-pt table.
+        sys.path.insert(0, str(REPO / "y3_buzzard"))
+        from nfwModel import sigmaNFW_Analytical, deltaSigmaNFW_Analytical
+        sig_table = self.gauss.sigma(self.R128) / 1e12
+        out = {}
+        for md, cd in ((1e14, 5.0), (1e13, 4.0)):
+            sig_nfw = sigmaNFW_Analytical(self.R128, md, cd,
+                                          rho_c=self.RHO_M) / 1e12
+            dsig_nfw = deltaSigmaNFW_Analytical(self.R128, md, cd,
+                                                rho_c=self.RHO_M) / 1e12
+            ds = ct.deltasigma.DeltaSigma_at_R(self.R128, self.R128,
+                                               sig_table + sig_nfw,
+                                               md, cd, 0.311049)
+            out[md] = ds - dsig_nfw
+        peak = np.abs(self.gauss.delta_sigma(self.R128) / 1e12).max()
+        diff = np.abs(out[1e14] - out[1e13])[self.R128 >= 0.5].max()
+        self.assertLess(diff / peak, 3e-2)
 
 
 if __name__ == "__main__":

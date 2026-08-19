@@ -74,9 +74,13 @@ def stage_p_to_xi(profile, r_eval, mask, truncated=False):
     else:
         p_in = profile.rho_tilde(K_GRID)
         rho_true = profile.rho(r_eval)
+    # floor: a Gaussian FT underflows to exactly 0 for k >~ 60/s, and
+    # cluster_toolkit's internal log-spline of P NaNs on log(0)
+    p_in = np.maximum(p_in, 1e-140 * p_in.max())
     xi_out = ct.xi.xi_mm_at_r(r_eval, K_GRID, p_in)
+    n_bad = int(np.sum(~np.isfinite(xi_out)))
     mx, md = frac_err(xi_out, rho_true, mask)
-    return xi_out, rho_true, mx, md
+    return xi_out, rho_true, mx, md, n_bad
 
 
 # --------------------------------------------------------------------------
@@ -187,30 +191,41 @@ def main():
 
     r_eval = np.logspace(-2, 1.8, 80)
     print("=== stage P->xi (ct.xi.xi_mm_at_r) ===")
+    # Masks: cluster_toolkit's fixed-cycle Hankel quadrature is accurate for
+    # power-law-tailed P (the cosmological case; NFW below) but genuinely
+    # degrades at r << s for flat-cored profile FTs (85% at r = 0.01 s,
+    # k_max-independent -- mcfit's FFTLog handles the same input at 1e-8;
+    # see 03). Flat-core masks therefore start at 0.3 of the core scale;
+    # the full unmasked error profile is stored for the report figure.
     for name, (p, _) in profiles.items():
         if isinstance(p, GaussianProfile):
-            mask = r_eval < 3.5 * p.s
+            mask = (r_eval > 0.3 * p.s) & (r_eval < 3.5 * p.s)
         elif isinstance(p, ExponentialProfile):
-            mask = r_eval < 8.0 * p.h
+            mask = (r_eval > 0.3 * p.h) & (r_eval < 8.0 * p.h)
         else:
             mask = r_eval < 0.9 * p.c * p.r_s
         trunc = isinstance(p, NFWProfile)
-        xi_out, rho_true, mx, md = stage_p_to_xi(p, r_eval, mask, truncated=trunc)
+        xi_out, rho_true, mx, md, n_bad = stage_p_to_xi(p, r_eval, mask,
+                                                        truncated=trunc)
         results[f"{name}__p2xi_out"] = xi_out
         results[f"{name}__p2xi_true"] = rho_true
         results[f"{name}__p2xi_mask"] = mask
         results[f"{name}__p2xi_err"] = np.array([mx, md])
-        print(f"  {name:18s} max={mx:.3e} median={md:.3e}"
+        results[f"{name}__p2xi_nan"] = np.int64(n_bad)
+        print(f"  {name:18s} max={mx:.3e} median={md:.3e} nonfinite={n_bad}"
               f"{'  (truncated FT, r < 0.9 c r_s)' if trunc else ''}")
         if trunc:
             # untruncated variant: smooth FT on the finite k window (this is
             # the shape actually resembling a real P(k): no truncation ringing)
             mask_u = (r_eval > 0.02) & (r_eval < 30.0)
-            xi_u, rho_u, mxu, mdu = stage_p_to_xi(p, r_eval, mask_u, truncated=False)
+            xi_u, rho_u, mxu, mdu, n_bad_u = stage_p_to_xi(p, r_eval, mask_u,
+                                                           truncated=False)
             results[f"{name}__p2xi_untrunc_out"] = xi_u
             results[f"{name}__p2xi_untrunc_true"] = rho_u
             results[f"{name}__p2xi_untrunc_err"] = np.array([mxu, mdu])
-            print(f"  {name:18s} max={mxu:.3e} median={mdu:.3e}  (untruncated FT)")
+            results[f"{name}__p2xi_untrunc_nan"] = np.int64(n_bad_u)
+            print(f"  {name:18s} max={mxu:.3e} median={mdu:.3e} "
+                  f"nonfinite={n_bad_u}  (untruncated FT)")
 
     print("=== stage xi->Sigma (ct.deltasigma.Sigma_at_R) ===")
     for name, (p, _) in profiles.items():
