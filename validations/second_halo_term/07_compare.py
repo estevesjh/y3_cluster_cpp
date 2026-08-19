@@ -351,9 +351,6 @@ def make_figures(pk, cct, ccl_, rct, rcl, prod, prod_after, z, r_sigma,
               label="CLensPy (FFTLog)")
     ax.loglog(r_xi_cl, xi_ccl, C["pyccl"], ls=LS["pyccl"],
               label="pyccl (independent Boltzmann)")
-    wp5 = prod["camb_wp_hh"][5]
-    ax.loglog(r_perp, wp5, C["prod"], ls=LS["prod"], lw=1.8,
-              label=r"production internal $\xi$ (current, $z$-degenerate)")
     xinl5 = loginterp(prod["xinl_r"], prod["xinl_r"], prod["xinl_xi"][5])
     ax.loglog(prod["xinl_r"], xinl5, C["clmm"], ls=LS["clmm"],
               label="xi_nl table (correct per-z)")
@@ -362,12 +359,9 @@ def make_figures(pk, cct, ccl_, rct, rcl, prod, prod_after, z, r_sigma,
     ax.legend(fontsize=6.5)
     for arr, rr, key in ((xi_cl, r_xi_cl, "clenspy"), (xi_ccl, r_xi_cl, "pyccl")):
         axr.semilogx(rr, arr / xi_ct - 1, C[key], ls=LS[key])
-    axr.semilogx(r_perp, wp5 / loginterp(r_perp, rct["rfix_dense"],
-                                         rct["lin_iz5_xi_dense"]) - 1,
-                 C["prod"], lw=1.8)
     axr.axhline(0, color="k", lw=0.5)
     axr.set_xlim(0.1, 60.0)
-    axr.set_ylim(-0.1, 0.7)
+    axr.set_ylim(-0.05, 0.05)
     axr.set_xlabel(r"$r$ [cMpc/$h$, comoving]")
     axr.set_ylabel("fractional dev.\nto cluster_toolkit")
     fig.tight_layout()
