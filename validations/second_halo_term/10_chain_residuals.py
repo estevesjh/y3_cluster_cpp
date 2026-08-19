@@ -183,17 +183,15 @@ def stage_figure():
     for ax, (title, x, curves, xlabel) in zip(axes, panels):
         for name, res in curves:
             ax.semilogx(x, 100.0 * res, color=C[name], ls=LS[name],
-                        lw=1.5, label=name)
+                        lw=3.0, label=name)
         ax.axhline(0, color="0.25", lw=0.8)
-        lim = max(0.05, min(1.0, 1.3 * 100.0 * np.nanmax(
-            np.abs(np.concatenate([r for _, r in curves])))))
-        ax.set_ylim(-lim, lim)
+        ax.set_ylim(-0.3, 0.3)
         ax.set_title(title)
         ax.set_xlabel(xlabel)
 
         axz = ax.inset_axes([0.56, 0.08, 0.40, 0.28])
         for name, res in curves:
-            axz.plot(x, 100.0 * res, color=C[name], ls=LS[name], lw=1.5)
+            axz.plot(x, 100.0 * res, color=C[name], ls=LS[name], lw=2.0)
         axz.axhline(0, color="0.25", lw=0.6)
         axz.set_xlim(0.1, 1.0)
         axz.set_ylim(-0.01, 0.01)
