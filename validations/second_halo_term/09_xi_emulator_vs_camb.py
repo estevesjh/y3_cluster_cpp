@@ -41,8 +41,8 @@ FID = dict(h0=0.6766, omega_m=0.311049, omega_b=0.048975,
 # all inside the emulator training box
 COSMOS = [
     ("fiducial", dict(FID)),
-    (r"$\Omega_m = 0.26$", dict(FID, omega_m=0.26)),
-    (r"$\Omega_m = 0.36$", dict(FID, omega_m=0.36)),
+    (r"$\Omega_{m,0} = 0.26$", dict(FID, omega_m=0.26)),
+    (r"$\Omega_{m,0} = 0.36$", dict(FID, omega_m=0.36)),
     (r"$\sigma_8 = 0.75$", dict(FID, sigma8=0.75)),
     (r"$\sigma_8 = 0.90$", dict(FID, sigma8=0.90)),
     (r"$h = 0.72$", dict(FID, h0=0.72)),

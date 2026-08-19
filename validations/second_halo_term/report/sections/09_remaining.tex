@@ -40,12 +40,15 @@
 
 \paragraph{Upstream (CLensPy) --- issue list to file.}
 \begin{itemize}
-\item \pyfile{lensing/profile.py}: the $\Sigma$ path multiplies
-  $\rho_m$ evaluated as $\rho_c(z)\,\Omega_{m,0}$ (34\% low at
-  $z = 0.25$ vs the comoving $\Omega_m \rho_{c,0}$ its own
-  \pyfile{nfw.py} uses), while the $\Delta\Sigma$ path applies the bare
-  $10^{12}$ pc$^2$/Mpc$^2$ conversion without $\rho_m$ --- the two
-  two-halo paths are mutually inconsistent.
+\item \pyfile{lensing/profile.py} [\textbf{fixed in the working copy
+  during this exercise}]: $\rho_m$ was evaluated as
+  $\rho_c(z)\,\Omega_{m,0}$ ($\sim$56\% high at $z = 0.41$ vs the
+  comoving $\Omega_{m,0}\,\rho_{c,0}$ its own \pyfile{nfw.py} uses; now
+  \texttt{critical\_density0}), and the $\Delta\Sigma$ two-halo path
+  applied the bare $10^{12}$ pc$^2$/Mpc$^2$ conversion without
+  $\rho_m$ (now $\times\,\rho_m$, matching the $\Sigma$ path). The
+  convention everywhere is now $\Omega_{m,0}\,\rho_{c,0}$ ---
+  no redshift dependence.
 \item \pyfile{utils/interpolate.py}: the log-log interpolator drops
   negative $\xi$ (everything beyond the zero crossing) and power-law
   extrapolates --- the \texttt{TwoHaloTerm} chain overflows for
