@@ -151,9 +151,9 @@ def stage_figure():
     d_ct = np.load(os.path.join(OUT, "chain_res_ct.npz"))
     d_cl = np.load(os.path.join(OUT, "chain_res_clenspy.npz"))
 
-    sns.set_theme(style="whitegrid", font_scale=1.5)
-    C = {"cluster_toolkit": "#0072B2", "CLensPy": "#009E73",
-         "CLMM": "#E69F00"}
+    sns.set_theme(style="white", font_scale=1.8)
+    C = {"cluster_toolkit": "black", "CLensPy": "firebrick",
+         "CLMM": "grey"}
     LS = {"cluster_toolkit": "-", "CLensPy": "--", "CLMM": "-."}
 
     panels = [
@@ -175,36 +175,37 @@ def stage_figure():
     ]
 
     # one panel per stage; each carries an INSET zoom on the core
-    # (r/R in [0.1, 1], fixed +-0.05% scale -- CLMM's ~0.3% offset is
-    # deliberately off the inset scale; the inset resolves the ct/CLensPy
-    # fine structure)
+    # (r/R in [0.1, 1], LINEAR x with dense ticks, fixed +-0.01% scale,
+    # label inside the box, connector lines to the zoomed region;
+    # anything beyond +-0.01% -- CLMM's ~0.3% offset, ct's -0.03% Sigma
+    # dip -- is deliberately off the inset scale)
     fig, axes = plt.subplots(1, 3, figsize=(16.5, 5.6))
     for ax, (title, x, curves, xlabel) in zip(axes, panels):
         for name, res in curves:
             ax.semilogx(x, 100.0 * res, color=C[name], ls=LS[name],
-                        lw=2.6, label=name)
-        ax.axhline(0, color="0.25", lw=1.0)
+                        lw=1.5, label=name)
+        ax.axhline(0, color="0.25", lw=0.8)
         lim = max(0.05, min(1.0, 1.3 * 100.0 * np.nanmax(
             np.abs(np.concatenate([r for _, r in curves])))))
         ax.set_ylim(-lim, lim)
         ax.set_title(title)
         ax.set_xlabel(xlabel)
 
-        axz = ax.inset_axes([0.10, 0.06, 0.52, 0.40])
+        axz = ax.inset_axes([0.56, 0.08, 0.40, 0.28])
         for name, res in curves:
-            axz.semilogx(x, 100.0 * res, color=C[name], ls=LS[name],
-                         lw=2.0)
-        axz.axhline(0, color="0.25", lw=0.8)
+            axz.plot(x, 100.0 * res, color=C[name], ls=LS[name], lw=1.5)
+        axz.axhline(0, color="0.25", lw=0.6)
         axz.set_xlim(0.1, 1.0)
-        axz.set_ylim(-0.05, 0.05)
-        axz.set_xticks([0.1, 0.3, 1.0])
-        axz.set_xticklabels(["0.1", "0.3", "1"], fontsize=11)
-        axz.minorticks_off()
-        axz.tick_params(axis="y", labelsize=11)
-        axz.set_title(r"core, $\pm 0.05\%$", fontsize=12, pad=2)
+        axz.set_ylim(-0.01, 0.01)
+        axz.set_xticks(np.arange(0.2, 1.01, 0.2))
+        axz.set_xticks(np.arange(0.1, 1.01, 0.1), minor=True)
+        axz.tick_params(axis="both", labelsize=11)
+        axz.text(0.05, 0.82, r"core, $\pm 0.01\%$",
+                 transform=axz.transAxes, fontsize=12)
         axz.set_facecolor("white")
+        ax.indicate_inset_zoom(axz, edgecolor="0.4", lw=1.0)
     axes[0].set_ylabel("code / analytic $-$ 1  [%]")
-    axes[0].legend(fontsize=13, loc="upper right")
+    axes[0].legend(fontsize=14, loc="upper right")
     fig.tight_layout()
     fig.savefig(os.path.join(FIGS, "chain_residuals_codes.pdf"))
     plt.close(fig)
