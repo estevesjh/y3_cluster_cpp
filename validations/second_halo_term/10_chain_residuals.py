@@ -174,19 +174,32 @@ def stage_figure():
          r"$R$ [cMpc/$h$]"),
     ]
 
-    fig, axes = plt.subplots(1, 3, figsize=(16.5, 5.2))
-    for ax, (title, x, curves, xlabel) in zip(axes, panels):
+    # top row: full radial range, auto-focused ylims;
+    # bottom row: core zoom r/R in [0.1, 1], fixed ylim +-1%
+    fig, axes = plt.subplots(2, 3, figsize=(16.5, 10.0))
+    for col, (title, x, curves, xlabel) in enumerate(panels):
+        ax, axz = axes[0, col], axes[1, col]
         for name, res in curves:
             ax.semilogx(x, 100.0 * res, color=C[name], ls=LS[name],
                         lw=2.6, label=name)
-        ax.axhline(0, color="0.25", lw=1.0)
+            axz.semilogx(x, 100.0 * res, color=C[name], ls=LS[name],
+                         lw=2.6, label=name)
+        for a in (ax, axz):
+            a.axhline(0, color="0.25", lw=1.0)
         lim = max(0.05, min(1.0, 1.3 * 100.0 * np.nanmax(
             np.abs(np.concatenate([r for _, r in curves])))))
         ax.set_ylim(-lim, lim)
         ax.set_title(title)
-        ax.set_xlabel(xlabel)
-    axes[0].set_ylabel("code / analytic $-$ 1  [%]")
-    axes[0].legend(fontsize=13, loc="upper right")
+        axz.set_xlim(0.1, 1.0)
+        axz.set_ylim(-1.0, 1.0)
+        axz.set_xticks([0.1, 0.2, 0.3, 0.5, 1.0])
+        axz.set_xticklabels(["0.1", "0.2", "0.3", "0.5", "1.0"])
+        axz.minorticks_off()
+        axz.set_title(title + " --- core zoom", fontsize=14)
+        axz.set_xlabel(xlabel)
+    axes[0, 0].set_ylabel("code / analytic $-$ 1  [%]")
+    axes[1, 0].set_ylabel("code / analytic $-$ 1  [%]")
+    axes[0, 0].legend(fontsize=13, loc="upper right")
     fig.tight_layout()
     fig.savefig(os.path.join(FIGS, "chain_residuals_codes.pdf"))
     plt.close(fig)
