@@ -58,6 +58,7 @@
 % Generated values (never hand-edited) ----------------------------------
 \input{values.tex}
 \input{values_consumers.tex}
+\input{values_emulator.tex}
 \input{build/downstream.tex}
 
 \title{\vspace{-4ex}\huge \textbf{The Two-Halo Lensing Term:}\\[0.5ex]
@@ -85,8 +86,8 @@ and select the $\Delta\Sigma$ method by measurement
 against a converged anchor). A dedicated section audits the
 $\xinl$ table feeding the $\bsel$ and shear-projection branches: the
 table and its consumers are numerically correct, but every run to date
-has fed it \emph{linear} $P(k)$ (halofit input does not exist yet);
-at $z=0.41$ halofit/linear reaches \xiNlLinRatioROne{} in $\xi(r{=}1)$
+has fed it \emph{linear} $P(k)$ (a nonlinear input does not exist
+yet); at $z=0.41$ the CAMB-NL/linear ratio (Takahashi 2012) reaches \xiNlLinRatioROne{} in $\xi(r{=}1)$
 and \dsNlLinRatioRThree{} in $\DStwo(R{=}3)$.
 \end{abstract}
 

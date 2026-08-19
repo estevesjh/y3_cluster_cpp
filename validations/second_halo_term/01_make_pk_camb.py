@@ -54,6 +54,9 @@ def camb_pk(As, z, k_h):
     pars.set_cosmology(H0=H0, ombh2=OMBH2, omch2=OMCH2, mnu=0.0,
                        num_massive_neutrinos=0, omk=0.0, tau=TAU)
     pars.InitPower.set_params(As=As, ns=NS)
+    # pin the nonlinear model: Takahashi (2012) halofit, the paper's
+    # prescription for xi_NL (CAMB's default is mead2020/HMcode)
+    pars.NonLinearModel.set_params(halofit_version="takahashi")
     pars.set_matter_power(redshifts=[0.0], kmax=60.0 / H)
     res = camb.get_results(pars)
     s8 = float(res.get_sigma8_0())

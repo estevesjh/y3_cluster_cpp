@@ -1,10 +1,13 @@
 #!/usr/bin/env python
-"""xi_NL consumers, current vs proposed fix.
+"""xi_NL consumers: current (linear) vs the planned CAMB NL input.
 
-'current'      = linear P(k) under the xi_nl name (the silent fallback,
-                 all runs to date)
-'proposed fix' = halofit matter_power_nl injected (common/inject_pk_nl.py),
-                 everything downstream unchanged
+'current' = linear P(k) under the xi_nl name (the silent fallback,
+            all runs to date)
+'CAMB NL' = Takahashi-2012 nonlinear matter_power_nl injected
+            (common/inject_pk_nl.py), everything downstream unchanged --
+            the impact assessment for the planned cp_camb upgrade
+            (NOT the issue-#4 fix, which repairs P(k)->xi and is
+            validated against CLensPy separately)
 
 Both arms are full pipeline runs of xinl_consumers.ini (cp_camb ->
 halo_model -> b_sel_marg -> [wall-metadata shim] -> bsel ->
@@ -96,7 +99,7 @@ def main():
     for ax, lam_bin in zip(axes, (0, 3)):
         for arm in ("current", "proposed"):
             b, (bs, bl) = bsel_of_theta(dumps[arm], lam_bin, zob_show, theta)
-            label = (f"{'current (linear)' if arm == 'current' else 'proposed fix (halofit)'}"
+            label = (f"{'current (linear)' if arm == 'current' else 'CAMB NL (Takahashi 2012)'}"
                      f":  $b_s$={bs:.1f}, $b_\\ell$={bl:.2f}")
             ax.semilogx(theta, b, C[arm], ls=LS[arm], lw=1.8, label=label)
             if lam_bin == 0:
@@ -124,7 +127,7 @@ def main():
         lo, hi = (20, 30) if lam_bin == 0 else (60, 200)
         for arm in ("current", "proposed"):
             v = prj_bin(dumps[arm], "dsigma_prj", lam_bin, iz_show)
-            lab = (f"{'current' if arm == 'current' else 'proposed fix'}, "
+            lab = (f"{'current' if arm == 'current' else 'CAMB NL'}, "
                    rf"$\lambda^{{\rm ob}} \in [{lo}, {hi}]$")
             ax.loglog(RADII, v, C[arm], ls=LS[arm], lw=1.8, alpha=alpha,
                       label=lab)
@@ -139,7 +142,7 @@ def main():
     axr.axhline(0, color="k", lw=0.5)
     axr.set_ylim(-0.15, 0.15)
     axr.set_xlabel(r"$R$ [cMpc/$h$, comoving]")
-    axr.set_ylabel("proposed / current $-1$")
+    axr.set_ylabel("CAMB NL / current $-1$")
     fig.tight_layout()
     fig.savefig(os.path.join(FIGS, "dsigmaprj_current_proposed.pdf"))
     plt.close(fig)

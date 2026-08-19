@@ -67,10 +67,40 @@ FFTLog, pyccl, the dump \blk{xi\_nl} row, and the (pre-fix) production
 \label{fig:xi4way}
 \end{figure}
 
+\subsection{$\xi$ from the cp\_camb emulator vs CAMB, across
+cosmologies}
+\label{sec:xinl-emulator}
+
+Production's only $P(k)$ source is the \modname{cp\_camb} linear
+emulator, so its error propagates directly into $\xinl$. For the
+fiducial cosmology and one-at-a-time variations in
+$\Omega_m$, $\sigma_8$ and $h$ (all inside the training box), the
+emulator's $P(k, z{=}0)$ and the $\ximm(r)$ transformed from it were
+compared against real CAMB at matched $\sigma_8$
+(Fig.~\ref{fig:xiemu}): the worst $\xi$ residual over
+$r \in [0.3, 50]$ cMpc$/h$ across all six cosmologies is
+\xiEmuWorst{} --- negligible against every other budget in this
+report. The residual is dominated by smoothing of the BAO wiggles
+($k \sim 0.1$--$1\,h/$Mpc) and stays flat in $r$ until the
+zero-crossing region. The growth factor is applied identically to the
+emulator and CAMB spectra downstream (massless neutrinos, so the
+scaling is scale-independent); $z = 0$ therefore isolates the pure
+emulator error.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{figs/xi_emulator_vs_camb.pdf}
+\caption{cp\_camb emulator vs CAMB residuals at $z = 0$ for six
+cosmologies: linear $P(k)$ (top) and its Hankel transform $\ximm(r)$
+(bottom).}
+\label{fig:xiemu}
+\end{figure}
+
 \subsection{The physics gap: $\xinl$ contains linear $\xi$}
 \label{sec:xinl-gap}
 
-The paper's model prescribes $\xinl$ from the \emph{halofit} power
+The paper's model prescribes $\xinl$ from the nonlinear (halofit)
+power
 spectrum. In practice \blk{matter\_power\_nl} has never existed: the
 \modname{cp\_camb} emulator ships only linear models
 (\texttt{camb\_linear\_*.npz}), no production ini sets its
@@ -79,11 +109,11 @@ fallback silently substitutes the linear $P(k)$. Every $\bsel$,
 $\Sigma^{\rm prj}$, $\Delta\Sigma^{\rm prj}$ and $\DShh$ result to date
 has therefore used $\xi_{\rm lin}$ under the \blk{xi\_nl} name.
 
-Measured at the fiducial cosmology, $z = 0.41$ (CAMB halofit vs
-linear): $\xi_{\rm hf}/\xi_{\rm lin}(r{=}1\,\mathrm{cMpc}/h) =
-\xiNlLinRatioROne$ and
-$\DStwo^{\rm hf}/\DStwo^{\rm lin}(R{=}3) = \dsNlLinRatioRThree$,
-converging to unity only for $r \gtrsim 20$ cMpc$/h$
+Measured at the fiducial cosmology, $z = 0.41$ (CAMB NL, Takahashi
+2012, vs linear): the ratio $\xi_{\rm NL}/\xi_{\rm lin}$ reaches
+\xiNlLinRatioROne{} at $r = 1$ cMpc$/h$, and
+$\DStwo^{\rm NL}/\DStwo^{\rm lin} = \dsNlLinRatioRThree$ at
+$R = 3$ cMpc$/h$, converging to unity only for $r \gtrsim 20$ cMpc$/h$
 (Fig.~\ref{fig:xinlfallback}). The correlated-structure terms are
 underestimated by these factors at small and intermediate separations
 (modulated by $\bsel$ and the radial weighting of each observable).
@@ -91,16 +121,17 @@ underestimated by these factors at small and intermediate separations
 \textbf{Agreed path}: keep the linear $P(k)$ for now (all current
 validation and mock work is internally consistent and documented as
 linear); add the nonlinear input by updating \modname{cp\_camb} with a
-halofit emulator --- the module and the fallback then propagate it to
+CAMB NL emulator --- the module and the fallback then propagate it to
 $\xinl$, $\DShh$ and the whole projection branch with zero further code
-changes. The CAMB halofit reference for the acceptance test is already
+changes. The CAMB NL (Takahashi 2012) reference for the acceptance test is
+already
 generated (\pyfile{outputs/pk\_camb.npz}, key \texttt{p\_k\_nl}).
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.6\textwidth]{figs/xi_nl_linear_fallback.pdf}
 \caption{What \blk{xi\_nl} contains today (linear) vs what its name
-claims (halofit), $z = 0.41$.}
+claims (CAMB NL, Takahashi 2012), $z = 0.41$.}
 \label{fig:xinlfallback}
 \end{figure}
 
@@ -160,10 +191,13 @@ pattern re-pointed at the dump's own $\xinl$/HMF/bias/selection
 tables), plus a genuine \texttt{full\_ltmz}-class reference for
 projection.
 
-\subsection{Current vs proposed fix at the consumer level}
+\subsection{Current vs the CAMB NL input at the consumer level}
 \label{sec:xinl-impact}
 
-To measure what the proposed fix changes \emph{in the observables}, the
+The $P(k)\to\xi$ chain fix (issue \#4) is validated against CLensPy
+at every stage (Sections~\ref{sec:chain} and \ref{sec:postfix});
+what remains is the \emph{input} upgrade. To measure what the planned
+CAMB NL input changes \emph{in the observables}, the
 full consumer chain (\modname{cp\_camb} $\to$ \modname{halo\_model}
 $\to$ \modname{b\_sel\_marg} $\to$ \modname{bsel} $\to$
 \modname{DSigmaPrjEvaluator} $\to$ \modname{ShearPrjFrozenPhysics})
@@ -173,7 +207,8 @@ was run twice with identical configuration
 \begin{itemize}
 \item \textbf{current} --- linear $P(k)$ under the \blk{xi\_nl} name
   (the silent fallback; what every run to date has used);
-\item \textbf{proposed fix} --- halofit \blk{matter\_power\_nl}
+\item \textbf{CAMB NL} --- Takahashi-2012 nonlinear
+  \blk{matter\_power\_nl}
   injected (\pyfile{common/inject\_pk\_nl.py}, the harness CAMB
   reference), everything downstream untouched. Sanity:
   the resulting $\xinl$ table ratio at $r = 1$ cMpc$/h$, $z = 0.41$ is
@@ -185,7 +220,7 @@ harness-local shim (\pyfile{common/bsel\_wall\_meta.py}); they are the
 first end-to-end executions of the refactored $\bsel$ chain.
 
 \textbf{$\bsel(\theta)$, marginalized over $\lambda^{\rm tr}$}
-(Fig.~\ref{fig:bseltheta}): the halofit $\xinl$ \emph{lowers} the
+(Fig.~\ref{fig:bseltheta}): the CAMB NL $\xinl$ \emph{lowers} the
 small-scale plateau substantially --- $b_s$ from \bSmallCurrent{} to
 \bSmallProposed{} (\bSmallShift) in the lowest richness bin at
 $\zob = 0.425$ --- while the large-scale plateau moves by only a few
@@ -195,14 +230,14 @@ correlation raises the unselected expectation against which the
 selection excess is measured.
 
 \textbf{$\Delta\Sigma^{\rm prj}(R)$} (Fig.~\ref{fig:dsprj}): the two
-effects largely cancel in the observable --- the proposed fix shifts
+effects largely cancel in the observable --- the CAMB NL input shifts
 $\Delta\Sigma^{\rm prj}$ by at most \dsPrjMaxShift{} (a $-9\%$
 suppression at $R \lesssim 0.3$ cMpc$/h$ turning into a $+3\%$
 enhancement near $R \approx 2$, and $\lesssim 1\%$ beyond
 $R \sim 5$). The observable-level impact of the linear-$P(k)$ gap is
 therefore far milder than the raw factor-\xiNlLinRatioROne{} $\xi$
 ratio suggests --- but it is scale-dependent and coherent across bins,
-i.e.\ shaped like a signal, which is exactly why the halofit input
+i.e.\ shaped like a signal, which is exactly why the nonlinear input
 should land before cosmology inference.
 
 \begin{figure}[H]
@@ -212,7 +247,8 @@ should land before cosmology inference.
 (reconstructed exactly as every consumer does: the $b_s$/$b_\ell$
 plateaus from the wall closure plus the shared sigmoid with
 $\theta_0 = 0.5\,\theta_\lambda$, $k = 2.5/\theta_\lambda$), current
-(linear) vs proposed fix (halofit), for the lowest and highest richness
+(linear) vs CAMB NL (Takahashi 2012), for the lowest and highest
+richness
 bins at $\zob = 0.425$.}
 \label{fig:bseltheta}
 \end{figure}
@@ -221,7 +257,7 @@ bins at $\zob = 0.425$.}
 \centering
 \includegraphics[width=0.62\textwidth]{figs/dsigmaprj_current_proposed.pdf}
 \caption{$\Delta\Sigma^{\rm prj}(R)$ for the same bins
-($\zob \in [0.35, 0.50]$), current vs proposed fix, with the fractional
+($\zob \in [0.35, 0.50]$), current vs CAMB NL, with the fractional
 shift below. The $\bsel$ decrease and the $\xi$ increase largely cancel;
 the residual is a $\pm$\dsPrjMaxShift{}, scale-dependent shape change.}
 \label{fig:dsprj}

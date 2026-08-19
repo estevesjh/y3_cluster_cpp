@@ -170,8 +170,9 @@ def main():
     # models and no production ini sets nonlinear_pk_path), so
     # halo_model_cosmosis's fallback feeds LINEAR P(k) to the xi_nl table
     # every run: the shearPrj projection branch consumes linear xi under
-    # the xi_nl name. Quantify what halofit would change.
-    print("== xi_nl linear-fallback impact (halofit / linear) ==")
+    # the xi_nl name. Quantify what the CAMB NL (Takahashi 2012) input,
+    # planned via the cp_camb upgrade, would change.
+    print("== xi_nl linear-fallback impact (CAMB NL / linear) ==")
     xi_ratio_r1 = float(
         loginterp(1.0, rct["rfix_dense"], rct["nl_iz5_xi_dense"])
         / loginterp(1.0, rct["rfix_dense"], rct["lin_iz5_xi_dense"]))
@@ -190,18 +191,18 @@ def main():
     ax.loglog(rr[mplot], rct["lin_iz5_xi_dense"][mplot], C["ct"], ls=LS["ct"],
               lw=1.8, label="current: linear $P(k)$ (the silent fallback)")
     ax.loglog(rr[mplot], rct["nl_iz5_xi_dense"][mplot], C["prod"], lw=1.8,
-              label="proposed fix: halofit $P(k)$")
+              label="CAMB NL $P(k)$ (Takahashi 2012)")
     ax.set_ylabel(r"$\xi_{mm}(r,\,z=0.41)$  (dimensionless)")
     ax.legend(fontsize=7)
     axr.semilogx(rr[mplot],
                  rct["nl_iz5_xi_dense"][mplot] / rct["lin_iz5_xi_dense"][mplot],
                  C["prod"], lw=1.8)
     axr.axhline(1, color="k", lw=0.5)
-    # focus on the observable-relevant range; the ratio reaches ~22 at
-    # r = 0.1 (quoted in the caption), off-scale here by design
+    # focus on the observable-relevant range; the ratio at r = 0.1 is
+    # quoted in the caption, off-scale here by design
     axr.set_ylim(0.7, 6.0)
     axr.set_xlabel(r"$r$ [cMpc/$h$, comoving]")
-    axr.set_ylabel("halofit / linear")
+    axr.set_ylabel("CAMB NL / linear")
     fig.tight_layout()
     fig.savefig(os.path.join(FIGS, "xi_nl_linear_fallback.pdf"))
     plt.close(fig)
