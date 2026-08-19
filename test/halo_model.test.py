@@ -569,10 +569,14 @@ class TestSecondHaloTermVsClenspy(unittest.TestCase):
         np.testing.assert_allclose(lm.dSigma["2h"][self.IZ_CLUSTER],
                                    self.DSIGMA_BENCHMARK_Z_CLUSTER, rtol=3e-2)
 
-    def test_production_wp_matches_clenspy_xi_per_z(self):
-        # The published Wp table IS xi_2halo interpolated onto the R grid;
-        # after the fix it must reproduce the pinned per-z CLensPy xi
-        # benchmarks (which production, pre-fix, missed by up to 60% and
+    def test_production_xi_matches_clenspy_per_z(self):
+        # lensingModel.Wp is the INTERNAL xi_2halo of the 2h chain (the
+        # same per-z xi Sigma_hh/dSigma_hh are built from), interpolated
+        # onto the R grid. The Wp_hh datablock table built from it is no
+        # longer published (unsupported; its only reader was the broken
+        # legacy wp_cluster.cuh) -- this pin validates the xi STAGE of the
+        # chain, post-fix, against the pinned per-z CLensPy benchmarks
+        # (which production, pre-fix, missed by up to 60% and
         # z-degenerately). Tolerance 4%: the 2% xi method difference plus
         # log-interpolation off the 50-point Rfix grid at the smallest
         # pinned radius (measured total: 2.4%, identical at every z --

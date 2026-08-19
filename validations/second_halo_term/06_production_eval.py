@@ -85,11 +85,13 @@ def main():
         print(f"  dSigma_hh first finite column at R = {edge:.3f} (row iz=5)")
         results[f"{ptag}_nan_edge_r"] = np.float64(edge)
 
-    # snapshot of the checked-in dump's published tables
+    # snapshot of the checked-in dump's published tables (wp_hh existed
+    # only in pre-drop dumps -- Wp_hh is no longer published/supported)
     hm_dir = os.path.join(DUMP, "halomodel")
     for key in ("sigma_hh", "dsigma_hh", "wp_hh"):
-        t = np.loadtxt(os.path.join(hm_dir, f"{key}.txt"))
-        results[f"dumptable_{key}"] = t
+        path = os.path.join(hm_dir, f"{key}.txt")
+        if os.path.exists(path):
+            results[f"dumptable_{key}"] = np.loadtxt(path)
     results["dumptable_r_sigma"] = np.loadtxt(os.path.join(hm_dir, "r_sigma.txt"))
     results["dumptable_z"] = np.loadtxt(os.path.join(hm_dir, "z.txt"))
     xi_dir = os.path.join(DUMP, "xi_nl")

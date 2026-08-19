@@ -353,7 +353,7 @@ def make_figures(pk, cct, ccl_, rct, rcl, prod, prod_after, z, r_sigma,
               label="pyccl (independent Boltzmann)")
     wp5 = prod["camb_wp_hh"][5]
     ax.loglog(r_perp, wp5, C["prod"], ls=LS["prod"], lw=1.8,
-              label=r"Wp_hh table (current, $z$-degenerate)")
+              label=r"production internal $\xi$ (current, $z$-degenerate)")
     xinl5 = loginterp(prod["xinl_r"], prod["xinl_r"], prod["xinl_xi"][5])
     ax.loglog(prod["xinl_r"], xinl5, C["clmm"], ls=LS["clmm"],
               label="xi_nl table (correct per-z)")

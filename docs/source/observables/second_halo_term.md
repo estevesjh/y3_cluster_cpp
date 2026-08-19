@@ -145,8 +145,14 @@ compute_lensing_2h = T   ; reference run sets F
 
 | DataBlock output | Meaning | Units / shape | Consumed by |
 |---|---|---|---|
-| `haloModel/Rp` | radius grid of the 2h tables | cMpc/$h$, `(128,)` | 1h+2h variant assembly |
-| `haloModel/Wp_hh` | matter two-point correlation table of the chain (despite the $W_p$ name) | `(50, 128)` | same |
-| `haloModel/Sigma_hh` | two-halo surface density, **bias not applied** (consumer multiplies by $b$ or $\langle b\rangle_i$) | `(50, 128)` | same |
+| `haloModel/Sigma_hh` | two-halo surface density on the `r_sigma` grid, **bias not applied** (consumer multiplies by $b$ or $\langle b\rangle_i$) | `(50, 128)` | 1h+2h variant assembly |
 | `haloModel/dSigma_hh` | two-halo excess surface density, bias not applied | `(50, 128)` | same |
+
+`haloModel/Wp_hh` (the chain's internal ξ under a misleading $W_p$ name)
+and its mislabeled `haloModel/Rp` axis are **no longer published**
+(2026-08: unsupported; their only reader was the legacy
+`wp_cluster.cuh` interpolation, which used the wrong radial axis — see
+`docs/known_issues/wp_hh_rp_axis_mismatch.md`). The internal ξ stage of
+the chain remains pinned by `test/halo_model.test.py`; consumers that
+need ξ read `xi_nl`.
 

@@ -4,19 +4,24 @@
 The DES cluster-cosmology pipeline
 (\href{https://arxiv.org/abs/2309.06593}{DES Cluster et al.\ 2023})
 publishes a conventional two-halo lensing table ---
-\blk{haloModel/Sigma\_hh}, \blk{haloModel/dSigma\_hh},
-\blk{haloModel/Wp\_hh} --- produced by
+\blk{haloModel/Sigma\_hh} and \blk{haloModel/dSigma\_hh} --- produced
+by
 \modname{ct\_2hTerm} in \pyfile{y3\_buzzard/haloModel.py} and consumed
 by the traditional $1h{+}2h$ ``max-model'' composition
 (\href{https://arxiv.org/abs/1805.00039}{McClintock et al.\ 2019}).
+(The chain's historical third output, \blk{Wp\_hh} --- its internal
+$\xi$ under a misleading $W_p$ name --- has been dropped from the
+datablock entirely during this exercise: unsupported, nothing in the
+reference pipeline reads it, and its only legacy reader interpolated
+it on the wrong axis.)
 GitHub issue \#4 recorded three confirmed defects:
 
 \begin{enumerate}
 \item \textbf{z-degenerate tables} --- the per-redshift loop passed the
   full two-dimensional $P(k,z)$ array to cluster\_toolkit's
   \texttt{xi\_mm\_at\_r}, whose C interface silently consumed the first
-  row only: every redshift slice of $\Shh$ and \blk{Wp\_hh} was
-  $P(k, z{=}0)$.
+  row only: every redshift slice of $\Shh$ (and of the chain's
+  internal $\xi$) was $P(k, z{=}0)$.
 \item \textbf{NaN clipping} --- every negative $\DShh$ value was
   overwritten with NaN, blanking \nanFracBefore{} of the table (all
   $R \lesssim \nanEdgeR\,$cMpc$/h$).

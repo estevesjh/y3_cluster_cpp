@@ -42,3 +42,18 @@ fi
 
 echo "== 07 compare, gates, figures, tables =="
 $CONDA 07_compare.py
+
+echo "== 09 xi from cp_camb emulator vs CAMB, across cosmologies =="
+$CONDA 09_xi_emulator_vs_camb.py
+
+echo "== 10 per-code chain residuals (ct / CLensPy / CLMM vs analytics) =="
+$CONDA   10_chain_residuals.py --stage ct
+$CLENSPY 10_chain_residuals.py --stage clenspy
+$CONDA   10_chain_residuals.py --stage figure
+
+# 08 (xi_NL consumers, current vs CAMB NL) needs the two cosmosis runs of
+# xinl_consumers.ini first -- see its docstring; not part of the default
+# reproduction because it requires the cosmosis stack:
+#   cosmosis xinl_consumers.ini -p test.save_dir=<scratch>/xinl_current
+#   cosmosis xinl_consumers.ini -p pk_nl_inject.enabled=T test.save_dir=<scratch>/xinl_proposed
+#   $CONDA 08_xinl_consumers.py --current ... --proposed ...

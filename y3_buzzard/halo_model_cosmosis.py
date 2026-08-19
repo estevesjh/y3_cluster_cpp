@@ -215,8 +215,11 @@ def execute(block, config):
 
     if compute_lensing_2h:
         lensModel.second_halo_term(z, k_nl, P_k_nl)
-        block[section_name, "Rp"]        = Radii
-        block[section_name, "Wp_hh"]     = lensModel.Wp
+        # Wp_hh (xi_2halo on the R_perp grid, despite the Wp name) and its
+        # mislabeled "Rp" axis are no longer published: unsupported, and
+        # their only reader was the broken legacy wp_cluster.cuh
+        # interpolation (wrong radial axis). The internal xi stays on
+        # lensModel.Wp for validation; consumers needing xi read xi_nl.
         block[section_name, "Sigma_hh"]  = lensModel.Sigma['2h']
         block[section_name, "dSigma_hh"] = lensModel.dSigma['2h']
 

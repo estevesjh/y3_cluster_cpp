@@ -1,8 +1,23 @@
-# ⚠ `haloModel/Rp` is not the axis of the 2h tables (`wp_cluster.cuh` interpolates on the wrong grid)
+# ✅ RESOLVED by removal — `haloModel/Wp_hh` and `haloModel/Rp` are no longer published
 
-**Raised 2026-08-19** while fixing issue #4 (`dsigma_hh_debug_flag.md`).
-Deliberately **not** fixed in that branch — publisher change deferred
-pending a consumer audit.
+**Raised 2026-08-19** while fixing issue #4 (`dsigma_hh_debug_flag.md`);
+**resolved 2026-08-19 by dropping both keys** (user decision: `Wp_hh`
+is unsupported — nothing in the reference pipeline uses it, and its
+only reader was the broken legacy interpolation below).
+`halo_model_cosmosis.py` now publishes only `Sigma_hh`/`dSigma_hh`
+(on `r_sigma`) under `compute_lensing_2h = T`. The chain's internal ξ
+stage remains validated by
+`test/halo_model.test.py::test_production_xi_matches_clenspy_per_z`;
+consumers that need ξ read `xi_nl`. Legacy `wp_cluster.cuh` /
+`sigma_buzzard_y3/avgWpCentBu.cu` will now fail loudly
+(BlockNameNotFound) instead of silently interpolating on the wrong
+axis — intended, since they are unsupported.
+
+Original write-up below for history.
+
+---
+
+# ⚠ `haloModel/Rp` is not the axis of the 2h tables (`wp_cluster.cuh` interpolates on the wrong grid) [HISTORICAL]
 
 ## The mismatch
 
