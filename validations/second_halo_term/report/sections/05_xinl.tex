@@ -13,32 +13,29 @@ currently contains.
 \subsection{Where it is built and consumed}
 
 \begin{itemize}
-\item \textbf{Producer} --- \pyfile{y3\_buzzard/halo\_model\_cosmosis.py}
-  (\texttt{execute}, one line): per redshift slice,
-  $\xinl(r, z_i) = \texttt{ct.xi.xi\_mm\_at\_r}(r, k, P_{\rm nl}(k, z_i))$
-  on $r \in [10^{-3}, 10^{3}]$ cMpc$/h$ (128 log points, 50 redshifts),
-  published as \blk{xi\_nl/\{r, z, xi\_nl\}}. Note this loop indexes
-  $P(k, z_i)$ \emph{correctly} --- the issue-\#4 z-degeneracy bug lived
-  only in the \blk{Sigma\_hh} path.
+\item \textbf{Producer} ---
+  \pyfile{halo\_model\_cosmosis.py} (\texttt{execute}, one line): per
+  redshift slice, the cluster\_toolkit Hankel transform of
+  $P_{\rm nl}(k, z_i)$ on $r \in [10^{-3}, 10^{3}]$ cMpc$/h$ (128 log
+  points, 50 redshifts), published as \blk{xi\_nl}. Note this loop
+  indexes $P(k, z_i)$ \emph{correctly} --- the issue-\#4 z-degeneracy
+  bug lived only in the \blk{Sigma\_hh} path.
 \item \textbf{$P_{\rm nl}$ source} --- the block section
   \blk{matter\_power\_nl} if present; otherwise a silent fallback
   aliases the \emph{linear} $P(k)$
   (\pyfile{halo\_model\_cosmosis.py:132-137}).
 \item \textbf{Consumer: $\bsel$ wall} ---
-  \modname{BSelMargIntegrand.so}
-  (\pyfile{src/models/p\_operator\_t.hh}) reads the table into a flat
-  array with a hand-rolled bilinear lookup (\texttt{:238-248}) and
-  evaluates $(P_1, I_1, J{=}I_2{-}I_1)$ per
-  $(\zob_{\rm lo}, \zob_{\rm hi}, \lambda\text{-bin})$ wall row;
+  \modname{BSelMargIntegrand.so} (\pyfile{p\_operator\_t.hh}) reads the
+  table into a flat array with a hand-rolled bilinear lookup and
+  evaluates $(P_1, I_1, J{=}I_2{-}I_1)$ per wall row
+  (redshift-bin bounds $\times$ richness bin);
   \pyfile{bsel.py} then turns the wall into the $\bsel(\theta)$
   sigmoid.
 \item \textbf{Consumer: projection} --- the three \texttt{sp\_detail}
-  cores in \pyfile{src/models/sigma\_prj\_t.hh}
-  (\modname{SigmaPrjEvaluator}, \modname{DSigmaPrjEvaluator},
-  \modname{ShearPrjFrozenPhysics}) read it as an
-  \texttt{Interp2D} and evaluate
-  $\xinl(\Delta\chi, \zob)$ with
-  $\Delta\chi = \sqrt{\chi_z^2 + \chi_o^2 - 2\chi_z\chi_o\cos\theta}$.
+  cores in \pyfile{sigma\_prj\_t.hh} (\modname{SigmaPrjEvaluator},
+  \modname{DSigmaPrjEvaluator}, \modname{ShearPrjFrozenPhysics}) read
+  it as an \texttt{Interp2D} and evaluate $\xinl(\Delta\chi, \zob)$,
+  $\Delta\chi^2 = \chi_z^2 + \chi_o^2 - 2\chi_z\chi_o\cos\theta$.
 \end{itemize}
 
 \subsection{What is verified correct}
@@ -116,7 +113,8 @@ consume it were audited for existing validation coverage --- the result
 is the sharpest open gap of this exercise:
 
 \begin{table}[H]
-\centering\small
+\centering
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{lll}
 \toprule
 output & independent reference? & where / caveat \\
@@ -139,7 +137,7 @@ output & independent reference? & where / caveat \\
 projection \texttt{full\_ltmz} & does not exist &
   CUDA-only; no Python/C++ adaptive reference for projection at all \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \caption{Validation coverage of the $\xinl$ consumers. Contrast the
 counts/1h-shear observables, which all validate against an adaptive
 \texttt{full\_ltmz} Python reference.}
@@ -160,6 +158,71 @@ undetected. The recommended follow-up is a dump-fed adaptive-quadrature
 reference for the wall (the RichnessSelection \texttt{quad\_truth}
 pattern re-pointed at the dump's own $\xinl$/HMF/bias/selection
 tables), plus a genuine \texttt{full\_ltmz}-class reference for
-projection. End-to-end regeneration of these sections is currently
-blocked by the bsel wall-metadata contract gap
-(Section~\ref{sec:remaining}).
+projection.
+
+\subsection{Current vs proposed fix at the consumer level}
+\label{sec:xinl-impact}
+
+To measure what the proposed fix changes \emph{in the observables}, the
+full consumer chain (\modname{cp\_camb} $\to$ \modname{halo\_model}
+$\to$ \modname{b\_sel\_marg} $\to$ \modname{bsel} $\to$
+\modname{DSigmaPrjEvaluator} $\to$ \modname{ShearPrjFrozenPhysics})
+was run twice with identical configuration
+(\pyfile{validations/second\_halo\_term/xinl\_consumers.ini}):
+
+\begin{itemize}
+\item \textbf{current} --- linear $P(k)$ under the \blk{xi\_nl} name
+  (the silent fallback; what every run to date has used);
+\item \textbf{proposed fix} --- halofit \blk{matter\_power\_nl}
+  injected (\pyfile{common/inject\_pk\_nl.py}, the harness CAMB
+  reference), everything downstream untouched. Sanity:
+  the resulting $\xinl$ table ratio at $r = 1$ cMpc$/h$, $z = 0.41$ is
+  \xiTableNlLinAtROne{}, matching the standalone prediction.
+\end{itemize}
+
+These runs required closing the bsel wall-metadata contract gap with a
+harness-local shim (\pyfile{common/bsel\_wall\_meta.py}); they are the
+first end-to-end executions of the refactored $\bsel$ chain.
+
+\textbf{$\bsel(\theta)$, marginalized over $\lambda^{\rm tr}$}
+(Fig.~\ref{fig:bseltheta}): the halofit $\xinl$ \emph{lowers} the
+small-scale plateau substantially --- $b_s$ from \bSmallCurrent{} to
+\bSmallProposed{} (\bSmallShift) in the lowest richness bin at
+$\zob = 0.425$ --- while the large-scale plateau moves by only a few
+percent ($b_\ell$: \bLargeCurrent{} $\to$ \bLargeProposed). The
+selection-bias \emph{contrast} shrinks because the boosted small-$r$
+correlation raises the unselected expectation against which the
+selection excess is measured.
+
+\textbf{$\Delta\Sigma^{\rm prj}(R)$} (Fig.~\ref{fig:dsprj}): the two
+effects largely cancel in the observable --- the proposed fix shifts
+$\Delta\Sigma^{\rm prj}$ by at most \dsPrjMaxShift{} (a $-9\%$
+suppression at $R \lesssim 0.3$ cMpc$/h$ turning into a $+3\%$
+enhancement near $R \approx 2$, and $\lesssim 1\%$ beyond
+$R \sim 5$). The observable-level impact of the linear-$P(k)$ gap is
+therefore far milder than the raw factor-\xiNlLinRatioROne{} $\xi$
+ratio suggests --- but it is scale-dependent and coherent across bins,
+i.e.\ shaped like a signal, which is exactly why the halofit input
+should land before cosmology inference.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figs/bsel_theta_current_proposed.pdf}
+\caption{$\bsel(\theta)$ marginalized over $\lambda^{\rm tr}$
+(reconstructed exactly as every consumer does: the $b_s$/$b_\ell$
+plateaus from the wall closure plus the shared sigmoid with
+$\theta_0 = 0.5\,\theta_\lambda$, $k = 2.5/\theta_\lambda$), current
+(linear) vs proposed fix (halofit), for the lowest and highest richness
+bins at $\zob = 0.425$.}
+\label{fig:bseltheta}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\textwidth]{figs/dsigmaprj_current_proposed.pdf}
+\caption{$\Delta\Sigma^{\rm prj}(R)$ for the same bins
+($\zob \in [0.35, 0.50]$), current vs proposed fix, with the fractional
+shift below. The $\bsel$ decrease and the $\xi$ increase largely cancel;
+the residual is a $\pm$\dsPrjMaxShift{}, scale-dependent shape change.}
+\label{fig:dsprj}
+\end{figure}

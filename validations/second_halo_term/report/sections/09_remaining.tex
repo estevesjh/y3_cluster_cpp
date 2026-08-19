@@ -4,12 +4,11 @@
 \paragraph{In this repo.}
 \begin{itemize}
 \item \textbf{$\xinl$ carries linear $\xi$} --- the priority follow-up;
-  Section~\ref{sec:xinl} and
-  \pyfile{docs/known\_issues/xi\_nl\_linear\_fallback.md}. Agreed path:
-  keep linear for now; add the nonlinear input by updating
-  \modname{cp\_camb} (its \texttt{nonlinear\_pk\_path} plumbing already
-  exists); the CAMB halofit reference for the acceptance gate is
-  already in the harness outputs.
+  see Section~\ref{sec:xinl} and the tracking note under
+  \pyfile{docs/known\_issues}. Agreed path: keep linear for
+  now; add the nonlinear input by updating \modname{cp\_camb} (its
+  nonlinear-path plumbing already exists); the CAMB halofit reference
+  for the acceptance gate is already in the harness outputs.
 \item \textbf{\blk{haloModel/Rp} axis mismatch} --- \blk{Rp} publishes
   the \texttt{Radii} grid (1--35) while the 2h tables live on
   \blk{r\_sigma} (0.1--20); \pyfile{src/models/wp\_cluster.cuh}
@@ -17,14 +16,21 @@
   candidate one-line fix deferred pending a legacy-consumer audit
   (\pyfile{docs/known\_issues/wp\_hh\_rp\_axis\_mismatch.md}).
 \item \textbf{bsel wall-metadata contract gap} --- the 08-17 refactor's
-  consumer (\pyfile{src/pipelines/shared/datablock\_models.py}) expects
-  \blk{b\_sel\_marg\_P1/\{lambda\_bin, zo\_low, zo\_high, vals\}}, but
+  consumer (\pyfile{datablock\_models.py} in
+  \pyfile{src/pipelines/shared}) expects the \blk{b\_sel\_marg\_P1}
+  section to carry \texttt{lambda\_bin}, \texttt{zo\_low},
+  \texttt{zo\_high} alongside \texttt{vals}, but
   the C++ evaluator template only publishes \texttt{vals} (the wall
-  metadata lives in ini config and never enters the datablock). The
-  refactored \pyfile{bsel.py} and
-  \pyfile{shear\_prj\_fast\_mass.py} therefore cannot run end-to-end;
-  this also blocks regenerating the projection sections of the fiducial
-  dump. Owner decision required on where to publish the wall metadata.
+  metadata lives in ini config and never enters the datablock), so the
+  refactored \pyfile{bsel.py} and \pyfile{shear\_prj\_fast\_mass.py}
+  cannot run on an unmodified pipeline. The harness closes it with a
+  shim module (\pyfile{common/bsel\_wall\_meta.py}: republishes the
+  wall vectors from ini into the three sections), which enabled the
+  first end-to-end runs of the refactored chain
+  (Section~\ref{sec:xinl-impact}). The \emph{permanent} home of that
+  publication (C++ evaluator template vs a pipeline module) is an owner
+  decision; until then the checked-in extract ini cannot regenerate the
+  projection sections of the fiducial dump.
 \item \textbf{Legacy raw readers} --- \pyfile{src/models/gamma\_max.hh}
   and kin read $\DShh$ without sanitization; they now see small
   negatives instead of NaN at small $R$. The max-model composition is

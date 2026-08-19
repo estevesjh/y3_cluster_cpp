@@ -10,20 +10,21 @@ The factor $10^{12}$ appearing throughout is the area conversion
 $1\,\mathrm{Mpc}^2 = 10^{12}\,\mathrm{pc}^2$.
 
 \begin{table}[H]
-\centering\small
+\centering
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{lllll}
 \toprule
 code & $r$, $R$ & $M$ & $\Sigma$, $\Delta\Sigma$ & $\rho$ convention \\
 \midrule
-production, cluster\_toolkit & cMpc$/h$ & $\hMsun$ & $\Msunpc$ comoving &
+cluster\_toolkit & cMpc$/h$ & $\hMsun$ & $\Msunpc$ comoving &
   $\bar\rho_m = \Omega_m\,\rho_{c,0}$ ($h$-units, no $(1{+}z)^3$) \\
-CLensPy \texttt{TwoHaloTerm} & physical Mpc (feed $k h$, $P/h^3$, $R/h$) & --- &
+CLensPy & physical Mpc (feed $k h$, $P/h^3$, $R/h$) & --- &
   dimensionless ($\times\,\Omega_m \rho_{c,0} h^2 / h / 10^{12}$) & caller-owned \\
 pyccl & Mpc & $M_\odot$ & --- ($\xi$ only) & $\Omega_c = \Omega_m - \Omega_b$ \\
 clmm & physical Mpc & $M_\odot$ & $M_\odot/\mathrm{Mpc}^2$ physical &
   $\Omega_{\rm dm} = \Omega_m - \Omega_b$ \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \caption{Unit ledger. The clmm comoving bridge is
 $\DStwo^{\rm com}(R^{\rm com}) =
 \DStwo^{\rm phys}(R^{\rm com}/(1{+}z))/(1{+}z)^2$ (the single-power

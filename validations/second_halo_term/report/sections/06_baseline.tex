@@ -1,15 +1,20 @@
 \section{Pre-fix baseline}
 \label{sec:baseline}
 
-Driving the unfixed \modname{ct\_2hTerm} through the exact production
-call site on the shared $P(k,z)$ reproduces every pinned defect
-bit-for-bit: all 50 redshift rows of $\Shh$ and \blk{Wp\_hh} identical;
-\nanFracBefore{} of $\DShh$ non-finite with the NaN edge at
-$R = \nanEdgeR$ cMpc$/h$; the published (z-invariant) $\Shh$
-overshooting the true $z = 0.41$ two-halo term by
-\sigmaDevBeforeMax{} at $R = 3$ falling to \sigmaDevBeforeMin{} at
-$R = 20$ (Table below), and \blk{Wp\_hh} missing the true
-$\ximm(r, z{=}0.41)$ by up to \wpDevBefore.
+Driving the current (unfixed) \modname{ct\_2hTerm} through the exact
+production call site on the shared $P(k,z)$ reproduces every pinned
+defect bit-for-bit: all 50 redshift rows of $\Shh$ and \blk{Wp\_hh}
+identical; \nanFracBefore{} of $\DShh$ non-finite with the NaN edge at
+$R = \nanEdgeR$ cMpc$/h$; the published $\Shh$ overshooting the true
+$z = 0.41$ two-halo term by \sigmaDevBeforeMax{} at $R = 3$ falling to
+\sigmaDevBeforeMin{} at $R = 20$ (Table below); and \blk{Wp\_hh}
+missing the true $\ximm(r, z{=}0.41)$ by up to \wpDevBefore. The
+harness additionally decomposes the $\Shh$ deviation: it is a
+\emph{composite} of the z-degeneracy (the $z{=}0$ row is $\sim$53\%
+above $z = 0.41$) and the dummy-NFW contamination injected by the
+view-mutation bug (an additive $\Sigma_{\rm NFW}(10^{14}, c{=}5)$
+profile, dominant at small $R$) --- e.g.\ at $R = 3$:
+$2.15 + 1.65 = 3.80\,\Msunpc$, exactly the issue-\#4 table value.
 
 \begin{table}[H]
 \centering\small
@@ -22,10 +27,16 @@ the CLensPy and cluster\_toolkit references at the pinned radii
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.48\textwidth]{figs/sigma_hh_before.pdf}
-\includegraphics[width=0.48\textwidth]{figs/nan_map_before.pdf}
-\caption{Left: the z-degenerate production $\Shh$ against the
-z-dependent reference. Right: the $\DShh$ NaN mask of the checked-in
-dump (60\% of the table).}
+\includegraphics[width=0.48\textwidth]{figs/dsigma_row_current_fixed.pdf}
+\caption{Left: the current (pre-fix) $\Shh$ against the z-dependent
+CLensPy reference --- the small-$R$ excess is the dummy-NFW
+contamination from the view-mutation bug (off the ratio scale by
+design; the documented $+71$--$172\%$ band appears at
+$R \gtrsim 1$ cMpc$/h$, where it combines the z-degeneracy with the
+contamination tail). Right: the $\DShh$ row at $z = 0.41$: the current
+table's NaN region (shaded, 60\% of the table), its surviving finite
+tail, and the fixed (direct-method) curve on top of the converged
+anchor.}
 \end{figure}
 
 \begin{figure}[H]

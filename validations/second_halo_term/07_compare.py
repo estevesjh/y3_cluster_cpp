@@ -188,16 +188,19 @@ def main():
     rr = rct["rfix_dense"]
     mplot = (rr >= 0.1) & (rr <= 60.0)
     ax.loglog(rr[mplot], rct["lin_iz5_xi_dense"][mplot], C["ct"], ls=LS["ct"],
-              label="linear (what xi_nl contains today)")
+              lw=1.8, label="current: linear $P(k)$ (the silent fallback)")
     ax.loglog(rr[mplot], rct["nl_iz5_xi_dense"][mplot], C["prod"], lw=1.8,
-              label="halofit (what the name claims)")
-    ax.set_ylabel(r"$\xi(r,\,z=0.41)$")
+              label="proposed fix: halofit $P(k)$")
+    ax.set_ylabel(r"$\xi_{mm}(r,\,z=0.41)$  (dimensionless)")
     ax.legend(fontsize=7)
     axr.semilogx(rr[mplot],
                  rct["nl_iz5_xi_dense"][mplot] / rct["lin_iz5_xi_dense"][mplot],
                  C["prod"], lw=1.8)
     axr.axhline(1, color="k", lw=0.5)
-    axr.set_xlabel(r"$r$ [cMpc/$h$]")
+    # focus on the observable-relevant range; the ratio reaches ~22 at
+    # r = 0.1 (quoted in the caption), off-scale here by design
+    axr.set_ylim(0.7, 6.0)
+    axr.set_xlabel(r"$r$ [cMpc/$h$, comoving]")
     axr.set_ylabel("halofit / linear")
     fig.tight_layout()
     fig.savefig(os.path.join(FIGS, "xi_nl_linear_fallback.pdf"))
@@ -341,26 +344,31 @@ def make_figures(pk, cct, ccl_, rct, rcl, prod, prod_after, z, r_sigma,
     fig, (ax, axr) = plt.subplots(2, 1, figsize=(4.6, 4.6), sharex=True,
                                   height_ratios=[2, 1])
     xi_ct, xi_cl, xi_ccl = xi_rows[5]
-    ax.loglog(r_xi_cl, xi_ct, C["ct"], ls=LS["ct"], label="cluster_toolkit")
-    ax.loglog(r_xi_cl, xi_cl, C["clenspy"], ls=LS["clenspy"], label="CLensPy")
-    ax.loglog(r_xi_cl, xi_ccl, C["pyccl"], ls=LS["pyccl"], label="pyccl")
+    ax.loglog(r_xi_cl, xi_ct, C["ct"], ls=LS["ct"],
+              label="cluster_toolkit (Hankel quadrature)")
+    ax.loglog(r_xi_cl, xi_cl, C["clenspy"], ls=LS["clenspy"],
+              label="CLensPy (FFTLog)")
+    ax.loglog(r_xi_cl, xi_ccl, C["pyccl"], ls=LS["pyccl"],
+              label="pyccl (independent Boltzmann)")
     wp5 = prod["camb_wp_hh"][5]
     ax.loglog(r_perp, wp5, C["prod"], ls=LS["prod"], lw=1.8,
-              label="production Wp (before)")
+              label=r"Wp_hh table (current, $z$-degenerate)")
     xinl5 = loginterp(prod["xinl_r"], prod["xinl_r"], prod["xinl_xi"][5])
     ax.loglog(prod["xinl_r"], xinl5, C["clmm"], ls=LS["clmm"],
-              label="dump xi_nl")
-    ax.set_ylabel(r"$\xi_{mm}(r,\,z=0.41)$")
-    ax.legend(fontsize=7)
+              label="xi_nl table (correct per-z)")
+    ax.set_xlim(0.1, 60.0)
+    ax.set_ylabel(r"$\xi_{mm}(r,\,z=0.41)$  (dimensionless)")
+    ax.legend(fontsize=6.5)
     for arr, rr, key in ((xi_cl, r_xi_cl, "clenspy"), (xi_ccl, r_xi_cl, "pyccl")):
         axr.semilogx(rr, arr / xi_ct - 1, C[key], ls=LS[key])
     axr.semilogx(r_perp, wp5 / loginterp(r_perp, rct["rfix_dense"],
                                          rct["lin_iz5_xi_dense"]) - 1,
                  C["prod"], lw=1.8)
     axr.axhline(0, color="k", lw=0.5)
-    axr.set_ylim(-0.6, 0.6)
-    axr.set_xlabel(r"$r$ [cMpc/$h$]")
-    axr.set_ylabel("ratio $-1$ (to ct)")
+    axr.set_xlim(0.1, 60.0)
+    axr.set_ylim(-0.1, 0.7)
+    axr.set_xlabel(r"$r$ [cMpc/$h$, comoving]")
+    axr.set_ylabel("fractional dev.\nto cluster_toolkit")
     fig.tight_layout()
     fig.savefig(os.path.join(FIGS, "xi_4way_z041.pdf"))
     plt.close(fig)
@@ -379,25 +387,28 @@ def make_figures(pk, cct, ccl_, rct, rcl, prod, prod_after, z, r_sigma,
     fig.savefig(os.path.join(FIGS, "xi_z_variation.pdf"))
     plt.close(fig)
 
-    # -- fig: Sigma_hh before vs refs at slices
+    # -- fig: Sigma_hh current vs refs at slices
     fig, (ax, axr) = plt.subplots(2, 1, figsize=(4.6, 4.6), sharex=True,
                                   height_ratios=[2, 1])
     for iz, alpha in zip(IZ_SLICES, (0.35, 0.6, 1.0, 0.8)):
         ax.loglog(r_sigma, rcl[f"lin_iz{iz}_sigma"], C["clenspy"],
                   ls=LS["clenspy"], alpha=alpha,
-                  label=f"CLensPy z={z[iz]:.2f}")
+                  label=rf"CLensPy $\Sigma_{{2h}}$, z={z[iz]:.2f}")
     ax.loglog(r_perp, prod["camb_sigma_hh"][5], C["prod"], lw=1.8,
-              label="production (all z identical)")
-    ax.set_ylabel(r"$\Sigma_{hh}$ [$M_\odot h/\mathrm{pc}^2$], $b=1$")
-    ax.legend(fontsize=7)
+              label="current (z-degenerate +\ndummy-NFW contaminated)")
+    ax.set_ylabel(r"$\Sigma_{hh}$ [$M_\odot h/\mathrm{pc}^2$, comoving], $b=1$")
+    ax.legend(fontsize=6.5)
     for iz, alpha in zip(IZ_SLICES, (0.35, 0.6, 1.0, 0.8)):
         axr.semilogx(r_sigma,
                      loginterp(r_sigma, r_perp, prod["camb_sigma_hh"][5])
                      / rcl[f"lin_iz{iz}_sigma"] - 1,
                      C["prod"], alpha=alpha)
     axr.axhline(0, color="k", lw=0.5)
-    axr.set_xlabel(r"$R$ [cMpc/$h$]")
-    axr.set_ylabel("prod/ref $-1$")
+    # focus on the documented +0.7..+1.7 deviation band; the small-R
+    # dummy-NFW contamination (up to ~100x) is off-scale by design
+    axr.set_ylim(-0.3, 2.0)
+    axr.set_xlabel(r"$R$ [cMpc/$h$, comoving]")
+    axr.set_ylabel("current / reference $-1$")
     fig.tight_layout()
     fig.savefig(os.path.join(FIGS, "sigma_hh_before.pdf"))
     plt.close(fig)
@@ -418,7 +429,7 @@ def make_figures(pk, cct, ccl_, rct, rcl, prod, prod_after, z, r_sigma,
                   ls=LS["clmm"], label="clmm ($(1+z)^{-2}$)")
     ds_b = prod["camb_dsigma_hh"][5]
     ax.loglog(r_perp, np.abs(ds_b), C["prod"], lw=1.8,
-              label="production (before, 60% NaN)")
+              label="production (current, 60% NaN)")
     ax.set_ylabel(r"$|\Delta\Sigma_{hh}|$ [$M_\odot h/\mathrm{pc}^2$], $b=1$")
     ax.legend(fontsize=6.5)
     for key, col, ls in (("lin_iz5_dsigma_sandwich", C["ct"], LS["ct"]),
@@ -434,18 +445,29 @@ def make_figures(pk, cct, ccl_, rct, rcl, prod, prod_after, z, r_sigma,
     fig.savefig(os.path.join(FIGS, "dsigma_methods_z041.pdf"))
     plt.close(fig)
 
-    # -- fig: NaN map (before, dump table)
-    fig, ax = plt.subplots(figsize=(4.4, 2.8))
-    nan_mask = ~np.isfinite(prod["dumptable_dsigma_hh"])
-    ax.imshow(nan_mask, aspect="auto", origin="lower", cmap="Greys",
-              extent=[np.log10(r_sigma[0]), np.log10(r_sigma[-1]),
-                      z[0], z[-1]])
-    ax.set_xlabel(r"$\log_{10} R$ [cMpc/$h$]")
-    ax.set_ylabel(r"$z$")
-    ax.set_title("dSigma_hh NaN mask (checked-in dump, before)", fontsize=8)
-    ax.grid(False)
+    # -- fig: dSigma_hh row, current table vs fixed (replaces the old
+    #    all-black NaN-mask imshow)
+    fig, ax = plt.subplots(figsize=(4.6, 3.2))
+    row_cur = prod["dumptable_dsigma_hh"][5]
+    finite = np.isfinite(row_cur)
+    nan_edge = r_sigma[np.argmax(finite)]
+    ax.axvspan(r_sigma[0], nan_edge, color="0.88", zorder=0)
+    ax.text(np.sqrt(r_sigma[0] * nan_edge), 0.32,
+            "NaN region\n(60% of table)", ha="center", fontsize=7,
+            color="0.35")
+    ax.loglog(r_sigma[finite], row_cur[finite], C["prod"], lw=1.8,
+              label="current table (finite part,\nz-degenerate)")
+    pa = prod_after.get("direct")
+    if pa is not None:
+        ax.loglog(r_perp, pa["camb_dsigma_hh"][5], C["clenspy"],
+                  ls=LS["clenspy"], lw=1.8, label="fixed (direct), z=0.41")
+    ax.loglog(r_sigma, np.abs(rct["lin_iz5_dsigma_anchor"]), C["truth"],
+              lw=1.0, label="converged anchor, z=0.41")
+    ax.set_xlabel(r"$R$ [cMpc/$h$, comoving]")
+    ax.set_ylabel(r"$\Delta\Sigma_{hh}$ [$M_\odot h/\mathrm{pc}^2$], $b=1$")
+    ax.legend(fontsize=6.5, loc="lower right")
     fig.tight_layout()
-    fig.savefig(os.path.join(FIGS, "nan_map_before.pdf"))
+    fig.savefig(os.path.join(FIGS, "dsigma_row_current_fixed.pdf"))
     plt.close(fig)
 
     # -- fig: P(k) consistency
@@ -495,7 +517,7 @@ def make_figures(pk, cct, ccl_, rct, rcl, prod, prod_after, z, r_sigma,
         ax.loglog(r_sigma, np.abs(anchor), C["truth"], label="anchor")
         ds5 = pa["camb_dsigma_hh"][5]
         ax.loglog(r_perp, np.abs(ds5), C["prod"], lw=1.8,
-                  label=f"production (after, {meth})")
+                  label=f"fixed ({meth})")
         ax.loglog(r_sigma, np.abs(rcl["lin_iz5_dsigma"]), C["pyccl"],
                   ls=LS["pyccl"], label="CLensPy")
         ax.set_ylabel(r"$|\Delta\Sigma_{hh}|$")
@@ -503,9 +525,9 @@ def make_figures(pk, cct, ccl_, rct, rcl, prod, prod_after, z, r_sigma,
         axr.semilogx(r_sigma, loginterp(r_sigma, r_perp, ds5) / anchor - 1,
                      C["prod"], lw=1.8)
         axr.axhline(0, color="k", lw=0.5)
-        axr.set_ylim(-0.1, 0.1)
-        axr.set_xlabel(r"$R$ [cMpc/$h$]")
-        axr.set_ylabel("after/anchor $-1$")
+        axr.set_ylim(-0.05, 0.05)
+        axr.set_xlabel(r"$R$ [cMpc/$h$, comoving]")
+        axr.set_ylabel("fixed / anchor $-1$")
         fig.tight_layout()
         fig.savefig(os.path.join(FIGS, f"dsigma_after_{meth}.pdf"))
         plt.close(fig)
