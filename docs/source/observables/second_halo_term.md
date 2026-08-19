@@ -71,22 +71,34 @@ of the 50-point redshift grid):
 2. $\xi_{\rm 2halo} = b\,\xi_{\rm mm}$ with $b = 1$: **the tables are
    published unbiased** and the consumer applies $b(M,z)$ or
    $\langle b\rangle_i$.
-3. $\Sigma_{2h}$ on the `Rp` grid via
+3. $\Sigma_{2h}$ on the `r_sigma` grid via
    `cluster_toolkit.deltasigma.Sigma_at_R`, which extends the
-   $\xi$ table below its inner edge with a **dummy NFW halo**
-   ($M_d = 10^{14}\,M_\odot/h$, $c_d = 5$ — placeholder values, not
-   physics).
+   $\xi$ table below its inner edge assuming an NFW halo
+   ($M_d = 10^{14}\,M_\odot/h$, $c_d = 5$ — a numerical
+   parameterisation of the extension, not physics; the inner edge is
+   $10^{-3}$ cMpc/$h$, so its imprint is negligible).
 4. $\Sigma \to \Delta\Sigma$ needs the full interior mass
-   $\bar\Sigma(<R)$, which the pure two-halo table cannot supply at
-   small $R$. The **dummy-halo trick**: *add* the dummy's analytic
-   $\Sigma_{\rm NFW}$, Hankel/Abel-transform the sum to $\Delta\Sigma$
-   (`DeltaSigma_at_R`), then *subtract* the dummy's analytic
-   $\Delta\Sigma_{\rm NFW}$ — regularising the interior integral while
-   cancelling the dummy exactly (up to numerics).
-5. Residual negative values — where the cancellation of step 4 is
-   imperfect at small $R$ — are set to **NaN** rather than silently
-   folded in. This is the documented NaN region of `dSigma_hh` below
-   $R \approx 8.6\,h^{-1}$cMpc (warning below).
+   $\bar\Sigma(<R)$. The default method (`dsigma_method='direct'`,
+   since the issue #4 fix) evaluates $\Sigma_{2h}$ from the per-$z$
+   $\xi$ on a grid extended down to $R = 10^{-3}$ cMpc/$h$ and
+   integrates $\bar\Sigma(<R)$ by cumulative trapezoid — the two-halo
+   interior mass is *integrated*, not modeled. Validated against
+   closed-form NFW/Einasto chains and a converged fiducial anchor
+   cross-checked by CLensPy: 0.4% max over
+   $R \in [0.5, 20]$ cMpc/$h$, $z \in [0.24, 0.65]$
+   (`validations/second_halo_term/`).
+5. The historical **NFW-sandwich stabiliser**
+   (`dsigma_method='sandwich'`) — *add* an analytic
+   $\Sigma_{\rm NFW}$ so `DeltaSigma_at_R`'s interior extrapolation is
+   NFW-dominated, then *subtract* the same halo's analytic
+   $\Delta\Sigma_{\rm NFW}$ — stays selectable for comparison. With a
+   consistent $M_d$ it is dummy-independent (residual $\sim$1%), but it
+   cannot recover the two-halo term's own interior mass below the table
+   edge (65% max deviation at small $R$ on the same benchmark), which
+   is why `direct` is the default. The pre-fix code broke even the
+   cancellation (an `Md/10` inconsistency) and then blanked the
+   resulting negatives to NaN — 60% of the table; both defects are
+   fixed and pinned by `test/halo_model.test.py`.
 
 ```{admonition} Composition figure removed — was computed wrong
 :class: warning

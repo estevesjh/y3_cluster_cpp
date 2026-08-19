@@ -1,4 +1,39 @@
-# ⚠ ΔΣ_hh (two-halo lensing term) needs debugging
+# ✅ RESOLVED — ΔΣ_hh (two-halo lensing term)
+
+**Resolved 2026-08-19** on branch `claude/issue-4-dsigma-hh-2h-term`
+(fix commit: `[claude] fix(halo-model): per-z P(k), direct interior-mean
+dSigma, no NaN clip in ct_2hTerm (fixes #4)`). All three defects below
+are fixed in `y3_buzzard/haloModel.py::ct_2hTerm`:
+
+1. **z degeneracy** — `pk_to_sigma` now indexes `pk[i]` per z (shape
+   asserted); `Sigma_hh`/`Wp_hh` vary with growth (ratio ≈ 15.5 between
+   z=0 and z=4 at r = 1 cMpc/h, matching CLensPy/pyccl/cluster_toolkit
+   references to ≤ 2%).
+2. **NaN clip removed** — tables are finite everywhere (previously
+   3850/6400 NaN). The negatives it masked came from the `Md/10.`
+   inconsistency below, not physics.
+3. **Dummy-halo convention** — the add/subtract NFW pair is numerical
+   stabilization (per-user clarification), not exclusion physics; with
+   consistent `Md` it is dummy-independent to ~1%. It is retained as
+   `dsigma_method='sandwich'`, but the **default is now
+   `dsigma_method='direct'`**: Σ̄(<R) integrated by cumulative trapezoid
+   on a grid extended to R = 1e-3 built from the per-z ξ. Measured
+   against a converged anchor cross-validated by CLensPy: D_direct =
+   0.44% vs D_sandwich = 65% (the sandwich cannot recover the two-halo
+   term's own interior mass below the table edge).
+
+Validation harness + numbers: `validations/second_halo_term/` (analytic
+NFW/Einasto chain bench + fiducial CAMB-P(k) 4-way cross-code
+comparison). Re-pinned tests: `test/halo_model.test.py`
+(`TestSecondHaloTerm`, `TestSecondHaloTermVsClenspy`,
+`TestTransformChainAnalytic`). Remaining related issue: the `haloModel/Rp`
+axis publication (`wp_hh_rp_axis_mismatch.md`).
+
+The original write-up is preserved below for history.
+
+---
+
+# ⚠ ΔΣ_hh (two-halo lensing term) needs debugging [HISTORICAL]
 
 **Raised 2026-08-12** while implementing the traditional 1h+2h max
 model (`src/pipelines/des_y3/observables/shear_1h2h/fast_mass/python/shear1h2h_max.py`).
