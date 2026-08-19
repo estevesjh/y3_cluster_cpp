@@ -1,0 +1,62 @@
+\section{Remaining issues and upstream findings}
+\label{sec:remaining}
+
+\paragraph{In this repo.}
+\begin{itemize}
+\item \textbf{$\xinl$ carries linear $\xi$} --- the priority follow-up;
+  Section~\ref{sec:xinl} and
+  \pyfile{docs/known\_issues/xi\_nl\_linear\_fallback.md}. Agreed path:
+  keep linear for now; add the nonlinear input by updating
+  \modname{cp\_camb} (its \texttt{nonlinear\_pk\_path} plumbing already
+  exists); the CAMB halofit reference for the acceptance gate is
+  already in the harness outputs.
+\item \textbf{\blk{haloModel/Rp} axis mismatch} --- \blk{Rp} publishes
+  the \texttt{Radii} grid (1--35) while the 2h tables live on
+  \blk{r\_sigma} (0.1--20); \pyfile{src/models/wp\_cluster.cuh}
+  silently interpolates \blk{Wp\_hh} on the wrong axis. Report-only;
+  candidate one-line fix deferred pending a legacy-consumer audit
+  (\pyfile{docs/known\_issues/wp\_hh\_rp\_axis\_mismatch.md}).
+\item \textbf{bsel wall-metadata contract gap} --- the 08-17 refactor's
+  consumer (\pyfile{src/pipelines/shared/datablock\_models.py}) expects
+  \blk{b\_sel\_marg\_P1/\{lambda\_bin, zo\_low, zo\_high, vals\}}, but
+  the C++ evaluator template only publishes \texttt{vals} (the wall
+  metadata lives in ini config and never enters the datablock). The
+  refactored \pyfile{bsel.py} and
+  \pyfile{shear\_prj\_fast\_mass.py} therefore cannot run end-to-end;
+  this also blocks regenerating the projection sections of the fiducial
+  dump. Owner decision required on where to publish the wall metadata.
+\item \textbf{Legacy raw readers} --- \pyfile{src/models/gamma\_max.hh}
+  and kin read $\DShh$ without sanitization; they now see small
+  negatives instead of NaN at small $R$. The max-model composition is
+  unaffected ($\max(1h, b\,\Delta\Sigma_{2h})$); any future sum-based
+  composition must handle the sign.
+\end{itemize}
+
+\paragraph{Upstream (CLensPy) --- issue list to file.}
+\begin{itemize}
+\item \pyfile{lensing/profile.py}: the $\Sigma$ path multiplies
+  $\rho_m$ evaluated as $\rho_c(z)\,\Omega_{m,0}$ (34\% low at
+  $z = 0.25$ vs the comoving $\Omega_m \rho_{c,0}$ its own
+  \pyfile{nfw.py} uses), while the $\Delta\Sigma$ path applies the bare
+  $10^{12}$ pc$^2$/Mpc$^2$ conversion without $\rho_m$ --- the two
+  two-halo paths are mutually inconsistent.
+\item \pyfile{utils/interpolate.py}: the log-log interpolator drops
+  negative $\xi$ (everything beyond the zero crossing) and power-law
+  extrapolates --- the \texttt{TwoHaloTerm} chain overflows for
+  steep-tailed inputs (Section~\ref{sec:chain}).
+\item \pyfile{utils/integrate.py}: the \texttt{leggauss} backend
+  interprets \texttt{r\_max} differently from the other two backends;
+  \texttt{sigma\_to\_deltasigma\_cumtrapz} omits the inner-boundary
+  term (documented) and clips negatives silently.
+\item \pyfile{cosmology/pkgrid.py}: the CAMB backend mixes $h$-units
+  ($k$ requested in $h$/Mpc against a grid built in 1/Mpc); duplicated
+  \texttt{RHOCRIT} constants differ between \pyfile{config.py} and
+  \pyfile{nfw.py}; \texttt{TwoHaloTerm}'s unsorted-$k$ branch sorts
+  \texttt{zvec} instead of \texttt{kvec}; class docstrings advertise
+  \texttt{buildAll}/\texttt{sigma\_R} which do not exist.
+\end{itemize}
+
+\paragraph{cluster\_toolkit.}
+GSL spline workspace cached by array size (same-process calls with a
+new grid length abort); fixed-cycle Hankel quadrature inaccurate at
+$r \ll s$ for flat-cored transforms (Section~\ref{sec:chain}).

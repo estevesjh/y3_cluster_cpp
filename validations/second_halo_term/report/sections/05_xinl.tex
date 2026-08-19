@@ -1,0 +1,165 @@
+\section{The $\xinl$ table: production audit and the linear-$P(k)$ gap}
+\label{sec:xinl}
+
+$\xinl(r, z)$ is the single matter-correlation input of the
+selection-affected two-halo formalism: the paper's operators
+$I_2 \equiv \mathcal{P}[b\,\xinl]$ and
+$I_1 \equiv \mathcal{P}[b\,\xinl\,\sigma(\theta)]$, and the
+$\Sigma^{\rm prj}$/$\Delta\Sigma^{\rm prj}$ projection integrals, all
+consume it. This section audits where it is built, where it is
+consumed, whether each link is numerically correct, and what physics it
+currently contains.
+
+\subsection{Where it is built and consumed}
+
+\begin{itemize}
+\item \textbf{Producer} --- \pyfile{y3\_buzzard/halo\_model\_cosmosis.py}
+  (\texttt{execute}, one line): per redshift slice,
+  $\xinl(r, z_i) = \texttt{ct.xi.xi\_mm\_at\_r}(r, k, P_{\rm nl}(k, z_i))$
+  on $r \in [10^{-3}, 10^{3}]$ cMpc$/h$ (128 log points, 50 redshifts),
+  published as \blk{xi\_nl/\{r, z, xi\_nl\}}. Note this loop indexes
+  $P(k, z_i)$ \emph{correctly} --- the issue-\#4 z-degeneracy bug lived
+  only in the \blk{Sigma\_hh} path.
+\item \textbf{$P_{\rm nl}$ source} --- the block section
+  \blk{matter\_power\_nl} if present; otherwise a silent fallback
+  aliases the \emph{linear} $P(k)$
+  (\pyfile{halo\_model\_cosmosis.py:132-137}).
+\item \textbf{Consumer: $\bsel$ wall} ---
+  \modname{BSelMargIntegrand.so}
+  (\pyfile{src/models/p\_operator\_t.hh}) reads the table into a flat
+  array with a hand-rolled bilinear lookup (\texttt{:238-248}) and
+  evaluates $(P_1, I_1, J{=}I_2{-}I_1)$ per
+  $(\zob_{\rm lo}, \zob_{\rm hi}, \lambda\text{-bin})$ wall row;
+  \pyfile{bsel.py} then turns the wall into the $\bsel(\theta)$
+  sigmoid.
+\item \textbf{Consumer: projection} --- the three \texttt{sp\_detail}
+  cores in \pyfile{src/models/sigma\_prj\_t.hh}
+  (\modname{SigmaPrjEvaluator}, \modname{DSigmaPrjEvaluator},
+  \modname{ShearPrjFrozenPhysics}) read it as an
+  \texttt{Interp2D} and evaluate
+  $\xinl(\Delta\chi, \zob)$ with
+  $\Delta\chi = \sqrt{\chi_z^2 + \chi_o^2 - 2\chi_z\chi_o\cos\theta}$.
+\end{itemize}
+
+\subsection{What is verified correct}
+
+\begin{itemize}
+\item \textbf{The transform}: the dump's \blk{xi\_nl} table matches a
+  converged per-$z$ recomputation of the same input $P(k)$ to
+  \xiNlDevMax{} over $r \in [0.5, 50]$ cMpc$/h$ at all comparison
+  redshifts, and the four-way $\ximm$ comparison
+  (cluster\_toolkit / CLensPy-FFTLog / pyccl) agrees to
+  \xiMutualMax{} (Fig.~\ref{fig:xi4way}).
+\item \textbf{Consumer units}: both consumers convert
+  $\chi$ to cMpc$/h$ ($\times h_0$;
+  \pyfile{sigma\_prj\_t.hh:415, :530}) before querying, matching the
+  table's $r$ axis; the grid $[10^{-3}, 10^{3}]$ covers every
+  $\Delta\chi$ the integrals request, so the \texttt{clamp} never
+  actually extrapolates.
+\item \textbf{Consumer evaluation redshift}: the table is queried at
+  $\zob$ (the observed cluster redshift), consistent with the
+  cylindrical two-halo specialisation used in the paper.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figs/xi_4way_z041.pdf}
+\caption{$\ximm(r, z{=}0.41)$, four ways: cluster\_toolkit, CLensPy
+FFTLog, pyccl, the dump \blk{xi\_nl} row, and the (pre-fix) production
+\blk{Wp\_hh} row --- the latter is the only outlier (issue \#4).}
+\label{fig:xi4way}
+\end{figure}
+
+\subsection{The physics gap: $\xinl$ contains linear $\xi$}
+\label{sec:xinl-gap}
+
+The paper's model prescribes $\xinl$ from the \emph{halofit} power
+spectrum. In practice \blk{matter\_power\_nl} has never existed: the
+\modname{cp\_camb} emulator ships only linear models
+(\texttt{camb\_linear\_*.npz}), no production ini sets its
+(already-implemented) \texttt{nonlinear\_pk\_path} option, and the
+fallback silently substitutes the linear $P(k)$. Every $\bsel$,
+$\Sigma^{\rm prj}$, $\Delta\Sigma^{\rm prj}$ and $\DShh$ result to date
+has therefore used $\xi_{\rm lin}$ under the \blk{xi\_nl} name.
+
+Measured at the fiducial cosmology, $z = 0.41$ (CAMB halofit vs
+linear): $\xi_{\rm hf}/\xi_{\rm lin}(r{=}1\,\mathrm{cMpc}/h) =
+\xiNlLinRatioROne$ and
+$\DStwo^{\rm hf}/\DStwo^{\rm lin}(R{=}3) = \dsNlLinRatioRThree$,
+converging to unity only for $r \gtrsim 20$ cMpc$/h$
+(Fig.~\ref{fig:xinlfallback}). The correlated-structure terms are
+underestimated by these factors at small and intermediate separations
+(modulated by $\bsel$ and the radial weighting of each observable).
+
+\textbf{Agreed path}: keep the linear $P(k)$ for now (all current
+validation and mock work is internally consistent and documented as
+linear); add the nonlinear input by updating \modname{cp\_camb} with a
+halofit emulator --- the module and the fallback then propagate it to
+$\xinl$, $\DShh$ and the whole projection branch with zero further code
+changes. The CAMB halofit reference for the acceptance test is already
+generated (\pyfile{outputs/pk\_camb.npz}, key \texttt{p\_k\_nl}).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{figs/xi_nl_linear_fallback.pdf}
+\caption{What \blk{xi\_nl} contains today (linear) vs what its name
+claims (halofit), $z = 0.41$.}
+\label{fig:xinlfallback}
+\end{figure}
+
+\subsection{Consumer outputs ($\bsel$ wall, projection): validation
+status audit}
+\label{sec:xinl-consumers}
+
+The tables above validate $\xinl$ itself. The \emph{outputs} that
+consume it were audited for existing validation coverage --- the result
+is the sharpest open gap of this exercise:
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lll}
+\toprule
+output & independent reference? & where / caveat \\
+\midrule
+\blk{b\_sel\_marg\_P1/I1/J} (the wall) & \textbf{none in-tree} &
+  from-scratch \texttt{scipy.quad} method exists in
+  RichnessSelection\footnotemark, \\
+ & & but on its own cosmology stack --- never wired to a pipeline dump \\
+\blk{b\_sel\_marginalised} ($\bsel$ closure) & no recompute &
+  \pyfile{cosmology/bsel.py} consumes the wall; only shape/uniqueness
+  checks \\
+\blk{dsigma\_prj/\{rnd,cl,vals\}} & same-algorithm port only &
+  \pyfile{shear\_prj\_fast\_mass.py} is a convention-exact port of the
+  C++ core \\
+ & & ($10^{-8}$ identity --- catches port bugs, not method bugs) \\
+\blk{dsigma\_prj\_frozen\_physics} & port, at $3\times10^{-3}$ &
+  documented frozen-physics approximation level \\
+\blk{shear\_prj*} & hard-coded pins only &
+  no live recomputation anywhere \\
+projection \texttt{full\_ltmz} & does not exist &
+  CUDA-only; no Python/C++ adaptive reference for projection at all \\
+\bottomrule
+\end{tabular}
+\caption{Validation coverage of the $\xinl$ consumers. Contrast the
+counts/1h-shear observables, which all validate against an adaptive
+\texttt{full\_ltmz} Python reference.}
+\end{table}
+\footnotetext{\pyfile{RichnessSelection/src/richness\_selection/
+sel\_bias.py} (\texttt{\_P\_operator}) with the adaptive truth in
+\pyfile{validations/frozen\_bsel\_validation.py}; the
+\pyfile{compare\_*\_py\_vs\_cpp.py} bridges referenced in the repo
+docs exist only on Perlmutter scratch, if at all.}
+
+Two consequences: (i) the $(P_1, I_1, J)$ wall produced by
+\modname{BSelMargIntegrand.so} has \textbf{zero} numerical validation
+in this repository --- no test, no validator, no Python recompute ---
+even though it is the direct carrier of $\xinl$ into $\bsel$; (ii) the
+projection chain's only cross-check is a port of the same algorithm,
+so a method-level error (grid placement, kernel convention) would pass
+undetected. The recommended follow-up is a dump-fed adaptive-quadrature
+reference for the wall (the RichnessSelection \texttt{quad\_truth}
+pattern re-pointed at the dump's own $\xinl$/HMF/bias/selection
+tables), plus a genuine \texttt{full\_ltmz}-class reference for
+projection. End-to-end regeneration of these sections is currently
+blocked by the bsel wall-metadata contract gap
+(Section~\ref{sec:remaining}).

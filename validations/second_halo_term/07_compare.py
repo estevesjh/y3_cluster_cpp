@@ -165,6 +165,44 @@ def main():
         devs_lin.append(np.nanmax(np.abs(xinl[iz][mm] / ref[mm] - 1)))
     gate("xi_nl_dump_vs_lin_ref_max", float(max(devs_lin)), 0.02)
 
+    # ---------------------------------- xi_nl linear-fallback physics impact
+    # No nonlinear emulator exists (camb-emulator ships only camb_linear_*
+    # models and no production ini sets nonlinear_pk_path), so
+    # halo_model_cosmosis's fallback feeds LINEAR P(k) to the xi_nl table
+    # every run: the shearPrj projection branch consumes linear xi under
+    # the xi_nl name. Quantify what halofit would change.
+    print("== xi_nl linear-fallback impact (halofit / linear) ==")
+    xi_ratio_r1 = float(
+        loginterp(1.0, rct["rfix_dense"], rct["nl_iz5_xi_dense"])
+        / loginterp(1.0, rct["rfix_dense"], rct["lin_iz5_xi_dense"]))
+    ds_ratio_r3 = float(
+        loginterp(3.0, r_sigma, rct["nl_iz5_dsigma_anchor"])
+        / loginterp(3.0, r_sigma, rct["lin_iz5_dsigma_anchor"]))
+    print(f"  z=0.408: xi_nl/xi_lin(r=1) = {xi_ratio_r1:.2f}, "
+          f"DSigma_2h nl/lin (R=3) = {ds_ratio_r3:.2f}")
+    vals["xiNlLinRatioROne"] = f"{xi_ratio_r1:.2f}"
+    vals["dsNlLinRatioRThree"] = f"{ds_ratio_r3:.2f}"
+
+    fig, (ax, axr) = plt.subplots(2, 1, figsize=(4.6, 4.6), sharex=True,
+                                  height_ratios=[2, 1])
+    rr = rct["rfix_dense"]
+    mplot = (rr >= 0.1) & (rr <= 60.0)
+    ax.loglog(rr[mplot], rct["lin_iz5_xi_dense"][mplot], C["ct"], ls=LS["ct"],
+              label="linear (what xi_nl contains today)")
+    ax.loglog(rr[mplot], rct["nl_iz5_xi_dense"][mplot], C["prod"], lw=1.8,
+              label="halofit (what the name claims)")
+    ax.set_ylabel(r"$\xi(r,\,z=0.41)$")
+    ax.legend(fontsize=7)
+    axr.semilogx(rr[mplot],
+                 rct["nl_iz5_xi_dense"][mplot] / rct["lin_iz5_xi_dense"][mplot],
+                 C["prod"], lw=1.8)
+    axr.axhline(1, color="k", lw=0.5)
+    axr.set_xlabel(r"$r$ [cMpc/$h$]")
+    axr.set_ylabel("halofit / linear")
+    fig.tight_layout()
+    fig.savefig(os.path.join(FIGS, "xi_nl_linear_fallback.pdf"))
+    plt.close(fig)
+
     # ------------------------------------------------ Sigma / DS: before state
     print("== production (BEFORE) vs references ==")
     sig_prod = prod["camb_sigma_hh"]

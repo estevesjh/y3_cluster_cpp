@@ -1,0 +1,36 @@
+\section{Pre-fix baseline}
+\label{sec:baseline}
+
+Driving the unfixed \modname{ct\_2hTerm} through the exact production
+call site on the shared $P(k,z)$ reproduces every pinned defect
+bit-for-bit: all 50 redshift rows of $\Shh$ and \blk{Wp\_hh} identical;
+\nanFracBefore{} of $\DShh$ non-finite with the NaN edge at
+$R = \nanEdgeR$ cMpc$/h$; the published (z-invariant) $\Shh$
+overshooting the true $z = 0.41$ two-halo term by
+\sigmaDevBeforeMax{} at $R = 3$ falling to \sigmaDevBeforeMin{} at
+$R = 20$ (Table below), and \blk{Wp\_hh} missing the true
+$\ximm(r, z{=}0.41)$ by up to \wpDevBefore.
+
+\begin{table}[H]
+\centering\small
+\input{tables/deviation_before.tex}
+\caption{Pre-fix $\Shh$ (row $z = 0.408$; all rows identical) against
+the CLensPy and cluster\_toolkit references at the pinned radii
+[$\Msunpc$, $b = 1$]. Reproduces the issue-\#4 deviation table.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.48\textwidth]{figs/sigma_hh_before.pdf}
+\includegraphics[width=0.48\textwidth]{figs/nan_map_before.pdf}
+\caption{Left: the z-degenerate production $\Shh$ against the
+z-dependent reference. Right: the $\DShh$ NaN mask of the checked-in
+dump (60\% of the table).}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{figs/xi_z_variation.pdf}
+\caption{$\ximm(r{=}1\,\mathrm{cMpc}/h, z)$: the reference varies by a
+factor \xiZRatioRef{} across the grid; production (before) is flat.}
+\end{figure}
