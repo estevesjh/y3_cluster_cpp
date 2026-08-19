@@ -168,76 +168,100 @@ class ct_2hTerm(object):
     ## following cluster toolkit definition
     RHO_C = 2.77533742639e+11 # Msun/Mpc^3/h^2 (critical density)
 
-    def __init__(self,omega_m=0.3,exclusion=True,NSIZE=50, Md=1e13, cd=4.,bias=1.00):
+    def __init__(self,omega_m=0.3,exclusion=True,NSIZE=50, Md=1e13, cd=4.,bias=1.00,
+                 dsigma_method='direct'):
         self.omega_m = omega_m
         self.NSIZE = NSIZE
         self.Rfix = np.logspace(-3., 3., NSIZE, base=10) #Xi_hm MUST be evaluated to higher than BAO
-        self.Md, self.cd = Md, cd # dummy values
+        # Md/cd parameterize cluster_toolkit's inner-edge NFW extension in
+        # Sigma_at_R (below Rfix[0]) and the 'sandwich' stabilizer; the
+        # published table is the pure b=1 two-halo term under both methods.
+        self.Md, self.cd = Md, cd
         self.bias = bias
+        # 'exclusion' is a deprecated no-op kept for call-site
+        # compatibility: the NFW add/subtract pair it used to gate is a
+        # numerical stabilizer, not physics, and only enters the
+        # 'sandwich' method (where skipping it is never correct).
         self.exclusion = exclusion
-    
+        if dsigma_method not in ('direct', 'sandwich'):
+            raise ValueError("dsigma_method must be 'direct' or 'sandwich', "
+                             "got %r" % (dsigma_method,))
+        self.dsigma_method = dsigma_method
+
+    def _pk_to_xi(self,k,pk):
+        assert np.ndim(pk) == 1, "per-z P(k) slice expected"
+        xi_mm = ct.xi.xi_mm_at_r(self.Rfix, k, pk)
+        return ct.xi.xi_2halo(self.bias, xi_mm)
+
     def _pk_to_sigma(self,Rp,k,pk):
-        ## TODO: add NFW profile
-        xi_mm    = ct.xi.xi_mm_at_r(self.Rfix, k, pk)
-        xi_2halo = ct.xi.xi_2halo(self.bias, xi_mm)
+        xi_2halo = self._pk_to_xi(k, pk)
         Sigma_mm = ct.deltasigma.Sigma_at_R(Rp, self.Rfix, xi_2halo, self.Md, self.cd, self.omega_m)
-        return Sigma_mm, np.interp(np.log(Rp), np.log(self.Rfix), xi_2halo)
-    
+        return Sigma_mm, xi_2halo
+
     def _to_dsigma(self,Rp,sigma):
-        dSigma_mm = ct.deltasigma.DeltaSigma_at_R(Rp, Rp, sigma, self.Md/10., self.cd, self.omega_m)
+        dSigma_mm = ct.deltasigma.DeltaSigma_at_R(Rp, Rp, sigma, self.Md, self.cd, self.omega_m)
         return dSigma_mm
 
+    @staticmethod
+    def _dsigma_direct(r_grid, sigma_grid, Rp):
+        """DeltaSigma = Sigmabar(<R) - Sigma(R) by cumulative trapezoid of
+        Sigma R dR on a log-spaced grid extended well below Rp.min(), so
+        the two-halo interior mass is integrated rather than modeled."""
+        lnr = np.log(r_grid)
+        integrand = sigma_grid * r_grid**2  # Sigma R dR = Sigma R^2 dlnR
+        cum = np.concatenate([[0.0], np.cumsum(
+            0.5*(integrand[1:] + integrand[:-1]) * np.diff(lnr))])
+        cum += 0.5 * sigma_grid[0] * r_grid[0]**2  # flat inner disc
+        sigma_bar = 2.0 * cum / r_grid**2
+        return np.interp(np.log(Rp), lnr, sigma_bar - sigma_grid)
+
     def pk_to_sigma(self,Rp,k,pk,zvec):
+        pk = np.atleast_2d(pk)
+        assert pk.shape == (zvec.size, k.size), \
+            "P(k, z) must be (n_z, n_k) = (%d, %d), got %r" % (
+                zvec.size, k.size, pk.shape)
         self.zvec = zvec
         self.Sigma = np.zeros((zvec.size,Rp.size))
         self.Xi = self.Sigma.copy()
+        self._xi_rfix = np.zeros((zvec.size, self.Rfix.size))
 
         for i in range(zvec.size):
-            s, xi = self._pk_to_sigma(Rp,k,pk)
+            s, xi_2halo = self._pk_to_sigma(Rp,k,pk[i])
             self.Sigma[i] = s
-            self.Xi[i] = xi
-        return 
+            self._xi_rfix[i] = xi_2halo
+            self.Xi[i] = np.interp(np.log(Rp), np.log(self.Rfix), xi_2halo)
+        return
 
     def pk_to_dsigma(self,Rp,k,pk,zvec=None):
         self.R = Rp
-        
         if zvec is None:
-            self.dSigma = np.zeros((Rp.size,))
-            sigma = self._pk_to_sigma(Rp, k, pk)
-            if self.exclusion:
-                ## ADD NFW
-                sigma+= sigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
-
-            self.dSigma = self._to_dsigma(Rp, sigma)
-            # if self.exclusion:
-                ## Subtract NFW
-                # self.dSigma -= 0.993*deltaSigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
-            self.dSigma -= deltaSigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
-            
-            self.dSigma = np.where(self.dSigma<0.,np.nan,self.dSigma)
-            return
-
+            zvec = np.atleast_1d(0.0)
 
         # check if Sigma is computed
         if not hasattr(self,'Sigma'):
             self.pk_to_sigma(Rp,k,pk,zvec)
-        
+
         # convert to delta sigma
         self.dSigma = np.zeros((self.zvec.size,Rp.size))
-        for i in range(self.zvec.size):
-            sigma = self.Sigma[i]
-            if self.exclusion:
-                ## ADD NFW
-                sigma+= sigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
 
-            self.dSigma[i] = self._to_dsigma(Rp, sigma)
-            if self.exclusion:
-                ## Subtract NFW
-                self.dSigma[i] -= deltaSigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
-            
-            self.dSigma = np.where(self.dSigma<0.,np.nan,self.dSigma)
-    
-        pass
+        if self.dsigma_method == 'direct':
+            r_ext = np.logspace(-3., np.log10(Rp.max()), 256)
+            for i in range(self.zvec.size):
+                sigma_ext = ct.deltasigma.Sigma_at_R(
+                    r_ext, self.Rfix, self._xi_rfix[i], self.Md, self.cd, self.omega_m)
+                self.dSigma[i] = self._dsigma_direct(r_ext, sigma_ext, Rp)
+            return
+
+        # 'sandwich': add an analytic NFW so cluster_toolkit's interior
+        # extrapolation in DeltaSigma_at_R is NFW-dominated (hence valid),
+        # then subtract the same halo's analytic DeltaSigma. Consistent
+        # (Md, cd) throughout makes the dummy halo cancel exactly; the
+        # two-halo term's own interior mass below Rp.min() is NOT
+        # recovered by this method (use 'direct' for that).
+        sig_nfw = sigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
+        dsig_nfw = deltaSigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
+        for i in range(self.zvec.size):
+            self.dSigma[i] = self._to_dsigma(Rp, self.Sigma[i] + sig_nfw) - dsig_nfw
 
 def child18_mass_concentration(M200c, z, halo_sample = 'stacked_nfw'):
 	"""
