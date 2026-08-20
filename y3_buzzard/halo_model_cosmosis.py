@@ -99,19 +99,28 @@ def setup(options):
     compute_lensing_1h = _bool("compute_lensing_1h", compute_lensing)
     compute_lensing_2h = _bool("compute_lensing_2h", compute_lensing)
 
-    # one_halo_z: redshift at which the (single, z-less) 1h tables are
-    # evaluated. Default 0.0 preserves the legacy behavior documented in
-    # docs/known_issues/first_halo_term_z0_defect.md (issue #3): the
-    # published Sigma_nfw/dSigma_nfw/concentration are the z=0 profile at
-    # every cluster redshift, with concentration 5-15% high for
-    # z=0.2-0.65. Setting it to the counts-weighted mean cluster z is an
-    # INTERIM mitigation (kills the mean bias, leaves the per-bin
-    # spread); the real fix is a per-z table + consumer schema change.
+    # z_halo: the FIXED redshift at which the 1h concentration is
+    # evaluated -- the owner-ratified convention (issue #3, review
+    # 2026-08-20): the 1h term uses c(M, z_halo) with z_halo an ini
+    # parameter, default 0.4 (~the survey mean); per-z tables are
+    # deliberately NOT the model. Density normalisation stays the
+    # comoving rho_m0 regardless (see execute()).
+    #
+    # Legacy runs (widePlanck self-closure DVs, the frozen fiducial
+    # dumps behind the hard-coded cross-backend pins) were generated at
+    # z=0: those inis now pin `z_halo = 0.0` explicitly. `one_halo_z`
+    # is honored as a deprecated alias when `z_halo` is absent.
     try:
-        one_halo_z = float(options.get_double(section, "one_halo_z",
-                                              default=0.0))
+        one_halo_z = float(options.get_double(section, "z_halo",
+                                              default=np.nan))
     except Exception:
-        one_halo_z = 0.0
+        one_halo_z = np.nan
+    if not np.isfinite(one_halo_z):
+        try:
+            one_halo_z = float(options.get_double(section, "one_halo_z",
+                                                  default=0.4))
+        except Exception:
+            one_halo_z = 0.4
 
     params_out = (R_perp_min, R_perp_max, R_perp_bins,
                   Radii_min, Radii_max, Radii_bins,

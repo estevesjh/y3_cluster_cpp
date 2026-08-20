@@ -303,25 +303,27 @@ class TestFirstHaloTermRedshiftHandling(unittest.TestCase):
         # production always uses.
         self.assertLess(cs[2] / cs[0], 0.95)  # z=0.4 vs z=0: >5% lower
 
-    def test_execute_evaluates_1h_at_the_configurable_one_halo_z(self):
-        # The hardcoded z=0 became the `one_halo_z` option (issue #3
-        # interim mitigation, default 0.0 = legacy). Read the call site
-        # off the source so this test breaks loudly -- and needs a
-        # deliberate update -- when the real per-z-table fix lands.
+    def test_execute_evaluates_1h_at_the_ini_z_halo(self):
+        # Issue #3 RESOLUTION (owner convention, review 2026-08-20): the
+        # 1h concentration is c(M, z_halo) with z_halo a FIXED ini
+        # parameter, default 0.4; per-z tables are deliberately not the
+        # model. Read the call site off the source so this test breaks
+        # loudly if the convention drifts.
         import inspect
         sys.path.insert(0, str(REPO / "y3_buzzard"))
         import halo_model_cosmosis as hmc
         src_exec = inspect.getsource(hmc.execute).replace(" ", "")
-        # one_halo_z feeds ONLY the concentration; the profile term stays
+        # z_halo feeds ONLY the concentration; the profile term stays
         # at z=0 so the published tables remain comoving (first_halo_term
         # scales its density by (1+z)^3 -- physical).
         self.assertIn("concentration_at_M(M,z=one_halo_z,", src_exec)
         self.assertIn("first_halo_term(M,z=0,", src_exec)
-        # Default must stay 0.0: the widePlanck self-closure DVs were
-        # generated with the z=0 tables.
         src_setup = inspect.getsource(hmc.setup).replace(" ", "")
-        self.assertIn('"one_halo_z"', src_setup)
-        self.assertIn('one_halo_z=0.0', src_setup)
+        self.assertIn('"z_halo"', src_setup)          # canonical ini key
+        self.assertIn('"one_halo_z"', src_setup)      # deprecated alias
+        self.assertIn('0.4', src_setup)               # convention default
+        # Legacy dumps/self-closure DVs pin z_halo = 0.0 explicitly in
+        # their inis (docs/figs extract inis, mock_mcmc_cp_camb.ini).
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
