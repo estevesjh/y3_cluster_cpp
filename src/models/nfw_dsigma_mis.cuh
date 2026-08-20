@@ -70,10 +70,17 @@ namespace y3_cuda {
 
     { }
 
-    // In case, we envolve the NFW profile with redshift
-    // TODO: Implement Mass-Concentration Relation
+    // TODO(issue #13, needs a Perlmutter CUDA build to implement+test):
+    // mirror the CPU use_halo_model_conc option (src/models/
+    // nfw_dsigma_mis.hh::set_concentration_table / conc_at). The lookup
+    // table is universal in x = r/r_s, so the change is purely analytic
+    // (r_s = r_200/c, delta_c(c)); the conc table is
+    // haloModel/{lnM, concentration} (Child18 at one_halo_z), device
+    // side via quad::Interp1D with clamp. Until then the CUDA prj
+    // modules support ONLY the legacy fixed c=4 default -- which is
+    // what every cross-backend identity pin tests, so they stay valid;
+    // do NOT set use_halo_model_conc=T on a GPU module.
     // TODO: Implement different operator in case of rhocz(zt)
-    // Ask Marc How to make _c and _rhoc be functional forms in any case
     // NFW_DSIGMA_MIS(cosmosis::DataBlock& sample)
     // : _c(y3_cluster::make_Interp1D(sample,"haloModel","lnM","concentration").clamp(14.0))
     // , _rhoc(y3_cluster::make_Interp1D(sample,"haloModel","z","rhoc").clamp(0.0))
