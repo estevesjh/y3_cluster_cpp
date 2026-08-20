@@ -188,7 +188,8 @@ class ShearPrjFastMass:
             # Exact wall row; no interpolation in zob.
             theta_lam = float(lp.r_lambda(lobc)) * (1.0 + zob) / chi_o
             k_sig, theta0 = 2.5 / theta_lam, 0.5 * theta_lam
-            bsel = bs + (bl - bs) / (1.0 + np.exp(-k_sig * (theta - theta0)))
+            bsel_theta = (bs + (bl - bs)
+                          / (1.0 + np.exp(-k_sig * (theta - theta0))))
 
             zs, wzs = self._build_z_grid(zob, chi, r_excl)
 
@@ -218,7 +219,7 @@ class ShearPrjFastMass:
                 ds = dsmis(r_perp, theta[:, None] * d_a_o,
                            self.lnm_x[None, :], rho_mult=omega_m)
                 rnd_R.append(geom @ (ds @ wrnd))
-                cl_R.append((geom * bsel) @ np.sum(wcl * ds, axis=1))
+                cl_R.append((geom * bsel_theta) @ np.sum(wcl * ds, axis=1))
             self._results[(s["lb"], zob)] = dict(
                 rnd=np.asarray(rnd_R), cl=np.asarray(cl_R), sci=sci_o,
                 wall_idx=s["wall_idx"])

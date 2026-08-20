@@ -1,14 +1,15 @@
-"""CosmoSIS module (harness-local): publish the b_sel_marg wall metadata
+"""CosmoSIS module: publish the b_sel_marg wall metadata
 (lambda_bin, zo_low, zo_high) into the b_sel_marg_P1/_I1/_J sections.
 
 The C++ evaluator template (CosmoSISScalarEvaluatorModule) publishes only
 'vals'; the wall geometry lives in the [b_sel_marg] ini section and never
 enters the datablock. The refactored consumers
 (src/pipelines/shared/datablock_models.py BSelWallVector.from_source)
-expect it there. This shim closes that contract gap non-invasively for
-harness runs: give it the SAME wall vectors as [b_sel_marg]. The
-permanent fix location is an owner decision (see
-docs/known_issues + report section 'remaining issues').
+expect it there. This module closes that contract gap non-invasively:
+run it right after b_sel_marg and give it the SAME wall vectors as
+[b_sel_marg]. Resolution of issue estevesjh/y3_cluster_cpp#10 (option 2
+of the three considered there): a pipeline module rather than a C++
+template change, keeping src/utils immutable.
 """
 
 import numpy as np

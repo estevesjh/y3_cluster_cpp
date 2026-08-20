@@ -99,6 +99,55 @@ R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
                    1.19581, 1.70998, 2.44521, 3.49658, 5.00000])
 
 
+class _SyntheticBselSource:
+    """Minimal DataBlockSource stand-in: the exact b_sel_marginalised
+    production contract for two wall rows, no dump required."""
+
+    _DATA = {
+        ("b_sel_marginalised", "lambda_bin"): np.array([0, 1]),
+        ("b_sel_marginalised", "zo_low"): np.array([0.20, 0.20]),
+        ("b_sel_marginalised", "zo_high"): np.array([0.35, 0.35]),
+        ("b_sel_marginalised", "zob"): np.array([0.275, 0.275]),
+        ("b_sel_marginalised", "lob"): np.array([25.0, 37.5]),
+        ("b_sel_marginalised", "b_small"): np.array([1.1, 1.3]),
+        ("b_sel_marginalised", "b_large"): np.array([2.2, 2.6]),
+    }
+
+    def has(self, section, key):
+        return (section, key) in self._DATA
+
+    def array(self, section, key):
+        return self._DATA[(section, key)]
+
+
+class TestBSelBinsContract(unittest.TestCase):
+    """Dump-free regression guards for the refactored bsel consumers.
+
+    Both defects below were invisible until the wall-metadata contract
+    gap (issue #10) was closed and the chain first ran end-to-end; the
+    dump-gated TestShearPrjFastMass end-to-end test also exercises them,
+    but only on machines that have regenerated the fiducial dump."""
+
+    def test_from_source_returns_the_bins_object_not_none(self):
+        # BSelBins.validate() used to return None, and from_source
+        # returned output.validate() -- every caller got None.
+        bins = dm.BSelBins.from_source(_SyntheticBselSource())
+        self.assertIsInstance(bins, dm.BSelBins)
+
+    def test_find_exact_row_usable_across_repeated_lookups(self):
+        # ShearPrjFastMass.set_sample() used to clobber its `bsel`
+        # BSelBins object with a per-theta ndarray inside the slice
+        # loop, so any second lookup raised AttributeError.
+        bins = dm.BSelBins.from_source(_SyntheticBselSource())
+        for lam_bin, lob_want, bs_want in ((0, 25.0, 1.1), (1, 37.5, 1.3)):
+            lob, zob, b_small, b_large = bins.find_exact_row(
+                lam_bin, zob=0.275)
+            self.assertEqual(lob, lob_want)
+            self.assertEqual(zob, 0.275)
+            self.assertEqual(b_small, bs_want)
+            self.assertEqual(b_large, 2.0 * bs_want)
+
+
 class TestSharedQuadratureAndMoments(unittest.TestCase):
     def test_gl_nodes_integrate_polynomials(self):
         x, w = dm.gl_nodes(-0.7, 1.4, 8)

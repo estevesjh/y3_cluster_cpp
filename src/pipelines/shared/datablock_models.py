@@ -608,6 +608,7 @@ class BSelBins:
             raise ValueError("bsel output vectors have inconsistent lengths")
         if not np.allclose(self.zob, 0.5 * (self.zo_low + self.zo_high)):
             raise ValueError("bsel zob does not match the wall")
+        return self
 
     def find_exact_row(self, lambda_bin, zo_low=None, zo_high=None, zob=None):
         """Return one exact row as ``(lob, zob, b_small, b_large)``.
