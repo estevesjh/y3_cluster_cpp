@@ -246,6 +246,13 @@ These bit future-you; enforce in any new integrand:
   (cluster_toolkit `Sigma_at_R` / CLensPy, both on `Omega_m0 rho_c0`).
   Any new profile code follows the same rule; redshift enters only
   through concentration, bias, xi, and the kernels.
+- **Concentration convention** (owner-ratified, same review): the
+  **1-halo term** uses the concentration evaluated at the cluster
+  redshift (`[halo_model] one_halo_z`; Child18 `stacked_nfw`); the
+  **shearPrj projection profile** uses the concentration–MASS relation
+  (`use_halo_model_conc = T` feeds `haloModel/concentration` into the
+  NFW lookups), never the legacy fixed c=4. Pinned against the papers
+  by `test/conc_mass_relation.test.py`.
 - **B_i and Ω(z)** are deliberately NOT in the P[X] operator — they cancel
   in every downstream b_sel ratio and are absent from the Python reference.
 - **`sigma_prj` is not yet apples-to-apples with Python** — differs in NFW

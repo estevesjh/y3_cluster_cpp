@@ -365,6 +365,13 @@ add_test(
   NAME shear_prj_external_test
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/shear_prj_external.test.py
   )
+# Concentration-mass relations vs the papers (Child+18 Eq.19/Table 2,
+# Duffy+08 Table 1) + the issue-#13 conc plumbing (legacy identity,
+# analytic r_s/delta_c scaling, published-table wiring).
+add_test(
+  NAME conc_mass_relation_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/conc_mass_relation.test.py
+  )
 
 add_executable(numcounts_full_ltmz_test numcounts_full_ltmz.test.cc)
 target_link_libraries(
