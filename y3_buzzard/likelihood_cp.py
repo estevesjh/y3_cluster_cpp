@@ -100,6 +100,28 @@ def setup(options):
               "log_space": log_space,
               "verbose": bool(options.get_bool(option_section, "verbose",
                                                 default=False))}
+
+    # Optional shear scale cut (the Buzzard scale-split runs): keep only
+    # radii with shear_r_min <= r_perp <= shear_r_max [cMpc/h]. The full
+    # 120-vector is loaded and validated first, then cut; the dense
+    # inverse covariance is cut by COV-slicing (invert -> slice ->
+    # invert), i.e. the removed radii are marginalized, not conditioned.
+    # Defaults keep everything. NOTE: this option previously existed
+    # only as an uncommitted NERSC working-tree patch -- the committed
+    # scale-split run scripts silently ignored it on a fresh checkout
+    # (des-nersc-cluster-scripts#3); this is the reproducible version.
+    shear_r_min = float(options.get_double(option_section, "shear_r_min",
+                                           default=0.0))
+    shear_r_max = float(options.get_double(option_section, "shear_r_max",
+                                           default=np.inf))
+    r_grid = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
+                       1.19581, 1.70998, 2.44521, 3.49658, 5.00000])
+    keep_r = (r_grid >= shear_r_min) & (r_grid <= shear_r_max)
+    config["shear_mask"] = np.tile(keep_r, _NC_N_BINS)
+    config["shear_cut_active"] = not keep_r.all()
+    if config["shear_cut_active"] and not keep_r.any():
+        raise ValueError("likelihood_cp: shear scale cut removes every "
+                         f"radius ({shear_r_min}, {shear_r_max})")
     for name, expected_n in OBS:
         d = np.asarray(vec[f"data_{name}"]).ravel()
         ic = np.asarray(vec[f"invcov_{name}"])
@@ -115,6 +137,14 @@ def setup(options):
             raise ValueError(
                 f"likelihood_cp: invcov_{name} dense has shape {ic.shape}, "
                 f"expected ({expected_n},{expected_n})")
+        if name == "Shear" and config["shear_cut_active"]:
+            m = config["shear_mask"]
+            d = d[m]
+            if ic.ndim == 1:
+                ic = ic[m]
+            else:
+                cov = np.linalg.inv(ic)
+                ic = np.linalg.inv(cov[np.ix_(m, m)])
         if log_space:
             # store ln(data) and the delta-method invcov; both fixed
             # across the chain (linearized about the data, not theory).
@@ -189,8 +219,11 @@ def execute(block, config):
     parts["NC"] = -0.5 * _chi2(delta_NC, config["invcov_NC"])
     logL += parts["NC"]
 
-    # Shear — theory = <gamma_t^1h> + gamma_t^prj (length 120).
+    # Shear — theory = <gamma_t^1h> + gamma_t^prj (length 120),
+    # scale-cut to match the data when shear_r_min/max is set.
     Shear_theory = _shear_theory(block)
+    if config["shear_cut_active"]:
+        Shear_theory = Shear_theory[config["shear_mask"]]
     delta_Shear = _residual(config["data_Shear"], Shear_theory, log_space)
     parts["Shear"] = -0.5 * _chi2(delta_Shear, config["invcov_Shear"])
     logL += parts["Shear"]
