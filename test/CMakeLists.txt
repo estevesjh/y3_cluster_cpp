@@ -349,6 +349,22 @@ add_test(
   NAME xi_nl_external_test
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/xi_nl_external.test.py
   )
+# b_sel_marg wall vs dump-fed adaptive quad-truth. DELIBERATELY red at
+# the default 1e-3: measured max devs P1 2.3e-3 / I1 1.7e-2 / J 1.9e-2,
+# a real finding (coarse distances grid + wall truncation), not a test
+# miscalibration -- see docs/known_issues/distances_grid_resolution_defect.md.
+add_test(
+  NAME bsel_external_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bsel_external.test.py
+  )
+# dsigma_prj rnd/cl vs dump-fed adaptive quad-truth. DELIBERATELY red at
+# the default 1e-3 at the innermost radius (rnd +3.0e-2, cl +2.2e-2 --
+# the known wall-edge convergence question, now quantified); the
+# 2h-regime outer-radius cl guard must stay green (<= 2e-3).
+add_test(
+  NAME shear_prj_external_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/shear_prj_external.test.py
+  )
 
 add_executable(numcounts_full_ltmz_test numcounts_full_ltmz.test.cc)
 target_link_libraries(
