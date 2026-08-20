@@ -303,15 +303,25 @@ class TestFirstHaloTermRedshiftHandling(unittest.TestCase):
         # production always uses.
         self.assertLess(cs[2] / cs[0], 0.95)  # z=0.4 vs z=0: >5% lower
 
-    def test_execute_hardcodes_z_equals_0_for_the_1h_term(self):
-        # Read directly off the source (rather than re-typing "z=0")
-        # so this test breaks loudly -- and needs a deliberate update --
-        # the day this hardcoding is fixed to use the real z grid.
+    def test_execute_evaluates_1h_at_the_configurable_one_halo_z(self):
+        # The hardcoded z=0 became the `one_halo_z` option (issue #3
+        # interim mitigation, default 0.0 = legacy). Read the call site
+        # off the source so this test breaks loudly -- and needs a
+        # deliberate update -- when the real per-z-table fix lands.
         import inspect
         sys.path.insert(0, str(REPO / "y3_buzzard"))
         import halo_model_cosmosis as hmc
-        src = inspect.getsource(hmc.execute)
-        self.assertIn("first_halo_term(M,z=0,", src.replace(" ", ""))
+        src_exec = inspect.getsource(hmc.execute).replace(" ", "")
+        # one_halo_z feeds ONLY the concentration; the profile term stays
+        # at z=0 so the published tables remain comoving (first_halo_term
+        # scales its density by (1+z)^3 -- physical).
+        self.assertIn("concentration_at_M(M,z=one_halo_z,", src_exec)
+        self.assertIn("first_halo_term(M,z=0,", src_exec)
+        # Default must stay 0.0: the widePlanck self-closure DVs were
+        # generated with the z=0 tables.
+        src_setup = inspect.getsource(hmc.setup).replace(" ", "")
+        self.assertIn('"one_halo_z"', src_setup)
+        self.assertIn('one_halo_z=0.0', src_setup)
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)

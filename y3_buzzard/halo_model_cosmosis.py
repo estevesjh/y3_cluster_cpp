@@ -99,10 +99,24 @@ def setup(options):
     compute_lensing_1h = _bool("compute_lensing_1h", compute_lensing)
     compute_lensing_2h = _bool("compute_lensing_2h", compute_lensing)
 
+    # one_halo_z: redshift at which the (single, z-less) 1h tables are
+    # evaluated. Default 0.0 preserves the legacy behavior documented in
+    # docs/known_issues/first_halo_term_z0_defect.md (issue #3): the
+    # published Sigma_nfw/dSigma_nfw/concentration are the z=0 profile at
+    # every cluster redshift, with concentration 5-15% high for
+    # z=0.2-0.65. Setting it to the counts-weighted mean cluster z is an
+    # INTERIM mitigation (kills the mean bias, leaves the per-bin
+    # spread); the real fix is a per-z table + consumer schema change.
+    try:
+        one_halo_z = float(options.get_double(section, "one_halo_z",
+                                              default=0.0))
+    except Exception:
+        one_halo_z = 0.0
+
     params_out = (R_perp_min, R_perp_max, R_perp_bins,
                   Radii_min, Radii_max, Radii_bins,
                   M_min, M_max, M_bins,
-                  compute_lensing_1h, compute_lensing_2h)
+                  compute_lensing_1h, compute_lensing_2h, one_halo_z)
     return params_out
     
 
@@ -112,7 +126,7 @@ def execute(block, config):
     (R_perp_min, R_perp_max, R_perp_bins,
      Radii_min, Radii_max, Radii_bins,
      M_min, M_max, M_bins,
-     compute_lensing_1h, compute_lensing_2h) = config
+     compute_lensing_1h, compute_lensing_2h, one_halo_z) = config
 
     # cosmo parameters
     omega_m = block[cosmo_names, "omega_m"]
@@ -208,6 +222,15 @@ def execute(block, config):
         block[section_name, "k"] = k_h
 
     if compute_lensing_1h:
+        # one_halo_z enters ONLY the Child18 concentration (the issue-#3
+        # defect). The density normalisation must stay the COMOVING
+        # rho_m0: first_halo_term scales rho by (1+z)^3 (physical), and
+        # the published tables are consumed as comoving -- evaluating the
+        # whole term at z>0 would inflate DSigma by up to (1+z)^2
+        # (measured +65% at the innermost radius for z=0.46). Setting
+        # self.c first makes first_halo_term skip its own z=0 recompute.
+        lensModel.concentration_at_M(M, z=one_halo_z,
+                                     model_name="Child18")
         lensModel.first_halo_term(M, z=0, conc_model_name="Child18")
         block[section_name, "Sigma_nfw"]  = lensModel.Sigma['1h']
         block[section_name, "dSigma_nfw"] = lensModel.dSigma['1h']
