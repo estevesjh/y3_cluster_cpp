@@ -439,6 +439,35 @@ def _S_j(ztr, zob_min, zob_max, sigma_z):
     return _phi((zob_max - ztr) / sigma_z) - _phi((zob_min - ztr) / sigma_z)
 
 
+def _seam_weight(z_grid, excl_lo, excl_hi):
+    """Per-node weight excising a TRUE-z interval from the shared grid.
+
+    Buzzard-style mocks drop every halo with z_true inside the
+    simulation-box seam (e.g. [0.33, 0.37]) from the catalog, so the
+    model's true-z integration must skip that interval too (issue #8).
+
+    Each node of the LINEAR grid owns the cell [z_i - dz/2, z_i + dz/2];
+    the weight is the fraction of that cell OUTSIDE [excl_lo, excl_hi].
+    Downstream trapezoid-style integrals over the weighted table then
+    reproduce the excised measure to O(dz^2), instead of the O(dz)
+    edge error of hard-zeroing whole nodes.
+    """
+    z = np.asarray(z_grid, dtype=float)
+    if not (excl_hi > excl_lo):
+        return np.ones_like(z)
+    dz = np.diff(z)
+    if dz.size == 0:
+        return np.ones_like(z)
+    if not np.allclose(dz, dz[0], rtol=1e-6):
+        raise ValueError("_seam_weight expects the linear shared z grid")
+    step = float(dz[0])
+    cell_lo = z - 0.5 * step
+    cell_hi = z + 0.5 * step
+    overlap = np.clip(np.minimum(cell_hi, excl_hi)
+                      - np.maximum(cell_lo, excl_lo), 0.0, step)
+    return 1.0 - overlap / step
+
+
 # ---------------------------------------------------------------------------
 # HOD MOR — Poisson(mu_sat) * Gauss(lambda_sigma * mu_sat), truncated at 0
 # and renormalized. Matches src/models/mor_hod_t.hh line-for-line.
@@ -612,6 +641,21 @@ def setup(options):
     cfg['lnm_grid'] = np.linspace(cfg['lnm_low'], cfg['lnm_high'], cfg['n_lnm'])
     cfg['z_grid']   = np.linspace(cfg['zt_low'], cfg['zt_high'],
                                   cfg['n_z_shared'])
+
+    # Optional TRUE-z exclusion range (issue #8): mocks that drop halos
+    # inside a simulation-box seam (Buzzard: z_true in [0.33, 0.37]) need
+    # the same interval excised from the model's true-z integration.
+    # Inactive unless zt_excl_high > zt_excl_low.
+    excl_lo = _read_scalar_or_first(options, option_section,
+                                    'zt_excl_low', 0.0)
+    excl_hi = _read_scalar_or_first(options, option_section,
+                                    'zt_excl_high', -1.0)
+    if excl_hi > excl_lo:
+        cfg['seam_weight'] = _seam_weight(cfg['z_grid'], excl_lo, excl_hi)
+        print(f"[sel_function] true-z exclusion active: "
+              f"[{excl_lo}, {excl_hi}]", flush=True)
+    else:
+        cfg['seam_weight'] = None
 
     # Per-module-instance cache for the plob EMG splines (see
     # _make_plob_splines) — plob_ltr_params never varies across a run in
@@ -905,6 +949,10 @@ def execute(block, config):
         config['zob_max'][:, None],
         config['sigma_z'][:, None],
     )
+    # True-z seam excision (issue #8): the weight multiplies every bin's
+    # S_j on the shared true-z grid, so all S_stack consumers inherit it.
+    if config.get('seam_weight') is not None:
+        redshift_selection = redshift_selection * config['seam_weight'][None, :]
     S_pack = np.ascontiguousarray(
         (richness_selection * redshift_selection[:, None, :])
         .transpose(0, 2, 1)
