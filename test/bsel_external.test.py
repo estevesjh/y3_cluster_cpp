@@ -8,18 +8,23 @@ the fiducial dump) against a dump-fed ADAPTIVE quadrature reference
 refined lt/lnM grids (3-5x production), all inputs from the same dump.
 Reference self-convergence: 2x inner grids move it by <= 6e-6.
 
-Measured production deviations (2026-08-20, official nz=50 dump):
+Measured production deviations (official nz=50 dump):
 
-    P1: max 2.3e-3 (median 1.0e-3)
-    I1: max 1.7e-2 (median 6.7e-3)   <- z-trending, worst at zob=0.575
-    J:  max 1.9e-2 (median 8.1e-3)
+    2026-08-20 pre-fix:  P1 max 2.3e-3 / I1 max 1.7e-2 / J max 1.9e-2
+                         (z-trending, worst at zob=0.575)
+    after the #12 C++ fix (chi evaluated directly at the z nodes
+    instead of double-resampled through zt_ref, commit series):
+                         P1 max 2.7e-3 / I1 max 1.0e-2 (median 5.6e-3)
+                         / J max 9.9e-3 -- the zob=0.575 kink excess is
+                         GONE; deviations roughly halved.
 
-Two known causes, tracked in
+Remaining causes, tracked in
 docs/known_issues/distances_grid_resolution_defect.md:
-  (a) the coarse 50-point distances table + the C++ zt_ref chi
-      double-resampling (z-sawtooth; dominant at high zob), and
+  (a) the coarse 50-point distances table itself (chi slope error at
+      the wing z nodes; removed by cp_camb nz=400 -- base ini/dump/pin
+      regeneration pending a coordinated Perlmutter re-pin), and
   (b) fixed-grid truncation at the production knobs (residual max
-      4.8e-3 on I1 once (a) is removed with a dense distances grid).
+      4.8e-3 on I1 with a dense distances grid).
 
 Convention per the project's known-defect pins (sel_function,
 radial_series, nfw_dsigma_mis): assertions stay at the DEFAULT 1e-3

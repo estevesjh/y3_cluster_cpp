@@ -83,3 +83,18 @@ exclusion masking was tested and exonerated: ≤3e-4.)
 `test/bsel_external.test.py` — quad-truth pins at the project-default
 1e-3 tolerance; the I1/J rows are DELIBERATELY red until the fixes land
 (same convention as the HOD-normalization and radial-series pins).
+
+## Status update (2026-08-20, later same day)
+
+The C++ half is FIXED: `p_operator_t.hh` now evaluates chi directly
+from the distances table at every z node (ring + wings) instead of
+double-resampling through `zt_ref`; `chi_o` and `chi_z` are now
+consistent. Measured against the adaptive quad-truth on the same nz=50
+dump: I1 max 1.7e-2 -> 1.0e-2, J 1.9e-2 -> 9.9e-3, the zob=0.575
+kink excess eliminated (all rows now -0.3%..-1.0%, no z-sawtooth).
+`ShearPrjCore` was already table-direct and needed no change.
+
+Still open: the input-side nz=50 coarseness (fixed in the Buzzard
+override ini via `cp_camb nz=400`; the BASE ini + official dump + the
+hard-coded cross-backend pins need a coordinated regeneration on
+Perlmutter, since the CUDA pin values cannot be recomputed locally).
