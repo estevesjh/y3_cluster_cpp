@@ -9,6 +9,16 @@ shear_prj.
 
 ---
 
+> **2026-08-20 evidence downgrade (Perlmutter-session audit):** every fit
+> below consumed harvester-built DVs (0.35 z-edges, NC x1.186 stale, old
+> Omega_buzz) and the scale-split relied on an UNCOMMITTED shear_r_min/max
+> patch on NERSC. Section 1's "large-scale misspecification" conclusion is
+> therefore a hint, not proof; the gating work is the DV rebuild
+> (des-nersc#3). The model-side defects fixed this campaign (#3, #8 seam,
+> #10, #12, #13) stand on their independent validations. The scale cut is
+> now committed (y3 `8c112c8`); the *_zfix run scripts are on HOLD until
+> the DV rebuild.
+
 ## 1. Where the fit stands (evidence, most recent first)
 
 All from `des-nersc-cluster-scripts`, branch
