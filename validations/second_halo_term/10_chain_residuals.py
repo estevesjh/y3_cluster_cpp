@@ -230,7 +230,7 @@ def stage_figure():
             ax.semilogx(x, 100.0 * res, color=C[name], ls=LS[name],
                         lw=3.0, label=name)
         ax.axhline(0, color="0.25", lw=0.8)
-        ax.set_ylim(-0.3, 0.3)
+        ax.set_ylim(-0.5, 0.5)
         ax.set_title(title)
         ax.set_xlabel(xlabel)
 
