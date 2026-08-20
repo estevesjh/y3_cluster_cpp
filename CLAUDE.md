@@ -236,6 +236,16 @@ These bit future-you; enforce in any new integrand:
   and silently produces wrong HMF values.
 - **`lt` integration range**: Costanzi-2026 operators integrate lt on
   `(0, lob_centre]` *per grid point*, not a fixed `[lt_low, lt_high]`.
+- **NFW/profile density normalisation is rho_m0 = Omega_m0 · rho_crit,0
+  (comoving, NO redshift dependence) EVERYWHERE** — owner-ratified
+  convention (review 2026-08-20): the 1h term
+  (`haloModel.py::first_halo_term` must stay at z=0 — its internal
+  `rhom0*(1+z)^3` is physical and would break the comoving tables, see
+  the `one_halo_z` comment), the shearPrj miscentred profile
+  (`NFW_DSIGMA_MIS`: `2 r_s Δ_c rho_crit,0 · Omega_m`), and the 2h term
+  (cluster_toolkit `Sigma_at_R` / CLensPy, both on `Omega_m0 rho_c0`).
+  Any new profile code follows the same rule; redshift enters only
+  through concentration, bias, xi, and the kernels.
 - **B_i and Ω(z)** are deliberately NOT in the P[X] operator — they cancel
   in every downstream b_sel ratio and are absent from the Python reference.
 - **`sigma_prj` is not yet apples-to-apples with Python** — differs in NFW
