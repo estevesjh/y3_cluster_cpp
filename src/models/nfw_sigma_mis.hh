@@ -5,10 +5,12 @@
 #define Y3_CLUSTER_NFW_SIGMA_MIS_HH
 
 #include <cmath>
+#include <optional>
 #include <string>
 
 #include "fmt/core.h"
 
+#include "utils/interp_1d.hh"
 #include "utils/interp_2d.hh"
 #include "utils/read_vector.hh"
 
@@ -48,15 +50,24 @@ namespace y3_cluster {
     // Default is 1.0 (legacy rho_crit behaviour).
     void set_rho_mult(double m) { _rho_mult = m; }
 
+    // Optional per-mass concentration c(lnM) -- see
+    // NFW_DSIGMA_MIS::set_concentration_table (issue #13).
+    void set_concentration_table(Interp1D t) { _c_tab = std::move(t); }
+    double conc_at(double lnM) const
+    {
+      return _c_tab ? _c_tab->clamp(lnM) : _c;
+    }
+
     // Miscentered Sigma at projected radius r with halo offset rmis.
     // lnM is raw natural log of M in M_sun/h (M_200m).
     double
     operator()(double r, double rmis, double lnM) const
     {
-      double const delta_c = (200.0 * _c * _c * _c / 3.0) /
-                             (std::log(1.0 + _c) - _c / (1.0 + _c));
+      double const c       = conc_at(lnM);
+      double const delta_c = (200.0 * c * c * c / 3.0) /
+                             (std::log(1.0 + c) - c / (1.0 + c));
       double const r_200   = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rhoc));
-      double const r_s     = r_200 / _c;
+      double const r_s     = r_200 / c;
       double const x       = r / r_s;
       double const xmis    = rmis / r_s;
 
@@ -69,6 +80,7 @@ namespace y3_cluster {
     double const _c;
     double const _rhoc;
     double       _rho_mult;
+    std::optional<Interp1D> _c_tab;
     Interp2D _nfwProfile;
   };
 

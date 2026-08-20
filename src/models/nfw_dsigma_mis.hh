@@ -11,8 +11,11 @@
 
 #include "fmt/core.h"
 
+#include <optional>
+
 #include "cosmosis/datablock/datablock.hh"
 
+#include "utils/interp_1d.hh"
 #include "utils/interp_2d.hh"
 #include "utils/make_interp_2d.hh"
 #include "utils/make_interp_1d.hh"
@@ -80,25 +83,38 @@ namespace y3_cluster {
     // use rho_mean instead of rho_crit in the rho_s normalisation.
     void set_rho_mult(double m) { _rho_mult = m; }
 
-    // Scale radius r_s(M) [cMpc/h] at fixed concentration/rho_crit
-    // convention, exposed for callers that need it directly (e.g. the
-    // frozen-physics r_s(M)-anchored amplitude drift a_b(z)). Additive-only:
-    // duplicates the same formula operator() computes inline, so any future
-    // change to that formula must be mirrored here.
+    // Optional per-mass concentration c(lnM) (issue #13): the lookup
+    // tables are universal in x = r/r_s, so ALL concentration
+    // dependence is analytic (r_s = r_200/c and delta_c(c)).  When a
+    // table is set (e.g. haloModel/{lnM, concentration} = Child18 at
+    // one_halo_z), it overrides the fixed _c; clamped outside its
+    // lnM range.  Default: unset -> legacy fixed c (= 4).
+    void set_concentration_table(Interp1D t) { _c_tab = std::move(t); }
+    double conc_at(double lnM) const
+    {
+      return _c_tab ? _c_tab->clamp(lnM) : _c;
+    }
+
+    // Scale radius r_s(M) [cMpc/h], exposed for callers that need it
+    // directly (e.g. the frozen-physics r_s(M)-anchored amplitude
+    // drift a_b(z)). Additive-only: duplicates the same formula
+    // operator() computes inline, so any future change to that formula
+    // must be mirrored here.
     double
     r_s(double lnM) const
     {
       double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rhoc));
-      return r_200 / _c;
+      return r_200 / conc_at(lnM);
     }
 
     double
     operator()(double r, double rmis, double lnM) const
     {
       double const rho_crit = _rhoc;
-      double const delta_c = (200.0 * _c * _c * _c / 3.0) / (std::log(1.0 + _c) - _c / (1.0 + _c));
+      double const c = conc_at(lnM);
+      double const delta_c = (200.0 * c * c * c / 3.0) / (std::log(1.0 + c) - c / (1.0 + c));
       double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * rho_crit));
-      double const r_s = r_200 / _c;
+      double const r_s = r_200 / c;
 
       double const x = r / r_s;
       double const xmis = rmis / r_s;
@@ -117,6 +133,7 @@ namespace y3_cluster {
     double const _c;
     double const _rhoc;
     double       _rho_mult;
+    std::optional<Interp1D> _c_tab;
     Interp2D _nfwProfile;
   };
 }

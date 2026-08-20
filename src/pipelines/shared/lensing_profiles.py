@@ -79,17 +79,27 @@ class NfwDsigmaMisProduction:
             (self._lnxm, self._lnx), logds, method="linear",
             bounds_error=False, fill_value=None)
 
-    def __call__(self, r_perp, r_mis, lnM, rho_mult=1.0):
+    def __call__(self, r_perp, r_mis, lnM, rho_mult=1.0, conc=None):
+        """conc: optional per-mass concentration, broadcastable with lnM
+        (issue #13; mirrors NFW_DSIGMA_MIS::set_concentration_table).
+        The lookup table is universal in x = r/r_s, so c enters only the
+        analytic r_s = r_200/c and delta_c(c). Default None = legacy
+        fixed c = CONC (= 4)."""
         lnM = np.asarray(lnM, dtype=float)
+        if conc is None:
+            c, delta_c = CONC, DELTA_C
+        else:
+            c = np.asarray(conc, dtype=float)
+            delta_c = (200.0 * c**3 / 3.0) / (np.log1p(c) - c / (1.0 + c))
         r_200 = np.cbrt(3.0 * np.exp(lnM) / (800.0 * np.pi * RHOC))
-        r_s = r_200 / CONC
+        r_s = r_200 / c
         lnx = np.clip(np.log(np.asarray(r_perp, dtype=float) / r_s),
                       self._lnx[0], self._lnx[-1])
         lnxm = np.clip(np.log(np.asarray(r_mis, dtype=float) / r_s),
                        self._lnxm[0], self._lnxm[-1])
         lnxm_b, lnx_b = np.broadcast_arrays(lnxm, lnx)
         log_u = self._interp(np.stack([lnxm_b, lnx_b], axis=-1))
-        norm = 2.0 * r_s * DELTA_C * RHOC * rho_mult
+        norm = 2.0 * r_s * delta_c * RHOC * rho_mult
         return norm * np.exp(log_u) * 1.0e-12
 
 
