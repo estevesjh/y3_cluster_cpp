@@ -47,6 +47,7 @@ rules.ninja
 debug-build/
 release-build/
 release-build.bak/
+gpu-build/
 _deps/
 *.tsv
 *.csv
