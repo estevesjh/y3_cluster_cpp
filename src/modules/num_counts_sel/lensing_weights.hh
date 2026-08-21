@@ -228,6 +228,13 @@ namespace y3_cluster_sel_weights {
       double const omm =
           s.view<double>("cosmological_parameters", "omega_M");
       dsigma_mis_.set_rho_mult(omm);
+      // Feed haloModel/concentration (Child18 x concentration_amplitude) into
+      // the miscentered NFW, so the 1h miscentered part matches the centered 1h
+      // (dSigma_nfw table) and the 2-halo (ShearPrjCore). Without this it stays
+      // at the fixed c=4 and ignores the concentration (and c_amp) entirely.
+      if (s.has_val("haloModel", "concentration"))
+        dsigma_mis_.set_concentration_table(
+            y3_cluster::make_Interp1D(s, "haloModel", "lnM", "concentration"));
       // Stay in a defined state until set_bin is called by the
       // operator template; first integrand evaluation will overwrite.
       current_R_lambda_ = mis_detail::R_lambda(
@@ -340,6 +347,12 @@ namespace y3_cluster_sel_weights {
       double const omm =
           s.view<double>("cosmological_parameters", "omega_M");
       dsigma_mis_.set_rho_mult(omm);
+      // See DSigma1hMisWeight: feed haloModel/concentration into the
+      // miscentered NFW so it matches the centered 1h and the 2-halo,
+      // instead of the fixed c=4.
+      if (s.has_val("haloModel", "concentration"))
+        dsigma_mis_.set_concentration_table(
+            y3_cluster::make_Interp1D(s, "haloModel", "lnM", "concentration"));
       current_R_lambda_ = mis_detail::R_lambda(
           lob_centers_.empty() ? 25.0 : lob_centers_.front());
     }
