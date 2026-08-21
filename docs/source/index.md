@@ -4,10 +4,12 @@ Documentation of the DES Y3 cluster-cosmology CosmoSIS pipeline: how to
 run the reference analysis, and what every module loads, reads, computes,
 and writes.
 
-Start with {doc}`running`, then follow the per-module pages. Each module
-page answers, in order: what it computes, which script implements it,
-where that script lives, how it is configured, what DataBlock values it
-reads and writes, and which module consumes its outputs.
+If the code is already built on your machine, follow {doc}`running`;
+otherwise start with {doc}`installation`. Then follow the per-module
+pages. Each module page answers, in order: what it computes, which
+script implements it, where that script lives, how it is configured,
+what DataBlock values it reads and writes, and which module consumes
+its outputs.
 
 For development, {doc}`pipeline_organization` explains the additive
 `src/pipelines/des_y3` layout and how its reference and alternative
@@ -17,11 +19,11 @@ implementations relate to the path-stable production modules.
 :maxdepth: 1
 :caption: Getting started
 
-running
 installation
 building_macos
 pipeline_organization
 testing
+running
 ```
 
 ```{toctree}
@@ -98,6 +100,8 @@ data/index
 
 ## References
 
+### Papers
+
 The main published reference for the pipeline — the cluster
 number-count and population-averaged lensing forward model and the
 CosmoSIS/CUBA software framework — is
@@ -109,7 +113,7 @@ The optical selection-bias and projection-lensing model layered on it
 is [Costanzi et al. 2026, PhRvD 113, 103508](https://ui.adsabs.harvard.edu/abs/2026PhRvD.113j3508C/abstract)
 (arXiv:[2604.05833](https://arxiv.org/abs/2604.05833)).
 
-## Archival documents
+### Archival documents
 
 The LaTeX documents below are the archival, paper-grade record from which
 the background chapters are ported. Where this site and a PDF disagree,
@@ -127,7 +131,12 @@ git):
 - [shear1h_radial_factorization.tex](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/shear1h_radial_factorization.tex)
   — factorisation strategies for the one-halo shear mass integral.
 
-The selection-model derivations live in the `RichnessSelection` repository
-(`docs/richness_selection_function.tex`, `docs/richness_selection.tex`,
-`docs/delta_sigma_prj_derivation.tex`); they are the source of truth for
-the model chapters here.
+The selection-model derivations below live in the `RichnessSelection`
+repository and are the source of truth for the model chapters here:
+
+- [richness_selection_function.tex](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
+  — selection functions and richness–mass models.
+- [richness_selection.tex](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection.tex)
+  — projection lensing.
+- [delta_sigma_prj_derivation.tex](https://github.com/estevesjh/RichnessSelection/blob/main/docs/delta_sigma_prj_derivation.tex)
+  — projection lensing.
