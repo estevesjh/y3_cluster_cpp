@@ -151,6 +151,11 @@ public:
     r_perp_ = get_vector_double(cfg, module_label(), "r_perp");
     if (r_perp_.empty())
       throw std::runtime_error("Shear1h2hMaxGpu: r_perp is empty");
+    // issue #14: honor use_halo_model_conc (per-mass c(lnM) into the
+    // miscentered NFW); default keeps fixed c=4.
+    use_halo_model_conc_ =
+        cfg.has_val(module_label(), "use_halo_model_conc") &&
+        cfg.view<bool>(module_label(), "use_halo_model_conc");
   }
 
   void
@@ -168,6 +173,8 @@ public:
       s, "haloModel", "r_sigma", "lnM", "dSigma_nfw"));
     bias.emplace(
       y3_cluster::make_Interp2D(s, "haloModel", "lnM", "z", "bias"));
+    if (use_halo_model_conc_)
+      dsigma_mis_dev_.set_concentration_table(s);
     dsigma_hh.emplace(make_sanitized_hh(s));
 
     double const f_mis_scalar =
@@ -313,6 +320,7 @@ private:
   double zt_lo_, zt_hi_, lnm_lo_, lnm_hi_;
   bool include_mis_;
   y3_cuda::NFW_DSIGMA_MIS dsigma_mis_dev_;
+  bool use_halo_model_conc_ = false;   // issue #14
   std::vector<double> lnm_x_, lnm_w_, z_x_, z_w_, lob_centers_, r_perp_;
 
   std::size_t n_bins_{0};

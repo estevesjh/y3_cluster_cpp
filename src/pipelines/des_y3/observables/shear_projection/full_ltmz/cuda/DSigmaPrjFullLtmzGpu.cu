@@ -66,6 +66,7 @@ private:
   std::optional<quad::Interp2D> bias_;     // b(lnM, z)
   std::optional<quad::Interp2D> xi_nl_;    // xi_NL(r, z)
   std::optional<y3_cuda::NFW_DSIGMA_MIS> dsigma_mis_;   // 'single'
+  bool use_halo_model_conc_ = false;   // issue #14
 
   // Host-side copies for set_grid_point geometry.
   std::vector<double> h_dist_z_, h_d_c_;
@@ -97,6 +98,11 @@ public:
       lob_centers_ = get_vector_double(cfg, module_label(), "lob_centers");
     if (lob_centers_.empty())
       throw std::runtime_error("DSigmaPrjFullLtmzGpu: lob_centers empty");
+    // issue #14: honor use_halo_model_conc (per-mass c(lnM) into the
+    // miscentered NFW); default keeps fixed c=4.
+    use_halo_model_conc_ =
+        cfg.has_val(module_label(), "use_halo_model_conc") &&
+        cfg.view<bool>(module_label(), "use_halo_model_conc");
   }
 
   void
@@ -111,6 +117,8 @@ public:
     bias_.emplace(make_Interp2D(s, "haloModel", "lnM", "z", "bias"));
     xi_nl_.emplace(make_Interp2D(s, "xi_nl", "r", "z", "xi_nl"));
     dsigma_mis_.emplace(4.0, 2.77533742639e+11, "single");
+    if (use_halo_model_conc_)
+      dsigma_mis_->set_concentration_table(s);
     h0_ = s.view<double>("cosmological_parameters", "h0");
     omega_m_ = s.view<double>("cosmological_parameters", "omega_M");
 

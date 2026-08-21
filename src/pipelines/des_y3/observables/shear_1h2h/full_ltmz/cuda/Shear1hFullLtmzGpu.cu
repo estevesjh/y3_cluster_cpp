@@ -62,6 +62,7 @@ private:
   std::optional<quad::Interp2D> dsigma_nfw_;
   std::optional<quad::Interp1D> sci_;
   std::optional<y3_cuda::NFW_DSIGMA_MIS> dsigma_mis_;
+  bool use_halo_model_conc_ = false;   // issue #14
   y3_cuda_des_y3::MorHodDevice mor_;
   y3_cuda_des_y3::PlobEmgDevice plob_;
   double f_mis_{0.22}, tau_mis_{0.17}, omega_m_{0.3};
@@ -96,6 +97,11 @@ public:
       throw std::runtime_error("Shear1hFullLtmzGpu: bad lob_centers");
     n_lob_ = static_cast<int>(lob.size());
     for (int i = 0; i != n_lob_; ++i) lob_centers_[i] = lob[i];
+    // issue #14: honor use_halo_model_conc (per-mass c(lnM) into the
+    // miscentered NFW); default keeps fixed c=4.
+    use_halo_model_conc_ =
+        cfg.has_val(module_label(), "use_halo_model_conc") &&
+        cfg.view<bool>(module_label(), "use_halo_model_conc");
   }
 
   void
@@ -109,6 +115,8 @@ public:
     sci_.emplace(make_Interp1D(s, "average_sigma_crit_inv", "zlense",
                                "sci_average"));
     dsigma_mis_.emplace(4.0, 2.77533742639e+11, "gamma");
+    if (use_halo_model_conc_)
+      dsigma_mis_->set_concentration_table(s);
     mor_ = y3_cuda_des_y3::MorHodDevice::from_datablock(s);
     plob_ = y3_cuda_des_y3::PlobEmgDevice::from_datablock(s);
     auto read_mis = [&s](char const* key, double dflt) {
