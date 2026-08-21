@@ -171,7 +171,15 @@ def _shear_theory(block) -> np.ndarray:
     """
     NC = np.asarray(block["numcountssel", "vals"]).ravel()
     S1h_Ni = np.asarray(block["shear1hmissel", "vals"]).ravel()
-    Sprj = np.asarray(block["shear_prj", "vals"]).ravel()
+    # DeltaSigma_prj: use the CLUSTERED component only. shear_prj/vals = rnd + cl,
+    # but for a *differential* DeltaSigma the mean-field (rnd) term must cancel to
+    # zero -- verified: cl converges to b_large*rho_m*xi (=shear1h2hMax) at large R
+    # while total (rnd+cl) diverges (RichnessSelection#1). Fall back to vals if the
+    # module doesn't publish the rnd/cl split.
+    if block.has_value("shear_prj", "cl"):
+        Sprj = np.asarray(block["shear_prj", "cl"]).ravel()
+    else:
+        Sprj = np.asarray(block["shear_prj", "vals"]).ravel()
     if NC.size != _NC_N_BINS:
         raise ValueError(
             f"likelihood_cp: numcountssel/vals size {NC.size} != "
