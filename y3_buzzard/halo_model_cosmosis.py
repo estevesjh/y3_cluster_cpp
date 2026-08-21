@@ -122,10 +122,23 @@ def setup(options):
         except Exception:
             one_halo_z = 0.4
 
+    # concentration_amplitude: multiply the Child18 c(M, z_halo) by this
+    # factor.  Buzzard clusters are ~1.25x more concentrated than Child18
+    # (measured c = R_200m/r_s vs the Child18 relation, median ratio ~1.25),
+    # which is the small-R 1-halo DeltaSigma deficit.  Applied consistently to
+    # BOTH the 1-halo term (via lensModel.c, reused by first_halo_term) and the
+    # published concentration (consumed by the miscentered NFW through
+    # set_concentration_table).  Default 1.0 (Child18 unchanged).
+    try:
+        c_amp = float(options.get_double(section, "concentration_amplitude",
+                                         default=1.0))
+    except Exception:
+        c_amp = 1.0
+
     params_out = (R_perp_min, R_perp_max, R_perp_bins,
                   Radii_min, Radii_max, Radii_bins,
                   M_min, M_max, M_bins,
-                  compute_lensing_1h, compute_lensing_2h, one_halo_z)
+                  compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp)
     return params_out
     
 
@@ -135,7 +148,7 @@ def execute(block, config):
     (R_perp_min, R_perp_max, R_perp_bins,
      Radii_min, Radii_max, Radii_bins,
      M_min, M_max, M_bins,
-     compute_lensing_1h, compute_lensing_2h, one_halo_z) = config
+     compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp) = config
 
     # cosmo parameters
     omega_m = block[cosmo_names, "omega_m"]
@@ -240,6 +253,11 @@ def execute(block, config):
         # self.c first makes first_halo_term skip its own z=0 recompute.
         lensModel.concentration_at_M(M, z=one_halo_z,
                                      model_name="Child18")
+        # Buzzard concentration boost: scale c BEFORE first_halo_term (which
+        # reuses the pre-set lensModel.c) so the factor lands on the 1-halo
+        # term and the published concentration alike.  c_amp=1.0 => Child18.
+        if c_amp != 1.0:
+            lensModel.c = lensModel.c * c_amp
         lensModel.first_halo_term(M, z=0, conc_model_name="Child18")
         block[section_name, "Sigma_nfw"]  = lensModel.Sigma['1h']
         block[section_name, "dSigma_nfw"] = lensModel.dSigma['1h']
