@@ -122,6 +122,35 @@ def setup(options):
     if config["shear_cut_active"] and not keep_r.any():
         raise ValueError("likelihood_cp: shear scale cut removes every "
                          f"radius ({shear_r_min}, {shear_r_max})")
+
+    # rho_m(z) density-evolution factor on the shear theory: multiply the
+    # per-bin DeltaSigma by (1+z_bin)^shear_1pz_power. The 1-halo term is
+    # built with the COMOVING rho_m0 (frozen z=0, halo_model_cosmosis.py),
+    # so a comoving-vs-physical surface-density mismatch with the Buzzard DV
+    # shows up as a coherent z-tilt (data/theory grows with z); a single
+    # power of (1+z) absorbs it (chi2 121080->30862 on the Buzzard DV).
+    # This lives here, not in halo_model, because halo_model publishes one
+    # z-agnostic 1-halo table consumed by all z-bins -- only the likelihood
+    # sees the per-bin redshift. Default power 0.0 => factor 1 (no change).
+    # Bins are z-major: index = z*4 + lambda; shear index = bin*_SHEAR_N_R+r.
+    z_power = float(options.get_double(option_section, "shear_1pz_power",
+                                      default=0.0))
+    try:
+        zreps_str = options.get_string(option_section, "shear_zbin_reps",
+                                       default="0.275 0.435 0.575")
+    except Exception:
+        zreps_str = "0.275 0.435 0.575"
+    if z_power != 0.0:
+        zreps = np.array([float(x) for x in zreps_str.split()])
+        if zreps.size != _NC_N_BINS // 4:
+            raise ValueError("likelihood_cp: shear_zbin_reps needs "
+                             f"{_NC_N_BINS // 4} redshifts, got {zreps.size}")
+        fac_bin = (1.0 + np.repeat(zreps, 4)) ** z_power      # (12,)
+        config["shear_1pz_factor"] = np.repeat(fac_bin, _SHEAR_N_R)  # (120,)
+        print(f"[likelihood_cp] shear rho_m(z) factor (1+z)^{z_power} "
+              f"with z_bins={zreps.tolist()}")
+    else:
+        config["shear_1pz_factor"] = np.ones(_NC_N_BINS * _SHEAR_N_R)
     for name, expected_n in OBS:
         d = np.asarray(vec[f"data_{name}"]).ravel()
         ic = np.asarray(vec[f"invcov_{name}"])
@@ -230,6 +259,7 @@ def execute(block, config):
     # Shear — theory = <gamma_t^1h> + gamma_t^prj (length 120),
     # scale-cut to match the data when shear_r_min/max is set.
     Shear_theory = _shear_theory(block)
+    Shear_theory = Shear_theory * config["shear_1pz_factor"]   # rho_m(z) (1+z)^p
     if config["shear_cut_active"]:
         Shear_theory = Shear_theory[config["shear_mask"]]
     delta_Shear = _residual(config["data_Shear"], Shear_theory, log_space)
