@@ -67,7 +67,8 @@ published as `numcountssel/vals` — 12 bins in production (4 richness bins
 $\times$ 3 photo-$z$ bins). The likelihood compares these 12 values
 directly against the mock data vector.
 
-**Production binning and grids.** DES Y3 richness bin edges are
+**Production binning and grids.** 
+DES Y3 richness bin edges are
 $[20, 30, 45, 60, 200]$ with arithmetic centres $\{25, 37.5, 52.5, 130\}$
 (the centre $130$ replaces a legacy value of $100$; the C++ evaluators
 hard-code the correct centres — `sigma_prj_t.hh` `default_lob_centers()`,
@@ -85,8 +86,9 @@ $N_{\rm grid} = N_{z^{\rm ob}}\cdot N_{\lambda^{\rm ob}}\cdot N_R$; the
 smoke setups use $N_{\rm grid}=12$ for scalar observables and $120$ for
 radial ones ($N_R = 10$).
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear
-composition / The $N_i[f]$ operator.*
+```{note}
+Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear composition / The $N_i[f]$ operator.
+```
 
 ## Cluster lensing
 
@@ -228,8 +230,9 @@ centred branch. At the fiducial parameters the small-$R$
 $\langle\gamma_t^{1h}\rangle$ is suppressed by $\sim 30\%$ at
 $R \lesssim 0.3\,h^{-1}\,\mathrm{Mpc}$ relative to the centred profile.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Miscentering selection on
-$\Delta\Sigma$.*
+```{note}
+Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Miscentering selection on $\Delta\Sigma$.
+```
 
 ### Projection lensing: $\Sigma_{\rm prj}$ and $\Delta\Sigma_{\rm prj}$
 
@@ -397,8 +400,9 @@ $\gamma_t^{\rm prj} = \Delta\Sigma^{\rm prj}\,\Sigma_{\rm crit}^{-1}$ in
 one pass; `sigma_prj/vals`, `dsigma_prj/vals`, and the `rnd`/`cl`
 subfields are published for diagnostics.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear
-composition.*
+```{note}
+Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear composition.
+```
 
 ### The standard two-halo term (fiducial 1h+2h)
 
@@ -456,8 +460,9 @@ that build the fiducial 1h+2h shear must instead keep
 `compute_lensing_2h = T` so that `Sigma_hh`, `dSigma_hh`, and `Wp_hh` are
 available downstream.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §`halo_model`: bias $b(M,z)$ and
-$\xi_{\rm NL}(r,z)$.*
+```{note}
+Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §`halo_model`: bias $b(M,z)$ and $\xi_{\rm NL}(r,z)$.
+```
 
 ### Comparing the two compositions
 
@@ -661,8 +666,9 @@ $$
 | $z_\star$ | pivot redshift, $0.45$ |
 | $\sigma_{\mathrm{intr}}$ | super-Poissonian halo-to-halo scatter |
 
-*Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex) §Models
-for the mass–richness relation.*
+```{note}
+Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex) §Models for the mass–richness relation.
+```
 
 ### Observed richness: the projection kernel
 
@@ -748,8 +754,9 @@ all depend on $(\lambda^{\mathrm{tr}}, z)$ and are calibrated empirically
 | $f^{\mathrm{prj}}(\lambda^{\mathrm{tr}}, z) \in [0,1]$ | fraction of clusters affected by a projection boost (line-of-sight overlap with other haloes); increases with $\lambda^{\mathrm{tr}}$ and $z$ |
 | $\tau(\lambda^{\mathrm{tr}}, z) > 0$ | inverse scale of the exponential projection tail: smaller $\tau$ means longer tails and stronger projections |
 
-*Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
-§Closed-form of the observed richness kernel with projection effects.*
+```{note}
+Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex) §Closed-form of the observed richness kernel with projection effects.
+```
 
 ### The observed-richness kernel
 
@@ -940,6 +947,6 @@ The evaluation grid in $(\ln M, z)$ then needs only elementary special
 functions ($\Phi$, $\exp$, $\ln\Gamma$), with the Gauss–Legendre nodes and
 weights pre-computed.
 
-*Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
-§Closed-form of the observed richness kernel with projection effects,
-§Gauss–Legendre numerical integration, §Summary.*
+```{note}
+Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex) §Closed-form of the observed richness kernel with projection effects, §Gauss–Legendre numerical integration, §Summary.
+```
