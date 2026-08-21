@@ -84,6 +84,22 @@ pre {
 .custom-range::-moz-range-thumb { background-color: var(--crimson); }
 .custom-range::-ms-thumb { background-color: var(--crimson); }
 
+/* --- source citations ---------------------------------------------------
+   Plain grey highlight for "Source: ..." lines in math/index.md — no
+   border, no title bar, just a subtle background so the citation reads
+   as metadata rather than more body text. */
+.source-line {
+  background-color: #f0f0f0;
+  color: #595959;
+  padding: 0.6em 1em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  margin: 1.5rem 0;
+}
+.source-line p {
+  margin: 0;
+}
+
 /* --- dark mode ---------------------------------------------------------- */
 
 /* Neutral near-black surfaces replacing the theme's dark purple (#120c24).
@@ -154,3 +170,8 @@ body.theme-dark .search li {
   border-color: #2e2e2e !important;
 }
 body.theme-dark blockquote { border-color: #2e2e2e; }
+
+body.theme-dark .source-line {
+  background-color: #1c1c1c;
+  color: #a0a0a0;
+}
