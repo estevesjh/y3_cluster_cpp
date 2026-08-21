@@ -6,22 +6,12 @@ optical-selection paper. Definitions are implementation-independent; the
 numerical treatment lives in {doc}`../numerics/index` and the code
 mapping in the per-module pages linked from {doc}`../running`.
 
-The main published reference for the forward model — cluster number
-counts and population-averaged lensing with miscentering, and the
-CosmoSIS software framework implementing them — is
-[DES Cluster et al. 2023](https://ui.adsabs.harvard.edu/abs/2023arXiv230906593A/abstract)
-(arXiv:[2309.06593](https://arxiv.org/abs/2309.06593)). The optical
-selection-bias and projection-lensing model ("Costanzi-2026" throughout
-these chapters) is
-[Costanzi et al. 2026, PhRvD 113, 103508](https://ui.adsabs.harvard.edu/abs/2026PhRvD.113j3508C/abstract)
-(arXiv:[2604.05833](https://arxiv.org/abs/2604.05833)).
 
-Further source material: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
-(selection functions and richness–mass models),
-[`RichnessSelection/docs/richness_selection.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection.tex) and
-[`delta_sigma_prj_derivation.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/delta_sigma_prj_derivation.tex) (projection lensing),
-[`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) and [`docs/projection_lensing_paper.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/projection_lensing_paper.tex) in this
-repository.
+```{contents} On this page
+:local:
+:depth: 2
+```
+---
 
 ## Number counts
 
@@ -67,36 +57,57 @@ published as `numcountssel/vals` — 12 bins in production (4 richness bins
 $\times$ 3 photo-$z$ bins). The likelihood compares these 12 values
 directly against the mock data vector.
 
-**Production binning and grids.** DES Y3 richness bin edges are
-$[20, 30, 45, 60, 200]$ with arithmetic centres $\{25, 37.5, 52.5, 130\}$
-(the centre $130$ replaces a legacy value of $100$; the C++ evaluators
-hard-code the correct centres — `sigma_prj_t.hh` `default_lob_centers()`,
-`p_operator_cuhre_t.hh` `lob_center()` — or read a `lob_centers` ini
-override). Photo-$z$ bins are
-$[0.20, 0.35] \cup [0.35, 0.50] \cup [0.50, 0.65]$ with midpoints
-$\{0.275, 0.425, 0.575\}$. The $(\ln M, z_{\rm true})$ integration runs
-over the shared grid on which `sel_function` tabulates $S_{ij}$ and serves
-it via `Interp2D`; the production grid sizes are `n_lnm = 192` (the
-whole-pipeline optimum — coarser grids force the downstream adaptive
-integrator to refine more and cost back the savings) and
-`n_z_shared = 64`. Evaluators read flat 1-D wall axes (`zo_low`,
-`zo_high`, `lambda_bin`, optionally `radii`) of length
-$N_{\rm grid} = N_{z^{\rm ob}}\cdot N_{\lambda^{\rm ob}}\cdot N_R$; the
-smoke setups use $N_{\rm grid}=12$ for scalar observables and $120$ for
-radial ones ($N_R = 10$).
+**Production binning and grids.**
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear
-composition / The $N_i[f]$ operator.*
+- **Richness bins** — DES Y3 edges $[20, 30, 45, 60, 200]$ with
+  arithmetic centres $\{25, 37.5, 52.5, 130\}$ (the centre $130$
+  replaces a legacy value of $100$; the C++ evaluators hard-code the
+  correct centres — `sigma_prj_t.hh` `default_lob_centers()`,
+  `p_operator_cuhre_t.hh` `lob_center()` — or read a `lob_centers` ini
+  override).
+- **Photo-$z$ bins** — $[0.20, 0.35] \cup [0.35, 0.50] \cup [0.50, 0.65]$
+  with midpoints $\{0.275, 0.425, 0.575\}$.
+- **The shared $(\ln M, z_{\rm true})$ grid** — the integration runs over
+  the same grid on which `sel_function` tabulates $S_{ij}$ and serves it
+  via `Interp2D`; the production grid sizes are `n_lnm = 192` (the
+  whole-pipeline optimum — coarser grids force the downstream adaptive
+  integrator to refine more and cost back the savings) and
+  `n_z_shared = 64`.
+- **Wall axes** — evaluators read flat 1-D wall axes (`zo_low`,
+  `zo_high`, `lambda_bin`, optionally `radii`) of length
+  $N_{\rm grid} = N_{z^{\rm ob}}\cdot N_{\lambda^{\rm ob}}\cdot N_R$; the
+  smoke setups use $N_{\rm grid}=12$ for scalar observables and $120$ for
+  radial ones ($N_R = 10$).
+
+```{container} source-line
+Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear composition / The $N_i[f]$ operator.
+```
+
+---
 
 ## Cluster lensing
 
-The lensing prediction separates physically distinct contributions — the
-(mis)centered one-halo profile of the selected cluster, the
-projection-selected line-of-sight contribution, and, in the fiducial
-composition, the standard two-halo term. This chapter defines each and how
-they combine into the theory vector.
+The lensing prediction combines several physically distinct pieces, and
+two different compositions of the theory vector appear in this chapter.
+The **production composition** — the (mis)centered one-halo profile
+([One-halo lensing and miscentering](#one-halo-lensing-and-miscentering))
+plus the projection-selected line-of-sight contribution
+({ref}`Projection lensing <projection-lensing>`)
+— sums exactly into $\gamma_t^{\rm theory}$
+([The shear composition](#the-shear-composition)) and is what the
+pipeline actually predicts. The **legacy composition** — the standard
+halo-model one-halo + two-halo sum
+({ref}`The standard two-halo term <standard-two-halo-term>`)
+— is kept only as a comparison reference, not the production path
+([Comparing the two compositions](#comparing-the-two-compositions)).
 
-### One-halo lensing and miscentering
+### Production composition
+
+The three sections below build the theory vector the pipeline actually
+predicts: the centred + miscentered one-halo profile, the projection
+lensing term, and how the two are summed into $\gamma_t^{\rm theory}$.
+
+#### One-halo lensing and miscentering
 
 The full DES Y3 cluster-lensing model does not assume the identified
 central galaxy coincides with the dark-matter halo centre. A fraction
@@ -154,7 +165,7 @@ Two offset kernels are supported (selected by the `kernel` string in
      \exp\!\left[-\frac{R_{\rm mis}}{\tau_{\rm mis} R_\lambda}\right],
   $$
 
-  a Rayleigh-shaped kernel calibrated against DES Y3 redMaPPer centring on
+  a Gamma-shaped kernel (Erlang, shape $k=2$) calibrated against DES Y3 redMaPPer centring on
   Buzzard mocks. This is the kernel used for the lensing branch — the
   convolution entering the `Shear1hMisSel` weight in the production
   pipeline.
@@ -228,12 +239,14 @@ centred branch. At the fiducial parameters the small-$R$
 $\langle\gamma_t^{1h}\rangle$ is suppressed by $\sim 30\%$ at
 $R \lesssim 0.3\,h^{-1}\,\mathrm{Mpc}$ relative to the centred profile.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Miscentering selection on
-$\Delta\Sigma$.*
+```{container} source-line
+Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Miscentering selection on $\Delta\Sigma$.
+```
 
-### Projection lensing: $\Sigma_{\rm prj}$ and $\Delta\Sigma_{\rm prj}$
+(projection-lensing)=
+#### Projection lensing: $\Sigma_{\rm prj}$ and $\Delta\Sigma_{\rm prj}$
 
-#### The full two-halo model
+**1. The full two-halo model.**
 
 The master equation (Costanzi 2026 Eq. 13) for the two-halo projected
 surface density around a richness-selected cluster is
@@ -251,16 +264,25 @@ $$
 \end{aligned}
 $$
 
-where the 3-D comoving separation is the **exact chord**
-$|\Delta r|^2 = \chi(z)^2 + \chi(z^{\rm ob})^2 -
-2\,\chi(z)\,\chi(z^{\rm ob})\cos\theta$ (the $\Delta\chi$-only
-approximation errs by 35% at $\theta=0.1\,\theta_\lambda$ and $>1000\%$ at
-$2\,\theta_\lambda$, because near the ring the transverse term dominates),
-and exclusion is a **line-of-sight slab**, $\xi_{\rm NL}\to 0$ for
-$\theta\le\theta_{\rm excl}(z)$ with
-$\cos\theta_{\rm excl}(z) =
-[\chi(z)^2+\chi(z^{\rm ob})^2-R_{\rm excl}^2]/[2\chi(z)\chi(z^{\rm ob})]$ —
-not a 3-D ball mask on $|\Delta r|$. The kernel $\Sigma_{\rm mis}$ is the
+where the 3-D comoving separation is the **exact chord**,
+
+$$
+|\Delta r|^2 = \chi(z)^2 + \chi(z^{\rm ob})^2 -
+2\,\chi(z)\,\chi(z^{\rm ob})\cos\theta.
+$$
+
+The $\Delta\chi$-only approximation errs by 35% at
+$\theta=0.1\,\theta_\lambda$ and $>1000\%$ at $2\,\theta_\lambda$, because
+near the ring the transverse term dominates. Exclusion is a
+**line-of-sight slab**, $\xi_{\rm NL}\to 0$ for $\theta\le\theta_{\rm excl}(z)$
+with
+
+$$
+\cos\theta_{\rm excl}(z) =
+\frac{\chi(z)^2+\chi(z^{\rm ob})^2-R_{\rm excl}^2}{2\chi(z)\chi(z^{\rm ob})}
+$$
+
+— not a 3-D ball mask on $|\Delta r|$. The kernel $\Sigma_{\rm mis}$ is the
 azimuth-averaged miscentered NFW surface density of the neighbour,
 
 $$
@@ -278,16 +300,19 @@ $(\mathbf{R}_\perp,\chi_\parallel)\to(\theta,z)$ with volume element
 $d^2R_\perp\,d\chi_\parallel = 2\pi\sin\theta\,d\theta\cdot
 (dV/dz\,d\Omega)\,dz$; the azimuth average around the neighbour's offset
 $R_{\rm mis}=\theta\,\chi(z_{\rm cls})$ produces $\Sigma_{\rm mis}$.
+
 Linear deterministic bias,
 $\xi_{hh}(r\mid M_{\rm cls},M)\approx b_{\rm cls}\,b(M,z)\,\xi_{\rm lin}(r)$,
-is then upgraded in three steps for a richness-selected target: (i)
-$\xi_{\rm lin}\to\xi_{\rm NL}$ (halofit), because the 1h–2h transition at
-$\sim R_{\rm excl}$ is nonlinear; (ii) the LoS-slab exclusion above; (iii)
-$b_{\rm cls}\to b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})$ (see
-{doc}`../math/index`), plus the uncorrelated cosmological
-mean as the $+1$ inside the bracket.
+is then upgraded in three steps for a richness-selected target:
 
-#### The channel split: $\Sigma_{\rm rnd}$ vs $\Sigma_{\rm cl+LSS}$
+1. $\xi_{\rm lin}\to\xi_{\rm NL}$ (halofit), because the 1h–2h transition
+   at $\sim R_{\rm excl}$ is nonlinear;
+2. the LoS-slab exclusion above;
+3. $b_{\rm cls}\to b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})$ (see
+   {doc}`../selection/bsel`), plus the uncorrelated cosmological mean as
+   the $+1$ inside the bracket.
+
+**2. The channel split: $\Sigma_{\rm rnd}$ vs $\Sigma_{\rm cl+LSS}$.**
 
 The `1` term integrates to the *mean cosmological* projected surface
 density in the photo-$z$ window, $\Sigma_{\rm rnd}(R)$ — spatially
@@ -304,7 +329,7 @@ grows $\sim 15\%$ going $R_{\max}=30\to 60\,h^{-1}\mathrm{Mpc}$ while
 cl+LSS changes $<1\%$). The pipeline therefore returns the cl+LSS piece by
 default for both observables.
 
-#### $\Delta\Sigma_{\rm prj}$ and the integration limit
+**3. $\Delta\Sigma_{\rm prj}$ and the integration limit.**
 
 The lensing observable is the excess surface density,
 
@@ -333,10 +358,13 @@ $$
 \ \ (\text{not below} \sim 2),
 $$
 
-replacing the fixed $R_{\max} = 30\,h^{-1}$Mpc cut. Full derivation:
-[`delta_sigma_prj_derivation.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/delta_sigma_prj_derivation.tex) in `RichnessSelection`.
+replacing the fixed $R_{\max} = 30\,h^{-1}$Mpc cut.
 
-### The shear composition
+```{container} source-line
+Full derivation: [`delta_sigma_prj_derivation.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/delta_sigma_prj_derivation.tex) in `RichnessSelection`.
+```
+
+#### The shear composition
 
 The pipeline emits two observables for the likelihood: the 12
 cluster-count bins $N_i[1]$, and the summed tangential shear (length 120,
@@ -345,7 +373,7 @@ i.e. $12 \times 10\,R$ points):
 $$
 \gamma_t^{\rm theory}(R \,|\, i, j)
  = \langle\gamma_t^{1h}\rangle_i(R) + \gamma_t^{\rm prj}(R \,|\, \lambda^{\rm ob}, z^{\rm ob})
- = \frac{\mathtt{shear1hsel/vals}}{\mathtt{numcountssel/vals}} + \mathtt{shear\_prj/vals}.
+ = \frac{\mathtt{shear1hmissel/vals}}{\mathtt{numcountssel/vals}} + \mathtt{shear\_prj/vals}.
 $$
 
 In the language of the Costanzi-2026 paper:
@@ -355,7 +383,9 @@ the projection-effect correction — the additional shear contributed by
 miscentering plus correlated large-scale structure, integrated over the
 same cluster sample via the photo-$z$ kernel $w_z$.
 
-**Why the sum is linear and exact.** Both modules emit the tangential
+```{admonition} Why the sum is linear and exact
+:class: tip
+Both modules emit the tangential
 shear $\gamma_t(R) = \Delta\Sigma(R)\,\Sigma_{\rm crit}^{-1}(z)$, *not*
 the reduced shear $g_t = \gamma_t/(1 - \Sigma\,\Sigma_{\rm crit}^{-1})$.
 The earlier reduced-shear form coupled the two pieces through its
@@ -365,8 +395,11 @@ denominator (retired 2026-05-11) recovers the linear-in-$\Delta\Sigma$
 form, so the sum is exact, not a leading-order approximation.
 `likelihood_cp.py` assembles the summed theory vector internally and
 compares it against the single `data_Shear` entry of the mock npz.
+```
 
-**Why `shear_prj` is not divided by `NumCountsSel`.** `shear_prj` does
+:::{admonition} Why `shear_prj` is not divided by `NumCountsSel`
+:class: tip
+`shear_prj` does
 *not* pass through the $N_i[f]$ template — it produces a different
 integrand (the master equation above), with three structural differences
 from the $N_i[f]$ operator:
@@ -385,6 +418,7 @@ from the $N_i[f]$ operator:
   `Shear1hMisSel`. Here the offset *is* the $\theta$-integration
   variable, so a $\delta$-kernel in $R_{\rm mis}$ is the right physics
   and a gamma kernel would double-integrate over $R_{\rm mis}$.
+:::
 
 The two branches therefore integrate different kernels (centred NFW vs
 miscentered $\Sigma_{\rm mis}$) against different weights ($S_{ij}$ vs
@@ -397,10 +431,18 @@ $\gamma_t^{\rm prj} = \Delta\Sigma^{\rm prj}\,\Sigma_{\rm crit}^{-1}$ in
 one pass; `sigma_prj/vals`, `dsigma_prj/vals`, and the `rnd`/`cl`
 subfields are published for diagnostics.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear
-composition.*
+```{container} source-line
+Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear composition.
+```
 
-### The standard two-halo term (fiducial 1h+2h)
+### Legacy composition (fiducial 1h+2h)
+
+The two sections below describe the older halo-model 1h+2h composition,
+kept only as a comparison reference — it is not the production path
+above.
+
+(standard-two-halo-term)=
+#### The standard two-halo term
 
 The `halo_model` module (`y3_buzzard/halo_model_cosmosis.py`) is the
 single most configurable module in the pipeline: it publishes the
@@ -412,33 +454,29 @@ products:
 - **Halo bias $b(M, z)$** — on a log-spaced mass grid, the peak height
   $\nu(M) = \delta_c/\sigma(M, z{=}0)$ is computed via
   `cluster_toolkit.peak_height.nu_at_M`, then for each redshift the
-  Tinker 2010 bias formula is evaluated at $\nu(M)/(D(z)/D(0))$. The
-  explicit $D(0)$ division matters: the CosmoSIS growth module publishes
-  an un-normalised $D(z)$ with $D(0) \neq 1$, and prior to May 2026 the
-  un-normalised value inflated the effective $\nu$ by
-  $1/D(0) \simeq 1.32$ (at $z = 0.425$, $D(0) \simeq 0.758$), producing
-  halo biases up to $2\times$ too large.
+  Tinker 2010 bias formula is evaluated at $\nu(M)/(D(z)/D(0))$.
 - **Nonlinear correlation $\xi_{\rm NL}(r, z)$** — via
   `ct.xi.xi_mm_at_r` over $r \in [10^{-3}, 10^{3}]\,h^{-1}\,\mathrm{Mpc}$
   (128 nodes) at each redshift of the linear power grid.
 
+```{admonition} The $D(0)$ normalisation bug (fixed May 2026)
+:class: warning
+The explicit $D(0)$ division in the halo-bias formula matters: the
+CosmoSIS growth module publishes an un-normalised $D(z)$ with
+$D(0) \neq 1$. Prior to May 2026 the un-normalised value inflated the
+effective $\nu$ by $1/D(0) \simeq 1.32$ (at $z = 0.425$,
+$D(0) \simeq 0.758$), producing halo biases up to $2\times$ too large.
+```
+
 The two lensing branches are gated by separate ini flags:
 
-- **`compute_lensing_1h`** — analytic NFW $\Sigma(R, M)$ and
-  $\Delta\Sigma(R, M)$ with the Child-18 concentration, written to
-  `haloModel/{Sigma_nfw, dSigma_nfw, concentration}`. This is the centred
-  profile that feeds the 1-halo branch: `Shear1hMisSel` needs it for the
-  centred component of its miscentering mixture.
-- **`compute_lensing_2h`** — the two-halo term via
-  `ct_2hTerm.pk_to_dsigma`, a redshift loop of cluster_toolkit Hankel
-  transforms ($P \to \xi \to \Sigma \to \Delta\Sigma$), written to
-  `haloModel/{Sigma_hh, dSigma_hh, Wp_hh}`. Together with $b(M, z)$ these
-  are the ingredients of the fiducial two-halo lensing composition,
-  $\mathrm{Shear} = 1h + 2h$: the halo-halo profiles
-  $\Sigma_{\rm hh}$/$\Delta\Sigma_{\rm hh}$/$W_{p,\rm hh}$ carry the
-  matter correlation, scaled by the halo bias to give the two-halo
-  contribution around a halo of mass $M$.
+| Flag | Computes | Writes to `haloModel/` | Feeds |
+|---|---|---|---|
+| `compute_lensing_1h` | analytic NFW $\Sigma(R, M)$ and $\Delta\Sigma(R, M)$, Child-18 concentration | `Sigma_nfw`, `dSigma_nfw`, `concentration` | `Shear1hMisSel` — centred component of its miscentering mixture |
+| `compute_lensing_2h` | two-halo term via `ct_2hTerm.pk_to_dsigma`, a redshift loop of cluster_toolkit Hankel transforms ($P \to \xi \to \Sigma \to \Delta\Sigma$) | `Sigma_hh`, `dSigma_hh`, `Wp_hh` | the fiducial $\mathrm{Shear} = 1h + 2h$ composition, together with $b(M,z)$ — the halo-halo profiles carry the matter correlation, scaled by the halo bias |
 
+:::{admonition} Why production sets `compute_lensing_2h = F`
+:class: tip
 The original module always ran both branches; the split was introduced
 because the 2h Hankel loop costs $\sim 200$–$300$ ms/sample at
 $N_z = 50$ and dominates the module's runtime. In the Costanzi-2026
@@ -455,11 +493,13 @@ a pure skip with no accuracy cost for the projection pipeline. Pipelines
 that build the fiducial 1h+2h shear must instead keep
 `compute_lensing_2h = T` so that `Sigma_hh`, `dSigma_hh`, and `Wp_hh` are
 available downstream.
+:::
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §`halo_model`: bias $b(M,z)$ and
-$\xi_{\rm NL}(r,z)$.*
+```{container} source-line
+Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §`halo_model`: bias $b(M,z)$ and $\xi_{\rm NL}(r,z)$.
+```
 
-### Comparing the two compositions
+#### Comparing the two compositions
 
 ```{admonition} Figure removed — orange curve used the wrong composition
 :class: warning
@@ -495,6 +535,8 @@ Two implementation findings from producing this figure (2026-08-10):
   code** (no `ShearCorr`/`B_prj` symbol exists in `src/` or
   `y3_buzzard/`); it is recorded here as terminology from earlier
   planning only.
+
+---
 
 ## Selection functions
 
@@ -633,12 +675,13 @@ $$
 obtained by promoting the factorial of the Poisson PMF to a gamma function
 and shifting its argument by $\delta$. This keeps the two-component
 variance scaling above and recovers the pure Poisson limit as
-$\sigma_{\mathrm{intr}} \to 0$. Numerical comparisons show it tracks the
-exact Poisson-convolved-with-Gaussian law essentially everywhere, including
-the low-$\lambda^{\mathrm{tr}}$ tail where the skew-normal breaks down. For
-forward-model use it is closed-form (no lookup tables, fully differentiable
-in $(M,z)$) and extends smoothly to the non-integer richness values
-required by the quadrature.
+$\sigma_{\mathrm{intr}} \to 0$.
+
+Numerical comparisons show it tracks the exact Poisson-convolved-with-Gaussian
+law essentially everywhere, including the low-$\lambda^{\mathrm{tr}}$ tail
+where the skew-normal breaks down. For forward-model use it is closed-form
+(no lookup tables, fully differentiable in $(M,z)$) and extends smoothly to
+the non-integer richness values required by the quadrature.
 
 To leading order its effective moments are
 
@@ -661,8 +704,9 @@ $$
 | $z_\star$ | pivot redshift, $0.45$ |
 | $\sigma_{\mathrm{intr}}$ | super-Poissonian halo-to-halo scatter |
 
-*Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex) §Models
-for the mass–richness relation.*
+```{container} source-line
+Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex) §Models for the mass–richness relation.
+```
 
 ### Observed richness: the projection kernel
 
@@ -748,8 +792,9 @@ all depend on $(\lambda^{\mathrm{tr}}, z)$ and are calibrated empirically
 | $f^{\mathrm{prj}}(\lambda^{\mathrm{tr}}, z) \in [0,1]$ | fraction of clusters affected by a projection boost (line-of-sight overlap with other haloes); increases with $\lambda^{\mathrm{tr}}$ and $z$ |
 | $\tau(\lambda^{\mathrm{tr}}, z) > 0$ | inverse scale of the exponential projection tail: smaller $\tau$ means longer tails and stronger projections |
 
-*Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
-§Closed-form of the observed richness kernel with projection effects.*
+```{container} source-line
+Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex) §Closed-form of the observed richness kernel with projection effects.
+```
 
 ### The observed-richness kernel
 
@@ -940,6 +985,6 @@ The evaluation grid in $(\ln M, z)$ then needs only elementary special
 functions ($\Phi$, $\exp$, $\ln\Gamma$), with the Gauss–Legendre nodes and
 weights pre-computed.
 
-*Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
-§Closed-form of the observed richness kernel with projection effects,
-§Gauss–Legendre numerical integration, §Summary.*
+```{container} source-line
+Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex) §Closed-form of the observed richness kernel with projection effects, §Gauss–Legendre numerical integration, §Summary.
+```
