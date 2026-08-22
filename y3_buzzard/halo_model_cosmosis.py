@@ -141,6 +141,11 @@ def setup(options):
     # rho_m(z)=rho_m0(1+z)^3 in the 1-halo (issue #22). The CONCENTRATION stays
     # fixed (pre-set from one_halo_z + concentration_amplitude), so this isolates
     # the (1+z)^3 density factor. Evaluate one z-bin per run and stitch.
+    # *** APPROXIMATION (issue #22, J.Esteves): this puts (1+z)^3 into the analytic
+    # NFW that fills the z-FREE (R,M) dSigma_nfw table, so per stitched z-bin the
+    # (1+z)^3 lands OUTSIDE the C++ z-integral (Wb weights), at the bin centre --
+    # NOT inside the integrand as it should be. Rigorous fix = 3-D (R,M,z) NFW table
+    # + phi(R,M,z) evaluated inside the SelGLCore z-integral. Use for ~5-15% checks.
     try:
         z_density = float(options.get_double(section, "one_halo_z_density",
                                              default=0.0))
