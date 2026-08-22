@@ -135,10 +135,23 @@ def setup(options):
     except Exception:
         c_amp = 1.0
 
+    # one_halo_z_density: redshift at which the 1-halo DENSITY normalisation is
+    # evaluated. Default 0.0 = the frozen COMOVING rho_m0 (the pipeline default;
+    # first_halo_term(z=0)). Set >0 to use the PHYSICAL mean density
+    # rho_m(z)=rho_m0(1+z)^3 in the 1-halo (issue #22). The CONCENTRATION stays
+    # fixed (pre-set from one_halo_z + concentration_amplitude), so this isolates
+    # the (1+z)^3 density factor. Evaluate one z-bin per run and stitch.
+    try:
+        z_density = float(options.get_double(section, "one_halo_z_density",
+                                             default=0.0))
+    except Exception:
+        z_density = 0.0
+
     params_out = (R_perp_min, R_perp_max, R_perp_bins,
                   Radii_min, Radii_max, Radii_bins,
                   M_min, M_max, M_bins,
-                  compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp)
+                  compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
+                  z_density)
     return params_out
     
 
@@ -148,7 +161,8 @@ def execute(block, config):
     (R_perp_min, R_perp_max, R_perp_bins,
      Radii_min, Radii_max, Radii_bins,
      M_min, M_max, M_bins,
-     compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp) = config
+     compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
+     z_density) = config
 
     # cosmo parameters
     omega_m = block[cosmo_names, "omega_m"]
@@ -258,7 +272,9 @@ def execute(block, config):
         # term and the published concentration alike.  c_amp=1.0 => Child18.
         if c_amp != 1.0:
             lensModel.c = lensModel.c * c_amp
-        lensModel.first_halo_term(M, z=0, conc_model_name="Child18")
+        # z_density=0 -> comoving rho_m0 (default); z_density>0 -> physical
+        # rho_m(z)=rho_m0(1+z)^3 (concentration stays fixed, pre-set above).
+        lensModel.first_halo_term(M, z=z_density, conc_model_name="Child18")
         block[section_name, "Sigma_nfw"]  = lensModel.Sigma['1h']
         block[section_name, "dSigma_nfw"] = lensModel.dSigma['1h']
         block[section_name, "concentration"] = lensModel.c
