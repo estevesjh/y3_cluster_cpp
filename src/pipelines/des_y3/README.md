@@ -3,7 +3,7 @@
 This directory contains the maintained DES Y3 implementations. The layout is
 
 ```text
-observable / numerical strategy / language or backend
+observable / {full_ltmz/fast_mass/radial_series} / {python/cpp/cuda}
 ```
 
 The strategy-level READMEs are the main entry points. Each one explains the
