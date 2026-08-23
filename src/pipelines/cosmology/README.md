@@ -1,51 +1,141 @@
-# `src/pipelines/cosmology/` — shared halo-model physics
+# Cosmology and halo-model physics
 
-Canonical, survey-agnostic home for the halo-model building blocks that
-used to be scattered across `y3_buzzard/`: halo bias, mass-concentration
-relations, the analytic NFW profile, the frozen projection-effect
-coefficients, the selection-bias closure, and Sigma_crit^-1. Consumers
-under `src/pipelines/des_y3/` (and, going forward, DES Y6) import from
-here instead of reaching into `y3_buzzard/`.
+This directory contains the survey-independent cosmological and halo-model
+ingredients used by the cluster-observable pipelines. These models describe
+the halo population, the lensing profile of an individual halo, the effect of
+halo bias on correlated structure along the line of sight, the modification of
+that bias by optical selection, and the lensing geometry that converts surface
+density into shear.
 
-## Why these are copies, not moves
+The consumers are the observable implementations under
+`src/pipelines/des_y3/` and future survey pipelines. This directory contains
+the physics layer, not the final number-count or lensing integrals.
 
-The `y3_buzzard/` originals are left in place, untouched. This repo has
-no visibility into the CosmoSIS `.ini` pipelines in the sibling repos
-that may still reference `y3_buzzard/<file>.py` by path (see the
-top-level `CLAUDE.md`, "CosmoSIS pipeline runs") — moving or deleting
-those files could silently break a production pipeline this tree can't
-see. `y3_buzzard/` itself is documented as local/scratch and
-non-canonical (`CLAUDE.md`), so this directory is the new canonical
-source; `y3_buzzard/` keeps working as-is for whatever already depends
-on it. This mirrors the same pattern the rest of `src/pipelines/`
-follows for the C++/CUDA side: new code instantiates the existing
-immutable models rather than editing them in place.
+## Physical role
 
-## Contents
+The main dependency chain is:
 
-| File | Ported from | Contents |
+```text
+halo mass M, redshift z
+        │
+        ├── halo bias b(M,z)
+        ├── concentration c(M,z)
+        │       └── NFW Sigma(R), DeltaSigma(R)
+        ├── selection bias b_sel(theta)
+        │       └── projection lensing from correlated line-of-sight halos
+        └── Sigma_crit^-1(z_lens, source)
+                └── converts DeltaSigma into tangential shear
+```
+
+For the cluster observables, these ingredients are combined with the halo
+mass function, richness and redshift selection kernels, survey geometry, and
+mass/redshift integration strategies implemented elsewhere in the pipeline.
+
+## Models implemented here
+
+| Physical ingredient | File | Model and role |
 | --- | --- | --- |
-| `halo_model.py` | `y3_buzzard/haloModel.py` | `lensingModel` (1h NFW + 2h via `ct_2hTerm`), `biasModel` (Tinker et al. 2010), `scaleShiftCosmo` |
-| `concentration.py` | `y3_buzzard/haloModel.py` + `y3_buzzard/mass_concentration.py` | `child18_mass_concentration` (M200c-native, table-driven per halo sample), `duffy_concentration_relation`, `peakHeight_nonLinearMass`, `c_from_m200` (M200m-native, via the `hydro_mc` M200m->M200c conversion) |
-| `nfw_model.py` | `y3_buzzard/nfwModel.py` | Analytical Wright & Brainerd (2000) NFW Sigma/DeltaSigma |
-| `hydro_mc.py` | `y3_buzzard/hydro_mc.py` | Vendored Ragagnin+2020 mass-definition/concentration conversion library (external code, verbatim) |
-| `prj_params.py` | `y3_buzzard/prj_params.py` | Frozen Costanzi-2026 EMG projection-effect coefficients (`PrjParams`) |
-| `bsel.py` | `y3_buzzard/bsel.py` | Canonical exact-wall selection-bias closure. Reads shared `lambda_edges` and `PHOD`, then writes one `b_small/b_large` pair per C++ `(lambda_bin, zo_low, zo_high)` row; the Buzzard path is a compatibility shim. |
-| `sigma_crit_inv.py` | `y3_buzzard/buildSigmaCritInv.py` | Sigma_crit^-1(z_lens, R) from the beta lookup table + cosmological shift; only change from the original is dropping an unused `setup_bins.zmeans` import |
+| Halo bias and halo-model lensing | `halo_model.py` | Tinker et al. (2010) halo bias; one-halo NFW and two-halo lensing terms; cosmology rescaling through `scaleShiftCosmo` |
+| Mass--concentration relations | `concentration.py` | Child18 and Duffy relations; peak-height quantities; concentration evaluated under the relevant halo-mass definition |
+| Mass-definition conversion | `hydro_mc.py` | Vendored Ragagnin et al. (2020) conversion between M200m/M200c and the corresponding concentrations |
+| Analytic NFW profile | `nfw_model.py` | Wright & Brainerd (2000) surface density Sigma and excess surface density DeltaSigma |
+| Projection-lensing coefficients | `prj_params.py` | Frozen Costanzi et al. (2026) EMG projection-kernel coefficients |
+| Selection-affected halo bias | `bsel.py` | Exact-wall selection-bias closure producing the small- and large-angle bias plateaus used by the projection branch |
+| Lensing geometry | `sigma_crit_inv.py` | Sigma_crit^-1 as a function of lens redshift and source distribution, using the beta lookup table and cosmological shift |
 
-`y3_buzzard/massconcen.py` is a byte-for-byte duplicate of
-`mass_concentration.py`'s `c_from_m200` (plus a dead,
-unconditionally-raising `c_from_m200_ragagnin`) and was not ported.
+## Observable connections
 
-**Halo mass function (HMF): not yet ported.** Explicitly out of scope
-for this pass — the reviewer flagged it TBD; it needs its own
-consolidation once the HMF story across `y3_buzzard`/`mf_tinker`/the
-Fortran module is settled.
+### One-halo lensing
 
-## Import convention
+The one-halo term describes the matter profile of the target cluster. The
+centered and miscentered profiles are built from the NFW surface-density
+model, the halo mass, the concentration relation, and the target-cluster
+miscentering model. The observable pipeline then averages this profile over
+the selected cluster population and multiplies it by Sigma_crit^-1.
 
-Same convention as `des_y3`/`shared`: put `<repo>/src/pipelines` on
-`sys.path`, then import this directory as a top-level `cosmology`
-package (`from cosmology.prj_params import PrjParams`, etc.) — not
-`from pipelines.cosmology import ...`, since `src/pipelines` itself has
-no `__init__.py` and is never imported as a package.
+### Two-halo and projection lensing
+
+The two-halo contribution is sourced by matter in correlated neighboring
+halos and the surrounding large-scale structure. It depends on halo bias,
+the nonlinear matter correlation function, the NFW profile of neighboring
+halos, and the projection geometry.
+
+The projection branch additionally uses the Costanzi et al. (2026) EMG
+projection kernel and the selection-affected bias `b_sel`. This is distinct
+from the conventional two-halo term evaluated with the unselected halo bias.
+
+### Optical selection bias
+
+`bsel.py` computes the bias of the halo population selected by an observed
+richness and observed-redshift wall. It consumes the shared richness
+selection inputs (`lambda_edges` and `PHOD`) and produces the bias closure
+used by the projection-lensing calculation.
+
+## Physical conventions
+
+- Halo masses may use either M200c or M200m. The mass definition must match
+  the concentration relation and the mass-conversion path being used.
+- The profile normalization is based on the present-day mean matter density,
+  `rho_m0 = Omega_m0 * rho_crit,0`, in comoving coordinates. It has no extra
+  redshift-density factor.
+- The one-halo profile uses the concentration evaluated at the cluster
+  redshift. The projection profile uses the configured mass--concentration
+  relation rather than an arbitrary fixed concentration.
+- `b_sel` is the selection-affected bias used for correlated line-of-sight
+  structure. It is not the same quantity as the ordinary halo bias
+  `b(M,z)`.
+- Sigma, DeltaSigma, and Sigma_crit^-1 must be combined with consistent
+  radius, mass, distance, and comoving/physical units. The consumer modules
+  define the final observable normalization.
+
+## What is not implemented here
+
+This directory is not a complete cosmology package. In particular:
+
+- The halo mass function is supplied by the shared/CosmoSIS layers; it is not
+  implemented here.
+- Richness and photometric-redshift selection kernels live under
+  `src/pipelines/shared/` and the survey-specific pipeline layers.
+- Number-count, one-halo, and projection-lensing integrations live under
+  `src/pipelines/des_y3/` or another survey's observable implementation.
+- Survey-specific calibration data and CosmoSIS run-management
+  configuration live outside this directory.
+
+## Scientific provenance
+
+The implementation is based on the following models and references:
+
+- DES Cluster et al. (2023), the cluster number-count and population-averaged
+  lensing forward model and CosmoSIS software framework
+  ([arXiv:2309.06593](https://arxiv.org/abs/2309.06593))
+- Tinker et al. (2010), halo bias
+- Wright & Brainerd (2000), analytic NFW lensing profiles
+- Costanzi et al. (2026), optical selection bias and projection lensing
+  ([arXiv:2604.05833](https://arxiv.org/abs/2604.05833))
+- Child18 and Duffy mass--concentration relations
+- Ragagnin et al. (2020), the vendored mass-definition conversion library in
+  `hydro_mc.py`
+
+## Implementation notes
+
+### Import convention
+
+Add `<repo>/src/pipelines` to `sys.path`, then import `cosmology` as a
+top-level package:
+
+```python
+from cosmology.halo_model import lensingModel
+from cosmology.concentration import child18_mass_concentration
+from cosmology.prj_params import PrjParams
+```
+
+Do not import through `pipelines.cosmology`: `src/pipelines` is a namespace
+root without an `__init__.py` and is not imported as the `pipelines` package.
+
+### Relationship to `y3_buzzard/`
+
+The modules here are the canonical source for new pipeline code. The original
+modules under `y3_buzzard/` remain untouched because CosmoSIS configurations
+in sibling repositories may still import them by path. Existing pipelines
+therefore continue to use the old paths, while new survey implementations
+import from `cosmology`.
