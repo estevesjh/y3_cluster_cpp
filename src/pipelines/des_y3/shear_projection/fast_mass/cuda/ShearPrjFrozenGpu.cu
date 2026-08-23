@@ -293,7 +293,18 @@ public:
       sample.view<double>("cosmological_parameters", "omega_M");
     h0_ = sample.view<double>("cosmological_parameters", "h0");
 
-    y3_cluster::sp_detail::BSelBins const bsel(sample);
+    auto const b_sel_lob =
+      sample.view<std::vector<double>>("b_sel_marginalised", "lob");
+    auto const b_sel_zob =
+      sample.view<std::vector<double>>("b_sel_marginalised", "zob");
+    int const n_lob = int(b_sel_lob.size());
+    int const n_zob = int(b_sel_zob.size());
+    auto const& nd_s =
+      sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "b_small");
+    auto const& nd_l =
+      sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "b_large");
+    std::vector<double> const b_small(nd_s.begin(), nd_s.end());
+    std::vector<double> const b_large(nd_l.begin(), nd_l.end());
 
     // ---- host part: per-slice grids and frozen weights (verbatim port).
     std::size_t const Nlz = lzob_lb_.size();
@@ -307,8 +318,7 @@ public:
     for (std::size_t k = 0; k != Nlz; ++k) {
       int const lob_bin = lzob_lb_[k];
       double const zob = lzob_zob_[k];
-      auto const bsel_bin = bsel.at(lob_bin, zob);
-      double const lobc = bsel_bin.lob;
+      double const lobc = lob_centers_.at(lob_bin);
       double const chi_o = chi_of(zob);
       double const D_A_o = chi_o / (1.0 + zob);
       double const R_excl = y3_cluster::sp_detail::R_lambda(lobc) * (1.0 + zob);
@@ -328,7 +338,23 @@ public:
           tg.weight[it] * 2.0 * y3_cluster::sp_detail::PI * std::sin(tg.theta[it]);
       }
 
-      // Exact wall row; no interpolation in zob.
+      // b_sel plateaus + sigmoid (frozen-class arithmetic).
+      double Bs = 0.0, Bl = 0.0;
+      {
+        int j = 0;
+        while (j + 1 < n_zob && b_sel_zob[j + 1] < zob) ++j;
+        int const j0 = (j + 1 < n_zob) ? j : n_zob - 2;
+        int const j1 = (j + 1 < n_zob) ? j + 1 : n_zob - 1;
+        double f = (b_sel_zob[j1] > b_sel_zob[j0])
+                     ? (zob - b_sel_zob[j0]) /
+                         (b_sel_zob[j1] - b_sel_zob[j0])
+                     : 0.0;
+        f = std::clamp(f, 0.0, 1.0);
+        Bs = (1 - f) * b_small[j0 * n_lob + lob_bin] +
+             f * b_small[j1 * n_lob + lob_bin];
+        Bl = (1 - f) * b_large[j0 * n_lob + lob_bin] +
+             f * b_large[j1 * n_lob + lob_bin];
+      }
       double const theta_lam =
         y3_cluster::sp_detail::R_lambda(lobc) * (1.0 + zob) / chi_o;
       double const k_sig = 2.5 / theta_lam;
@@ -336,7 +362,7 @@ public:
       bsel_k[k].resize(Nth);
       for (std::size_t it = 0; it != Nth; ++it)
         bsel_k[k][it] =
-          bsel_bin.b_small + (bsel_bin.b_large - bsel_bin.b_small) /
+          Bs + (Bl - Bs) /
                  (1.0 + std::exp(-k_sig * (tg.theta[it] - theta0)));
 
       // Frozen mass shapes at zob + r_s-anchored drift denominator.

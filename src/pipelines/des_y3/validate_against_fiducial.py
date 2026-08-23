@@ -82,7 +82,7 @@ def main():
           f"{np.max(np.abs(prod_s/s0-1)):.1e}")
 
     # 3. radial_series total error vs a same-profile doubled-node fiducial
-    rs_dir = (Path(__file__).resolve().parent / "observables" / "shear_1h2h"
+    rs_dir = (Path(__file__).resolve().parent / "shear_1h2h"
               / "radial_series" / "python")
     sys.path.insert(0, str(rs_dir))
     import nfw_profile_family as pf

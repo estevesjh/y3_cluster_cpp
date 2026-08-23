@@ -136,21 +136,20 @@ src/pipelines/
 │   ├── bsel.py                 selection-bias closure
 │   └── sigma_crit_inv.py       Sigma_crit^-1(z_lens, R)
 └── des_y3/
-    └── observables/
+    ├── README.md
+    ├── number_counts/
+    │   ├── README.md
+    │   ├── fast_mass/README.md
+    │   └── full_ltmz/README.md
+    ├── shear_1h2h/
+    │   ├── README.md
+    │   ├── fast_mass/README.md
+    │   ├── full_ltmz/README.md
+    │   └── radial_series/README.md
+    └── shear_projection/
         ├── README.md
-        ├── number_counts/
-        │   ├── README.md
-        │   ├── fast_mass/README.md
-        │   └── full_ltmz/README.md
-        ├── shear_1h2h/
-        │   ├── README.md
-        │   ├── fast_mass/README.md
-        │   ├── full_ltmz/README.md
-        │   └── radial_series/README.md
-        └── shear_projection/
-            ├── README.md
-            ├── fast_mass/README.md
-            └── full_ltmz/README.md
+        ├── fast_mass/README.md
+        └── full_ltmz/README.md
 ```
 
 `shared/` and `cosmology/` are siblings of `des_y3/`, not nested under it —

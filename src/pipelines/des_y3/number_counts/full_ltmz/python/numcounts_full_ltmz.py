@@ -6,7 +6,7 @@ count in richness bin i and photo-z bin j is the explicit triple integral
 
     N_ij = int dz int dlnM int dlambda_tr
            n(M,z) dV/dOmega/dz(z) Omega(z)
-           K_j(z) K_i(lambda_tr, z) P_HOD(lambda_tr | M, z)
+           K_j(z) S_i(lambda_tr, z) P_HOD(lambda_tr | M, z)
 
 with every kernel evaluated *at the quadrature nodes* — no intermediate
 S_ij(lnM, z) tabulation and no bilinear interpolation. The production
@@ -26,7 +26,7 @@ project's integrator convention):
                                                 N_q    nodes (default 32)
 
 The lambda_tr bracket, the shifted-Poisson HOD form, the EMG observed-
-richness kernel K_i (CDF differencing at the unique bin edges) and the
+richness kernel S_i (CDF differencing at the unique bin edges) and the
 Gaussian photo-z kernel K_j are *reused* from the maintained
 sel_function.py — not reimplemented — so this reference and the
 production selection stage share one set of kernels by construction.
