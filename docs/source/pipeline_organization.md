@@ -35,15 +35,15 @@ src/pipelines/
 │   └── shear_prj/cpp/
 └── des_y3/                         # survey observable compositions
     ├── number_counts/
-    │   ├── fast_mass/python/
-    │   └── full_ltmz/{python,cpp,cuda}/
+    │   ├── 0d/{python,cpp}/
+    │   └── 3d/{cpp,cuda}/
     ├── shear_1h2h/
-    │   ├── fast_mass/{python,cpp,cuda}/
-    │   ├── full_ltmz/{python,cpp,cuda}/
-    │   └── radial_series/{python,cpp}/
+    │   ├── 0d/{python,cpp,cuda}/
+    │   └── 3d/{cpp,cuda}/
     └── shear_projection/
-        ├── fast_mass/{python,cpp,cuda}/
-        └── full_ltmz/cuda/
+        ├── 0d/{python,cpp,cuda}/
+        ├── 2d/cpp/
+        └── 3d/cuda/
 ```
 
 Directories are created only for runnable implementations or substantive
@@ -57,58 +57,74 @@ are now owned by `systematics/`; the older files under `shared/`,
 `cosmology/`, and `src/models/` remain compatibility references and are not
 deleted by this migration.
 
-## Integration strategies
+## Integration strategies (adaptive-dimension tags)
 
-`full_ltmz`
-: Evaluates the selection kernels explicitly over true richness
-  $\lambda_{\rm true}$, log mass $\ln M$, and true redshift $z$. It is the
-  accuracy reference and may use fixed GL, adaptive Cuhre, or PAGANI depending
-  on the backend. Projection shear also retains the angular coordinate needed
-  by its observable definition.
+Strategy folders count **adaptive integration dimensions** (Cuhre/Vegas
+on CPU, PAGANI on GPU) — the quantity that drives per-sample cost. `0d`
+means no adaptive integration at all: fixed Gauss--Legendre sums and
+offline tables, fast and MCMC-viable. The maximum-dimension folder of
+each observable is always the adaptive reference, and every lower folder
+is a documented dimension reduction from it. Fixed-GL and offline
+dimensions do not count, whatever their number.
 
-`fast_mass`
-: Contracts the redshift-dependent population weight on fixed GL nodes before
-  the final mass/radial operator. For number counts, the operator is $f=1$.
-  For shear, the redshift contraction is exact for the implemented observable;
-  `fast_mass` does not by itself mean frozen redshift physics. A backend whose
-  physics is frozen is labelled explicitly.
+`3d`
+: Adaptive quadrature over the full explicit volume — true richness
+  $\lambda_{\rm true}$, log mass $\ln M$, and true redshift $z$ for
+  counts and one-halo/max shear (formerly the `full_ltmz` C++/CUDA
+  backends), or the fully coupled $(\theta, z, \ln M)$ PAGANI diagnostic
+  for projection shear. The accuracy reference of each observable.
 
-`radial_series`
-: Contracts redshift exactly, computes the sample-dependent moments of
-  $y=\ln r_s(M)$, and evaluates an offline radial expansion through at most
-  $\ell=3$. The reusable unit-profile tables live in `data/radial_series` and
-  are never regenerated during an MCMC sample. This strategy is implemented
-  for one-halo miscentred shear; the projection counterpart remains planned.
+`2d` (projection shear only)
+: `ShearPrjCuhre`: the outer $\theta$ integral is feature-split
+  fixed-GL, adaptive Cuhre/Vegas handles the inner two dimensions
+  $(z, \ln M)$. Two adaptive dimensions — the tag counts only those.
+
+`0d`
+: Everything with zero adaptive dimensions, merged per observable:
+  the $S_{ij}$-tabulated fixed-GL sums (formerly `fast_mass`), the
+  explicit fixed-GL Python references (formerly the `full_ltmz` Python
+  backends), the offline $U_\ell$ radial-series expansion (formerly
+  `radial_series`, one-halo shear only; tables in `data/radial_series`),
+  and for projection shear the region-split fixed-GL path (exact-$z$
+  core plus the frozen-physics CUDA port).
+
+Only the folders carry the new names: module labels, class names, file
+names, and DataBlock output sections keep their historical strings
+(`NumCountsFullLtmz`, `shear1h_fast_mass/vals`, `numcounts_full_ltmz.py`,
+`shared/full_ltmz_core.py`, ...), so existing ini files and validators
+reference them unchanged. The only file renames are the merged `0d`
+validators, qualified as `validate_fast_vs_production.py` and
+`validate_explicit_vs_production.py`.
 
 ## Implemented observable matrix
 
-| Observable | Strategy | Backends | Role |
+| Dims | Observable | Backends | Role |
 |---|---|---|---|
-| Number counts | `full_ltmz` | Python, C++, CUDA | Explicit-selection accuracy references |
-| Number counts | `fast_mass` | Python; production C++ by identity | Fast redshift-contracted calculation |
-| One-halo miscentred shear | `full_ltmz` | Python, C++, CUDA | Explicit-selection accuracy references |
-| One-halo miscentred shear | `fast_mass` | Python, C++ | Exact mass-sum path; C++ is bitwise-equivalent to production |
-| Traditional 1h+2h max model | `fast_mass` | Python, C++, CUDA | Implemented variant; two-halo profile has an open debugging flag |
-| One-halo miscentred shear | `radial_series` | Python, C++ | Candidate moment-expansion implementation |
-| Projection shear | `full_ltmz` | CUDA | Adaptive reference with an open wall-edge convergence study |
-| Projection shear | `fast_mass` | Python, C++, CUDA | Exact-$z$ Python/C++; CUDA reproduces the frozen production machinery |
-| Projection shear | `radial_series` | — | Planned |
+| `3d` | Number counts | C++, CUDA | Adaptive explicit-selection accuracy references |
+| `0d` | Number counts | Python (explicit GL + fast), C++ (production by identity) | Explicit 3-dim GL reference and the $S_{ij}$-tabulated 2-dim GL fast sum |
+| `3d` | One-halo miscentred shear | C++, CUDA | Adaptive explicit-selection accuracy references |
+| `0d` | One-halo miscentred shear | Python, C++ | Explicit 3-dim GL reference, the exact $z$-contracted 1-dim GL mass sum (C++ bitwise-equivalent to production), and the $U_\ell$ moment expansion |
+| `3d` | Traditional 1h+2h max model | C++ | Adaptive explicit reference for the max model |
+| `0d` | Traditional 1h+2h max model | Python, C++, CUDA | $z$-resolved 2-dim GL sum; two-halo profile has an open debugging flag |
+| `3d` | Projection shear | CUDA | Fully-coupled adaptive diagnostic with an open wall-edge convergence study |
+| `2d` | Projection shear | C++ | `ShearPrjCuhre`: feature-split $\theta$ GL, adaptive $(z, \ln M)$ |
+| `0d` | Projection shear | Python, C++, CUDA | Exact-$z$ region-split 3-dim GL Python/C++; CUDA reproduces the frozen production machinery |
 
 The per-implementation `README.md` files record DataBlock contracts,
 quadrature, validation tolerances, timing, and known limitations. In
 particular, the traditional max model is not promoted while its
 $\Delta\Sigma_{hh}$ input is under investigation, and the projection
-`full_ltmz` CUDA backend has not closed its innermost-radius convergence
+`3d` CUDA backend has not closed its innermost-radius convergence
 study.
 
 ## Production and reference choices
 
 The currently selected reference backend for day-to-day comparisons is the
-`fast_mass` C++ cell for each observable:
+fast (`0d`, fixed-GL) C++ cell for each observable:
 
 | Observable | Selected backend |
 |---|---|
-| Number counts | Production `NumCountsSel.so` (the same algorithm as `fast_mass`) |
+| Number counts | Production `NumCountsSel.so` (the same algorithm as the `0d` fast backend) |
 | One-halo miscentred shear | `Shear1hFastMass.so` |
 | Traditional 1h+2h max model | `Shear1h2hMax.so` |
 | Projection shear | `ShearPrjFastMass.so` |
@@ -121,7 +137,7 @@ pinned production ini loads.
 ## Validation policy
 
 Numerical accuracy is quoted against the corresponding explicit
-`full_ltmz` fiducial after that fiducial has passed its own convergence and
+`3d` fiducial after that fiducial has passed its own convergence and
 cross-backend checks. Agreement with a production module is reported
 separately as an algorithm-identity or compatibility check, because production
 can intentionally include selection tabulation or frozen-physics

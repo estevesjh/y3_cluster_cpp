@@ -1,5 +1,5 @@
 // Unit tests for the des_y3 Phase 2 fast_mass projection-shear C++ driver
-// (src/pipelines/des_y3/shear_projection/fast_mass/cpp/
+// (src/pipelines/des_y3/shear_projection/0d/cpp/
 // ShearPrjFastMass.cc).
 //
 // ShearPrjFastMass.cc has no fast_mass-specific header of its own -- it is

@@ -17,7 +17,7 @@ and compatibility rules.
 | File | Role |
 |---|---|
 | `shared/datablock_models.py` | Convention-matched HMF, volume, survey-area, selection-weight, and DataBlock-dump adapters |
-| `shared/full_ltmz_core.py` | Explicit-selection `full_ltmz` contraction shared by counts and shear |
+| `shared/full_ltmz_core.py` | Explicit-selection `3d` (formerly `full_ltmz`) contraction shared by counts and shear |
 | `shared/lensing_profiles.py` | Production-compatible centred and miscentred profile readers |
 | `shared/sel_function.py` | Staged maintained selection module; currently identical to the production entry point |
 | `shared/sel_kernels.py` | Cached loader and HOD/richness-kernel adapters for the shared selection module |
@@ -31,13 +31,13 @@ own accuracy/timing matrix (also surfaced in {doc}`../numerics/index`).
 
 | Directory | Products | Timing |
 |---|---|---|
-| `observables/number_counts/full_ltmz` | Python reference, `NumCountsFullLtmz.so`, `NumCountsFullLtmzGpu.so` | Python 25 s (adaptive) / 83 ms (fixed GL); C++ 3.1 s; CUDA 2.0 s |
-| `observables/number_counts/fast_mass` | Python production-algorithm replica, `NumCountsFastMass.so` | Python 5 ms; C++ 6 ms (= DES Y1 `NumCountsSel.so` by identity) |
-| `observables/shear_1h2h/full_ltmz` | Python reference, `Shear1hFullLtmz.so`, `Shear1hFullLtmzGpu.so` | Python 35 s (adaptive) / 149 ms (fixed GL); C++ 51 s; CUDA 32 s |
-| `observables/shear_1h2h/fast_mass` | Python references, `Shear1hFastMass.so`, `Shear1h2hMax.so`, `Shear1h2hMaxGpu.so` | `Shear1hFastMass` Python 74 ms / C++ 9 ms; `Shear1h2hMax` C++ 11 ms / CUDA 8 ms |
-| `observables/shear_1h2h/radial_series` | Python offline generator/evaluator and `Shear1hRadialSeries.so` | Python 6 ms; C++ 7 ms |
-| `observables/shear_projection/full_ltmz` | `DSigmaPrjFullLtmzGpu.so` | CUDA 95 s |
-| `observables/shear_projection/fast_mass` | Python exact-$z$ reference, `ShearPrjFastMass.so`, `ShearPrjFrozenGpu.so` | Python 270 ms; C++ 154 ms; CUDA (frozen) 8.3 ms |
+| `number_counts/3d` | Python reference, `NumCountsFullLtmz.so`, `NumCountsFullLtmzGpu.so` | Python 25 s (adaptive) / 83 ms (fixed GL); C++ 3.1 s; CUDA 2.0 s |
+| `number_counts/0d` (fast sum) | Python production-algorithm replica, `NumCountsFastMass.so` | Python 5 ms; C++ 6 ms (= DES Y1 `NumCountsSel.so` by identity) |
+| `shear_1h2h/3d` | Python reference, `Shear1hFullLtmz.so`, `Shear1hFullLtmzGpu.so` | Python 35 s (adaptive) / 149 ms (fixed GL); C++ 51 s; CUDA 32 s |
+| `shear_1h2h/0d` (GL paths) | Python references, `Shear1hFastMass.so`, `Shear1h2hMax.so`, `Shear1h2hMaxGpu.so` | `Shear1hFastMass` Python 74 ms / C++ 9 ms; `Shear1h2hMax` C++ 11 ms / CUDA 8 ms |
+| `shear_1h2h/0d` | Python offline generator/evaluator and `Shear1hRadialSeries.so` | Python 6 ms; C++ 7 ms |
+| `shear_projection/2d` + `shear_projection/3d` | `ShearPrjCuhre.so` (2d), `DSigmaPrjFullLtmzGpu.so` (3d) | CUDA 95 s |
+| `shear_projection/3d` | Python exact-$z$ reference, `ShearPrjFastMass.so`, `ShearPrjFrozenGpu.so` | Python 270 ms; C++ 154 ms; CUDA (frozen) 8.3 ms |
 
 
 (src-models)=

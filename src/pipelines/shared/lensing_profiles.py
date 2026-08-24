@@ -16,7 +16,7 @@ These are interpolation-exact replicas — linear interpolation with
 clamped queries is the same arithmetic GSL performs — so Python
 implementations that consume them can match the production .so to
 near machine precision. (Contrast with
-observables/shear_1h2h/radial_series/python/nfw_profile_family.py,
+observables/shear_1h2h/0d/python/nfw_profile_family.py,
 which deliberately uses a *smooth* spline view of the same gamma table
 for offline differentiation.)
 """

@@ -12,33 +12,33 @@ of the theory vector and the denominator of the stacked one-halo shear.
 - Model: [`src/models/n_operator_sel_gl_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/models/n_operator_sel_gl_t.hh)
   (`nosel_gl_detail::SelGLCore` — the fixed Gauss-Legendre mass-weight
   builder shared with {doc}`shear_halo`).
-- Module driver: [`src/pipelines/des_y3/observables/number_counts/fast_mass/cpp/NumCountsFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/observables/number_counts/fast_mass/cpp/NumCountsFastMass.cc)
+- Module driver: [`src/pipelines/des_y3/number_counts/0d/cpp/NumCountsFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/number_counts/0d/cpp/NumCountsFastMass.cc)
   (`DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE`) — the des_y3-namespaced
   wrapper, algorithmically identical to `NumCountsSelGL` ("by identity",
   {doc}`../variants`), with its own module label and output section so
   the two can co-run in one pipeline for comparison.
 - Compiled library loaded by CosmoSIS:
-  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_numcounts_fast_mass_cpp/NumCountsFastMass.so`.
+  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_numcounts_0d_cpp/NumCountsFastMass.so`.
 
 ## DES Y3 implementations
 
-This module is the `fast_mass` cell — the reference pipeline's choice
+This module is the `0d` fast cell (formerly `fast_mass`; zero adaptive dimensions) — the reference pipeline's choice
 per `src/pipelines/des_y3/README.md`'s own "Reference pipeline choices"
 table. Other implementations follow the organization in
 {doc}`../pipeline_organization`:
 
-| Strategy | Backend | Implementation and status |
-|---|---|---|
-| `full_ltmz` | Python | Explicit $(\lambda_{\rm true},\ln M,z)$ reference; fixed GL |
-| `full_ltmz` | C++ | `NumCountsFullLtmz.so`; adaptive Cuhre reference (needs an added `plob_ltr_params` stage — {doc}`../variants`) |
-| `full_ltmz` | CUDA | `NumCountsFullLtmzGpu.so`; PAGANI reference |
-| `fast_mass` | Python | Importable re-expression of the redshift contraction |
-| `fast_mass` | **C++ (this page)** | `NumCountsFastMass.so` — algorithmically identical to DES Y1's `NumCountsSel.so` |
+| Dims | Backend | Implementation and status | Precision vs 3d |
+|---|---|---|---|
+| `3d` | C++ | `NumCountsFullLtmz.so`; adaptive Cuhre reference (needs an added `plob_ltr_params` stage — {doc}`../variants`) | 4.9e-4 (vs the adaptive certifier) |
+| `3d` | CUDA | `NumCountsFullLtmzGpu.so`; PAGANI reference | 5.1e-4 (vs the adaptive certifier) |
+| `0d` | Python | Explicit $(\lambda_{\rm true},\ln M,z)$ fixed-GL 3-dim grid | 3.5e-5 |
+| `0d` | Python | Fast sum — re-expression of the redshift contraction ($S_{ij}$-tabulated 2-dim GL) | 7.6e-4 |
+| `0d` | **C++ (this page)** | `NumCountsFastMass.so` — fast sum, algorithmically identical to DES Y1's `NumCountsSel.so` (identity recorded separately) | 7.6e-4 |
 
 The implementations live below
-`src/pipelines/des_y3/observables/number_counts`. `radial_series` does not
+`src/pipelines/des_y3/number_counts`. A radial-series reduction does not
 apply because the counts operator has no radial profile ($f=1$). Accuracy is
-measured against `full_ltmz`; agreement with `NumCountsSel.so` is recorded
+measured against the explicit `3d` reference; agreement with `NumCountsSel.so` is recorded
 separately as an identity check — this module is expected to be bitwise
 equal to it.
 
@@ -69,7 +69,7 @@ lensing recipe, step by step".** Derivation: {doc}`../math/index`.
 
 ```ini
 [NumCountsFastMass]
-file = ${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_numcounts_fast_mass_cpp/NumCountsFastMass.so
+file = ${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_numcounts_0d_cpp/NumCountsFastMass.so
 bin_index = 0 1 2 3 4 5 6 7 8 9 10 11
 zt_low  = 0.05
 zt_high = 0.80

@@ -11,17 +11,17 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 PIPELINES = REPO / "src" / "pipelines"
-RADIAL_PY = (PIPELINES / "des_y3" / "shear_1h2h"
-             / "radial_series" / "python")
+RADIAL_PY = (PIPELINES / "des_y3" / "shear_1h2h" / "0d" / "python")
 NUMCOUNTS_FULL_LTMZ_PY = (PIPELINES / "des_y3"
-                          / "number_counts" / "full_ltmz" / "python")
+                          / "number_counts" / "0d" / "python")
 SHEAR_FAST_MASS_PY = (PIPELINES / "des_y3" / "shear_1h2h"
-                      / "fast_mass" / "python")
+                      / "0d" / "python")
+SHEAR_MAX_PY = (PIPELINES / "des_y3" / "shear_1h2h" / "0d" / "python")
 SHEAR_FULL_LTMZ_PY = (PIPELINES / "des_y3" / "shear_1h2h"
-                      / "full_ltmz" / "python")
+                      / "3d" / "python")
 sys.path.insert(0, str(PIPELINES))
 for _p in (RADIAL_PY, NUMCOUNTS_FULL_LTMZ_PY, SHEAR_FAST_MASS_PY,
-          SHEAR_FULL_LTMZ_PY):
+          SHEAR_MAX_PY, SHEAR_FULL_LTMZ_PY):
     sys.path.insert(0, str(_p))
 
 from shared import datablock_models as dm  # noqa: E402
@@ -39,7 +39,7 @@ from shear1h2h_max import compute_shear_max, z_resolved_weights  # noqa: E402
 from shear1h_full_ltmz import compute_shear as full_ltmz_shear  # noqa: E402
 
 SHEAR_PRJ_FAST_MASS_PY = (PIPELINES / "des_y3"
-                          / "shear_projection" / "fast_mass" / "python")
+                          / "shear_projection" / "0d" / "python")
 sys.path.insert(0, str(SHEAR_PRJ_FAST_MASS_PY))
 from shear_prj_fast_mass import (  # noqa: E402
     ShearPrjFastMass,
@@ -222,7 +222,7 @@ class TestOfflineRadialGenerator(unittest.TestCase):
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
 class TestNumCountsFastMass(unittest.TestCase):
-    """des_y3/number_counts/fast_mass/python/numcounts_fast_mass.py"""
+    """des_y3/number_counts/0d/python/numcounts_fast_mass.py"""
 
     def test_matches_production_numcountssel(self):
         source = dm.DumpSource(str(DUMP_DIR))
@@ -237,7 +237,7 @@ class TestNumCountsFastMass(unittest.TestCase):
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
 class TestNumCountsFullLtmz(unittest.TestCase):
-    """des_y3/number_counts/full_ltmz/python/numcounts_full_ltmz.py"""
+    """des_y3/number_counts/0d/python/numcounts_full_ltmz.py"""
 
     def test_matches_production_within_tabulation_error(self):
         source = dm.DumpSource(str(DUMP_DIR))
@@ -255,7 +255,7 @@ class TestNumCountsFullLtmz(unittest.TestCase):
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
 class TestShear1hFastMass(unittest.TestCase):
-    """des_y3/shear_1h2h/fast_mass/python/shear1h_fast_mass.py"""
+    """des_y3/shear_1h2h/0d/python/shear1h_fast_mass.py"""
 
     def test_matches_production_shear1hmissel(self):
         source = dm.DumpSource(str(DUMP_DIR))
@@ -274,7 +274,7 @@ class TestShear1hFastMass(unittest.TestCase):
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
 class TestShear1hFullLtmz(unittest.TestCase):
-    """des_y3/shear_1h2h/full_ltmz/python/shear1h_full_ltmz.py"""
+    """des_y3/shear_1h2h/0d/python/shear1h_full_ltmz.py"""
 
     def test_matches_production_within_tabulation_error(self):
         source = dm.DumpSource(str(DUMP_DIR))
@@ -296,7 +296,7 @@ class TestShear1hFullLtmz(unittest.TestCase):
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
 class TestShear1h2hMax(unittest.TestCase):
-    """des_y3/shear_1h2h/fast_mass/python/shear1h2h_max.py
+    """des_y3/shear_1h2h/0d/python/shear1h2h_max.py
 
     The available dump has halo_model run with compute_lensing_2h = F --
     haloModel/dSigma_hh has 3 open defects (see
@@ -377,7 +377,7 @@ class TestShear1h2hMax(unittest.TestCase):
 
 
 class TestShearPrjFastMass(unittest.TestCase):
-    """des_y3/shear_projection/fast_mass/python/shear_prj_fast_mass.py
+    """des_y3/shear_projection/0d/python/shear_prj_fast_mass.py
 
     ShearPrjFastMass.set_sample() needs a full real-pipeline sample (HMF,
     halo bias, xi_nl, distances, b_sel_marginalised) that no dump checked

@@ -69,7 +69,7 @@ def main():
 
     from shared import datablock_models  # noqa: F401
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]
-                           / "fast_mass" / "python"))
+                           / "0d" / "python"))
     from shear1h_fast_mass import compute_shear as fast_shear
     weights = dm.MassZWeights(source, n_lnm=96, n_z=64,
                               zt_lo=ZT_LO, zt_hi=ZT_HI,

@@ -48,39 +48,46 @@ add_subdirectory(num_counts_full)
 # des_y3 Phase 2 backends (src/pipelines/des_y3/README.md): new
 # maintained implementations live under src/pipelines/des_y3 and are
 # registered here with explicit binary dirs.
+# Strategy folders are named by the number of ADAPTIVE integration
+# dimensions (the cost driver): 0d = no adaptive integration at all
+# (fixed-GL sums and offline tables — fast, MCMC-viable), Nd = N
+# adaptive Cuhre/PAGANI dimensions (references). The maximum-dimension
+# folder of each observable is always the adaptive reference; every
+# lower folder is a documented dimension reduction from it. Binary
+# dirs mirror the folder names.
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/fast_mass/cpp
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_fast_mass_cpp)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/0d/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_0d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/radial_series/cpp
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_radial_series_cpp)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/3d/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_3d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/full_ltmz/cpp
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_full_ltmz_cpp)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/3d/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_3d_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/full_ltmz/cuda
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_full_ltmz_cuda)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/0d/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear1h_0d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/full_ltmz/cpp
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_full_ltmz_cpp)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/0d/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear1h_0d_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/fast_mass/cpp
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_fast_mass_cpp)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/3d/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear1h_3d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/full_ltmz/cuda
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_full_ltmz_cuda)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/3d/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear1h_3d_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/fast_mass/cpp
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_fast_mass_cpp)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/0d/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_0d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/full_ltmz/cuda
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_full_ltmz_cuda)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/0d/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_0d_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/fast_mass/cuda
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_frozen_cuda)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/2d/cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_2d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/fast_mass/cuda
-  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_1h2h_max_cuda)
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/3d/cuda
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_3d_cuda)
 
 # Many of these are historical
 # add_subdirectory(DESxSPTModule)

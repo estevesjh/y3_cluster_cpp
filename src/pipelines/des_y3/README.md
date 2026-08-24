@@ -10,6 +10,18 @@ The directory is organized as:
 observable / numerical strategy / language or backend
 ```
 
+Strategy folders count **adaptive integration dimensions** — the quantity
+that drives per-sample computing time. `0d` means no adaptive integration at
+all (fixed Gauss--Legendre sums and offline tables — fast, MCMC-viable);
+`Nd` means N adaptive (Cuhre/Vegas/PAGANI) dimensions. The
+maximum-dimension folder of each observable is always the adaptive
+reference, and every lower folder is a documented dimension reduction from
+it. Only the folders carry these names: module labels, class names,
+source-file names, and DataBlock output sections keep their historical
+strings (for example `NumCountsFullLtmz`, `shear1h_fast_mass/vals`,
+`numcounts_full_ltmz.py`), so inis and validators reference them
+unchanged.
+
 The observable and strategy READMEs are the detailed documentation. This file
 is the map of the directory and the short decision guide for choosing a
 numerical method.
@@ -21,24 +33,22 @@ src/pipelines/des_y3/
 ├── README.md
 ├── number_counts/
 │   ├── README.md
-│   ├── full_ltmz/
-│   │   └── README.md
-│   └── fast_mass/
-│       └── README.md
+│   ├── 0d/   fixed-GL: S_ij-tab fast path (formerly fast_mass) +
+│   │         explicit fixed-GL Python (formerly full_ltmz Python)
+│   └── 3d/   adaptive explicit C++/CUDA references (formerly full_ltmz)
 ├── shear_1h2h/
 │   ├── README.md
-│   ├── full_ltmz/
-│   │   └── README.md
-│   ├── fast_mass/
-│   │   └── README.md
-│   └── radial_series/
-│       └── README.md
+│   ├── 0d/   fixed-GL/tables: 1h z-contracted + max-model z-resolved
+│   │         (both formerly fast_mass), explicit fixed-GL Python
+│   │         (formerly full_ltmz Python), radial series
+│   │         (formerly radial_series)
+│   └── 3d/   adaptive explicit C++/CUDA references (formerly full_ltmz)
 └── shear_projection/
     ├── README.md
-    ├── full_ltmz/
-    │   └── README.md
-    └── fast_mass/
-        └── README.md
+    ├── 0d/   region-split fixed GL (formerly fast_mass)
+    ├── 2d/   ShearPrjCuhre: fixed log-GL angle, adaptive (z, lnM)
+    └── 3d/   fully-coupled adaptive PAGANI diagnostic
+              (formerly full_ltmz)
 ```
 
 `python/`, `cpp/`, and `cuda/` directories under a strategy contain
@@ -67,24 +77,21 @@ strategies and language backends.
 
 ## Numerical strategies
 
-| Strategy | Numerical idea | Role |
+| Strategy tag | Numerical idea | Role |
 | --- | --- | --- |
-| [`full_ltmz`](number_counts/full_ltmz/README.md) | Keep true richness, redshift, and halo mass explicit in the integral. | Independent reference and convergence tool. |
-| [`fast_mass`](number_counts/fast_mass/README.md) | Contract the redshift and selection dependence before the mass integration, using fixed grids or the shared exact core. | Maintained production method. |
-| [`radial_series`](shear_1h2h/radial_series/README.md) | Approximate the population-averaged radial profile with a moment expansion and precomputed radial functions. | One-halo candidate approximation only. |
+| `3d` | All three integration variables handled by adaptive Cuhre/Vegas/PAGANI quadrature. | Independent reference and convergence tool; the maximum-dimension adaptive reference of each observable. |
+| `2d` (projection only) | Fixed log-GL angular grid; adaptive quadrature over the inner (z, lnM). | Adaptive comparison backend (`ShearPrjCuhre`). |
+| `0d` | No adaptive integration: fixed Gauss--Legendre sums (with the redshift/selection contractions of the former `fast_mass` paths, or the full explicit composition on fixed nodes) and offline tables + moments (the former `radial_series`). | Maintained production methods; fast and MCMC-viable. |
 
-`full_ltmz` is the explicit reference formulation. Its adaptive Python
-implementation defines the accuracy baseline; fixed Gauss--Legendre, Cuhre,
-and PAGANI implementations are evaluated against that baseline.
+The `3d` adaptive implementations define the accuracy baseline
+("Precision vs 3d" in every table); fixed Gauss--Legendre backends are
+evaluated against that baseline. Agreement with an existing production
+module is a separate backend-identity check, not an accuracy measurement.
 
-`fast_mass` is a contracted production implementation. It is much faster
-than the explicit reference and has a measured residual relative to it. Its
-agreement with an existing production module is a separate backend-identity
-check, not an accuracy measurement.
-
-`radial_series` is not an exact replacement for the varying-concentration
-one-halo model. Its current profile uses a fixed concentration and is not
-scientifically interchangeable with `full_ltmz` or `fast_mass`.
+The radial-series `0d` algorithm is not an exact replacement for the
+varying-concentration one-halo model: its current profile uses a fixed
+concentration and is not scientifically interchangeable with the other
+implementations.
 
 ## Precision and cost overview
 
@@ -93,27 +100,25 @@ performance guarantees. Costs are per sample. The benchmark uses 12 count
 bins, 12 one-halo bins with 10 radii each, and 180 projection wall points.
 CPU timings depend on the Perlmutter node and build; GPU timings use an A100.
 
-The comparison labels mean:
+The precision column is quoted against the `3d` adaptive reference of each
+observable ("Precision vs 3d"); where a number was measured against a
+different baseline (production identity, backend twins, the exact
+evaluator), the baseline is stated in the cell:
 
-- **Reference error**: discrepancy relative to the adaptive `full_ltmz`
-  calculation or, for projection, the exact evaluator named in the row.
-- **Production identity**: agreement with an existing production backend. This
-  checks implementation equivalence, not physical accuracy.
-- **Internal consistency**: agreement between implementations of the same
-  approximation. It is not validation against the physical reference model.
-
-| Observable | Method and backend | Cost | Precision or status |
-| --- | --- | ---: | --- |
-| Counts | [`full_ltmz`](number_counts/full_ltmz/README.md), adaptive Python | 25 s | Reference; reported integration error at or below 1e-6 |
-| Counts | [`full_ltmz`](number_counts/full_ltmz/README.md), fixed GL Python | 83 ms | 3.5e-5 vs adaptive reference |
-| Counts | [`fast_mass`](number_counts/fast_mass/README.md), C++ | 6 ms | 7.6e-4 vs adaptive reference; identity with production |
-| One-halo shear | [`full_ltmz`](shear_1h2h/full_ltmz/README.md), adaptive Python | 35 s | Reference; reported integration error at or below 1e-6 |
-| One-halo shear | [`full_ltmz`](shear_1h2h/full_ltmz/README.md), fixed GL Python | 149 ms | 4.9e-5 vs adaptive reference |
-| One-halo shear | [`fast_mass`](shear_1h2h/fast_mass/README.md), C++ | 9 ms | 8.4e-4 vs adaptive reference; identity with production |
-| One-halo shear | [`radial_series`](shear_1h2h/radial_series/README.md) | 6--7 ms | Internal fixed-profile consistency only; not a production-accuracy result |
-| Projection shear | [`full_ltmz`](shear_projection/full_ltmz/README.md), PAGANI on A100 | 95 s | Convergence remains open; median 9.5e-4 and maximum 2.2% vs refined GL |
-| Projection shear | [`fast_mass`](shear_projection/fast_mass/README.md), exact-z C++ | 154 ms | 1e-11 vs exact evaluator |
-| Projection shear | [`fast_mass`](shear_projection/fast_mass/README.md), frozen GPU path | 8.3 ms | Faithful acceleration of frozen production; not the exact-z reference |
+| Dims | Observable | Method and backend | Cost | Precision vs 3d |
+| --- | --- | --- | ---: | --- |
+| `3d` | Counts | [`3d`](number_counts/3d/README.md), adaptive Python | 25 s | Reference (3d); reported integration error at or below 1e-6 |
+| `0d` | Counts | [`0d`](number_counts/0d/README.md), explicit Python (3-dim GL) | 83 ms | 3.5e-5 |
+| `0d` | Counts | [`0d`](number_counts/0d/README.md), fast path C++ (2-dim GL, S_ij tab) | 6 ms | 7.6e-4; also identity with production (separate baseline) |
+| `3d` | One-halo shear | [`3d`](shear_1h2h/3d/README.md), adaptive Python | 35 s | Reference (3d); reported integration error at or below 1e-6 |
+| `0d` | One-halo shear | [`0d`](shear_1h2h/0d/README.md), explicit Python (3-dim GL) | 149 ms | 4.9e-5 |
+| `0d` | One-halo shear | [`0d`](shear_1h2h/0d/README.md), 1h C++ (1-dim GL, z contracted) | 9 ms | 8.4e-4; also identity with production (separate baseline) |
+| `0d` | One-halo shear | [`0d`](shear_1h2h/0d/README.md), radial series (tables + moments) | 6--7 ms | 56--86% (known fixed-c=4 defect); 3.7e-3 internal fixed-profile consistency (separate baseline) |
+| `0d` | Max model | [`0d`](shear_1h2h/0d/README.md), max C++/CUDA (2-dim GL, z-resolved) | 11 / 8 ms | 8.3e-4; CUDA vs C++ twin 6.4e-15 (separate baseline) |
+| `3d` | Projection shear | [`3d`](shear_projection/3d/README.md), PAGANI on A100 | 95 s | Reference-class diagnostic (3d); convergence open — median 9.5e-4, maximum 2.2% vs region-split GL (separate baseline) |
+| `2d` | Projection shear | [`2d`](shear_projection/2d/README.md), `ShearPrjCuhre` C++ | minutes | pending (Perlmutter re-run, issue #23 task) |
+| `0d` | Projection shear | [`0d`](shear_projection/0d/README.md), exact-z C++ (3-dim region-split GL) | 154 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open); 1e-11 vs exact evaluator (separate baseline) |
+| `0d` | Projection shear | [`0d`](shear_projection/0d/README.md), frozen GPU path | 8.3 ms | pending (Perlmutter re-run, issue #23 task); faithful acceleration of frozen production (separate baseline) |
 
 The detailed strategy READMEs contain the complete backend tables, grid
 settings, tolerances, and comparison definitions:
@@ -126,21 +131,23 @@ settings, tolerances, and comparison definitions:
 
 The maintained smoke/reference pipeline uses:
 
-| Observable | Strategy | Backend |
-| --- | --- | --- |
-| Number counts | `fast_mass` | `NumCountsFastMass.so` |
-| One-halo miscentered shear | `fast_mass` | `Shear1hFastMass.so` |
-| Projection shear | `fast_mass` | `ShearPrjFastMass.so` exact-z CPU path |
+| Dims | Observable | Strategy | Backend |
+| --- | --- | --- | --- |
+| `0d` | Number counts | fast path (2-dim GL, S_ij tab) | `NumCountsFastMass.so` |
+| `0d` | One-halo miscentered shear | 1h z-contracted (1-dim GL) | `Shear1hFastMass.so` |
+| `0d` | Projection shear | region-split GL exact-z | `ShearPrjFastMass.so` |
 
 These are the production or reference choices for the DES Y3 implementations.
-The corresponding `full_ltmz` methods are validation tools. The traditional
-max model and frozen projection GPU path are optional variants.
+The corresponding `3d` adaptive methods are validation tools. The traditional
+max model and the frozen projection GPU path (both `0d`) are optional
+variants.
 
 ## Important limitations
 
-- `radial_series` currently uses a fixed concentration and is not validated as
-  an accurate replacement for the varying-concentration one-halo model.
-- The projection `full_ltmz` GPU calculation has unresolved wall-edge
+- The radial-series `0d` algorithm currently uses a fixed concentration and
+  is not validated as an accurate replacement for the varying-concentration
+  one-halo model.
+- The projection `3d` GPU calculation has unresolved wall-edge
   convergence; do not call its default result fully converged.
 - The traditional max model depends on the known `haloModel/dSigma_hh` data
   defect and is provisional as a scientific result. See

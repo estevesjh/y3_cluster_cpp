@@ -1,9 +1,10 @@
-# Fixed-grid projection contraction
+# Fixed-grid projection contraction (`0d`)
 
-This strategy evaluates the projection observable on a fixed angular wall and
-per-slice redshift/mass grids. It has two related implementations: an
-exact-\(z\) Python/C++ core and a CUDA port of the frozen production
-machinery.
+This strategy (formerly `fast_mass`; zero adaptive dimensions — all three
+integrals are region-split fixed-GL sums) evaluates the projection observable
+on a fixed angular wall and per-slice redshift/mass grids. It has two related
+implementations: an exact-\(z\) Python/C++ core and a CUDA port of the frozen
+production machinery.
 
 ## Definition of the projection weights
 
@@ -128,11 +129,11 @@ and photo-\(z\) inputs enter through the wall slice and its supplied weights.
 
 Pinned 180-point wall at the fiducial point:
 
-| Backend | Cost | Comparison |
-| --- | ---: | --- |
-| Python exact-\(z\) | 270 ms/sample | \(1.6\times10^{-11}\) vs exact evaluator; \(5.5\times10^{-5}\) vs frozen production |
-| C++ exact-\(z\) | 154 ms/sample | \(9.9\times10^{-12}\) vs exact evaluator |
-| CUDA frozen path / A100 | 8.3 ms/sample | \(1.5\times10^{-11}\) vs frozen production |
+| Dims | Backend | Cost | Precision vs 3d |
+| --- | --- | ---: | --- |
+| `0d` | Python exact-\(z\) (3-dim region-split GL) | 270 ms/sample | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open; the region split is the higher-precision side); \(1.6\times10^{-11}\) vs exact evaluator, \(5.5\times10^{-5}\) vs frozen production (separate baselines) |
+| `0d` | C++ exact-\(z\) (3-dim region-split GL) | 154 ms/sample | same vs-3d relation as the Python row; \(9.9\times10^{-12}\) vs exact evaluator (separate baseline) |
+| `0d` | CUDA frozen path / A100 | 8.3 ms/sample | pending (Perlmutter re-run, issue #23 task); \(1.5\times10^{-11}\) vs frozen production (separate baseline) |
 
 The frozen production CPU path is about 82 ms/sample. The CUDA result is
 therefore a faithful acceleration of that frozen definition, not a validation

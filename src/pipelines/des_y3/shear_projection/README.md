@@ -48,7 +48,11 @@ $$
 $$
 
 The detailed weight construction is documented in the
-[`fast_mass` strategy README](fast_mass/README.md).
+[`0d` strategy README](0d/README.md) (formerly `fast_mass`; zero adaptive
+dimensions — all region-split fixed-GL). Strategy folders count adaptive
+integration dimensions: [`0d`](0d/README.md) region-split fixed GL,
+[`2d`](2d/README.md) `ShearPrjCuhre` (fixed log-GL angle, adaptive
+`(z, lnM)`), [`3d`](3d/README.md) fully-coupled adaptive PAGANI diagnostic.
 
 ## What the numerical methods actually integrate
 
@@ -70,7 +74,7 @@ The three comparison paths therefore have this map:
 | `ShearPrjGsl` | Adaptive GSL `QAGP` (Gauss--Kronrod), with `z_ob` as an explicit breakpoint | Fixed Gauss--Legendre | Fixed Gauss--Legendre in `ln(theta)` |
 | `ShearPrjCuhre` | Cuhre/Vegas | Cuhre/Vegas | Fixed log-Gauss--Legendre grid |
 
-The related `ShearPrjEvaluator` and `fast_mass` exact-z path use fixed
+The related `ShearPrjEvaluator` and `0d` exact-z path use fixed
 Gauss--Legendre reductions in mass, angle, and the explicitly split redshift
 regions; they have no adaptive final contraction and are separate from the
 three comparison classes above.
@@ -168,7 +172,9 @@ backend above, which keeps a fixed angular GL grid and applies Cuhre only to
 `(z, lnM)`.
 
 The maintained full three-dimensional diagnostic is now the
-[`full_ltmz`](full_ltmz/README.md) CUDA/PAGANI backend. In both cases the
+[`3d`](3d/README.md) (formerly `full_ltmz`) CUDA/PAGANI backend; the
+maintained `ShearPrjCuhre` comparison backend lives in
+[`2d`](2d/README.md). In both cases the
 physical output is projected tangential shear,
 
 $$
@@ -182,13 +188,14 @@ with the non-unity `Sigma_crit^{-1}` factor supplied by the sample.
 
 Pinned 180-point wall fiducial measurements; cost is per sample.
 
-| Method and backend | Cost | Comparison or status |
-| --- | ---: | --- |
-| [`fast_mass`](fast_mass/README.md), exact-z Python | 270 ms | 1.6e-11 vs exact evaluator; 5.5e-5 vs frozen production |
-| [`fast_mass`](fast_mass/README.md), exact-z C++ | 154 ms | 9.9e-12 vs exact evaluator |
-| [`fast_mass`](fast_mass/README.md), frozen CUDA/A100 | 8.3 ms | Faithful acceleration of frozen production; not exact-z reference |
-| [`full_ltmz`](full_ltmz/README.md), PAGANI CUDA/A100, eps_rel=1e-3 | 95 s | Diagnostic only: median 9.5e-4, maximum 2.2% vs region-split GL; convergence open |
-| [`full_ltmz`](full_ltmz/README.md), PAGANI CUDA/A100, eps_rel=1e-4 | 463 s | Lower requested tolerance does not remove the missed-feature risk |
+| Dims | Method and backend | Cost | Precision vs 3d |
+| --- | --- | ---: | --- |
+| `0d` | [`0d`](0d/README.md), exact-z Python (3-dim region-split GL) | 270 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (whose own convergence is open — the region split is the higher-precision side); 1.6e-11 vs exact evaluator, 5.5e-5 vs frozen production (separate baselines) |
+| `0d` | [`0d`](0d/README.md), exact-z C++ (3-dim region-split GL) | 154 ms | same vs-3d relation as the Python row; 9.9e-12 vs exact evaluator (separate baseline) |
+| `0d` | [`0d`](0d/README.md), frozen CUDA/A100 | 8.3 ms | pending (Perlmutter re-run, issue #23 task); 1.5e-11 vs frozen production (separate baseline) |
+| `2d` | [`2d`](2d/README.md), `ShearPrjCuhre` C++ (fixed log-GL angle, adaptive (z, lnM)) | minutes | pending (Perlmutter re-run, issue #23 task) |
+| `3d` | [`3d`](3d/README.md), PAGANI CUDA/A100, eps_rel=1e-3 | 95 s | Reference-class diagnostic (3d); median 9.5e-4, maximum 2.2% vs region-split GL; convergence open |
+| `3d` | [`3d`](3d/README.md), PAGANI CUDA/A100, eps_rel=1e-4 | 463 s | Lower requested tolerance does not remove the missed-feature risk |
 
 The exact-z Python/C++ region-split path is the current observable precision
 reference. The frozen GPU path is a production algorithm variant, while the

@@ -9,7 +9,7 @@
 //             Σ_crit^-1(zt) S_j(zt) S_i(lt, zt) P_HOD(lt | M, zt)
 //             d_tot(R, lnM, zt | bin),
 //
-//   d_tot = max( DSigma_cl(R, lnM | bin),
+//   DSigma_tot = max( DSigma_cl(R, lnM | bin),
 //                b(lnM, zt) * DSigma_hh(R, zt) )
 //
 // with DSigma_cl the production miscentred mixture ((1 - f_mis)

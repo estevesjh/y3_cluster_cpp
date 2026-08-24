@@ -1,30 +1,3 @@
-// Miscentred one-halo shear — full (lambda_true, lnM, z) reference, CUDA.
-//
-// PAGANI twin of the C++/Cuhre backend (../cpp/shear1h_full_ltmz_t.hh):
-// one adaptive triple integral per (bin, R) wall point over the full
-// explicit integrand times the production miscentred mixture profile
-// d_tot. The HOD and the EMG observed-richness kernel S_i are the
-// gpu_prj_costanzi2026 device models (Arwa Qadi, upstream PR #3):
-// y3_cuda::MOR_SHIFTED_POISSON_t and y3_cuda::EMG_DES_t (analytic EMG
-// CDF difference, no lambda_ob quadrature). MOR convention: the
-// Costanzi-2026 P-operator form (no central-count shift; see the note
-// in num_counts_full_ltmz_gpu_t.cuh — MOR_SP(ltr) = MOR_HOD(ltr + 1)
-// above Mmin). The observed-redshift
-// kernel S_j is zkernel_sj (num_counts_full_ltmz_gpu_t.cuh) — verbatim
-// the CPU richness_zkernel at the per-bin constant sigma_z. The profile
-// uses the per-sample haloModel/dSigma_nfw table as a quad::Interp2D
-// and the y3_cuda::NFW_DSIGMA_MIS gamma-table reader with
-// set_rho_mult(Omega_m), matching the host convention.
-//
-// f_mis and tau_mis are REQUIRED datablock values (miscentering/f_mis,
-// miscentering/tau_mis): set_sample throws if the section is missing —
-// no silent fallback to the Y3 fiducial defaults.
-//
-// Configuration: identical to the C++ backend (zipped (bin_index,
-// r_perp) wall + per-row (lt, zt, lnm) volumes + bin definitions),
-// section Shear1hFullLtmzGpu, algorithm = pagani.
-// Output: shear1hfullltmzgpu/{vals, errors, ...}.
-// Status: reference backend. Production remains Shear1hMisSel.so.
 #ifndef Y3_CLUSTER_CPP_SHEAR1H_FULL_LTMZ_GPU_T_CUH
 #define Y3_CLUSTER_CPP_SHEAR1H_FULL_LTMZ_GPU_T_CUH
 
@@ -47,7 +20,7 @@
 #include "models/omega_z_des.cuh"
 
 // zkernel_sj (observed-redshift kernel S_j).
-#include "pipelines/des_y3/number_counts/full_ltmz/cuda/num_counts_full_ltmz_gpu_t.cuh"
+#include "pipelines/des_y3/number_counts/3d/cuda/num_counts_full_ltmz_gpu_t.cuh"
 
 #include <cmath>
 #include <optional>

@@ -4,7 +4,7 @@
 //
 // Reference/candidate backend under src/pipelines/des_y3; the
 // production stage remains Shear1hMisSel.so.
-#include "pipelines/des_y3/shear_1h2h/radial_series/cpp/shear1h_radial_series_t.hh"
+#include "pipelines/des_y3/shear_1h2h/0d/cpp/shear1h_radial_series_t.hh"
 #include "utils/module_macros.hh"
 
 using Shear1hRadialSeries = y3_cluster::des_y3::Shear1hRadialSeries;

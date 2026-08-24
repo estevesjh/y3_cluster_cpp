@@ -4,7 +4,7 @@ The reference configuration of the DES Y3 cluster-cosmology analysis is
 [`cosmosis-models/des_y3.ini`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/cosmosis-models/des_y3.ini)
 in this repository: the same forward model and DataBlock contract as
 the DES Y1 pipeline ({doc}`variants`), with the three observable stages
-swapped for their `src/pipelines/des_y3` fast_mass implementations —
+swapped for their `src/pipelines/des_y3` fixed-GL (`0d`, formerly `fast_mass`) implementations —
 `NumCountsFastMass`, `Shear1hFastMass`, `ShearPrjFastMass` — per
 [`src/pipelines/des_y3/README.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/README.md)'s
 own "Reference pipeline choices" table. Cosmology, halo model,
@@ -41,11 +41,11 @@ likelihoods = likelihoods
 | 5 | {doc}`halo_model <cosmology/halo_model>` | Tinker bias $b(M,z)$, $\xi_{\rm NL}$, NFW lensing tables | Python · `y3_cluster_cpp` |
 | 6 | {doc}`average_sigma_crit_inv <cosmology/sigma_crit_inv>` | $\langle\Sigma_{\rm crit}^{-1}\rangle(z_l)$ | Python · `y3_cluster_cpp` |
 | 7 | {doc}`sel_function <selection/sel_function>` | selection tensor $S_{ij}(\ln M, z)$ | Python · `systematics/selection_richness` |
-| 8 | {doc}`NumCountsFastMass <observables/number_counts>` | cluster counts $N_i[1]$ (fast_mass, des_y3) | C++ · `y3_cluster_cpp` |
-| 9 | {doc}`Shear1hFastMass <observables/shear_halo>` | one-halo shear with miscentering (fast_mass, des_y3) | C++ · `y3_cluster_cpp` |
+| 8 | {doc}`NumCountsFastMass <observables/number_counts>` | cluster counts $N_i[1]$ (`0d`, des_y3) | C++ · `y3_cluster_cpp` |
+| 9 | {doc}`Shear1hFastMass <observables/shear_halo>` | one-halo shear with miscentering (`0d`, des_y3) | C++ · `y3_cluster_cpp` |
 | 10 | {doc}`b_sel_marg <selection/bsel>` | selection-bias operators $(P_1, I_1, J)$ | C++ · `y3_cluster_cpp` |
 | 11 | {doc}`bsel <selection/bsel>` | bias plateaus $(B_{\rm small}, B_{\rm large})$ | Python · `systematics/selection_bias` |
-| 12 | {doc}`ShearPrjFastMass <observables/shear_projection>` | projection shear $\gamma_t^{\rm prj}(R)$ (fast_mass, des_y3) | C++ · `y3_cluster_cpp` |
+| 12 | {doc}`ShearPrjFastMass <observables/shear_projection>` | projection shear $\gamma_t^{\rm prj}(R)$ (`3d`, des_y3) | C++ · `y3_cluster_cpp` |
 | 13 | {doc}`likelihoods <observables/likelihood>` | Gaussian $\log L$ | Python · `y3_cluster_cpp` |
 
 ```{note}

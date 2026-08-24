@@ -9,7 +9,7 @@ the first radius, "reported only, not asserted" for a documented
 convention gap) — nobody had directly checked the raw ΔΣ values against
 the full_ltmz reference until this pass.
 
-Producer: `src/pipelines/des_y3/observables/shear_1h2h/radial_series/python/nfw_profile_family.py`,
+Producer: `src/pipelines/des_y3/shear_1h2h/0d/python/nfw_profile_family.py`,
 line 36: `CONC = 4.0` — a hardcoded module-level constant.
 
 ## The measurement

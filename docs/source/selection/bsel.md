@@ -60,7 +60,7 @@ rows, but new pipeline runs never write it.
 ## Shared implementation
 
 The maintained implementation lives in
-[`src/pipelines/systematics/selection_bias/python/bsel.py`](/Users/jesteves/Documents/Dev/github/y3_cluster_cpp/src/pipelines/systematics/selection_bias/python/bsel.py).
+[`src/pipelines/systematics/selection_bias/python/bsel.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/src/pipelines/systematics/selection_bias/python/bsel.py).
 `src/pipelines/cosmology/bsel.py` remains a compatibility reference, and
 `src/pipelines/shared/datablock_models.py` owns the data and HOD models shared
 by `sel_function` and `bsel`.
@@ -144,7 +144,7 @@ cleanup(config)
 ## C++ population operators
 
 `C++` · module `b_sel_marg` · source model
-[`src/models/p_operator_t.hh`](/Users/jesteves/Documents/Dev/github/y3_cluster_cpp/src/models/p_operator_t.hh)
+[`src/models/p_operator_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/src/models/p_operator_t.hh)
 
 The operators are
 
@@ -261,12 +261,12 @@ wall row -> exact (lambda_bin, zob) lookup
 |---|---|---|
 | production CPU | `src/pipelines/systematics/shear_prj/cpp/sigma_prj_t.hh` (`ShearPrjCore`, GSL, Cuhre) | `sp_detail::BSelBins::at` |
 | frozen CPU | `src/pipelines/systematics/shear_prj/cpp/sigma_prj_frozen_t.hh` and `sigma_prj_frozen_interp_t.hh` | `sp_detail::BSelBins::at` |
-| fast-mass Python | `shear_prj_fast_mass.py` | `dm.BSelBins.values` |
+| `3d` fixed-GL Python | `shear_prj_fast_mass.py` | `dm.BSelBins.values` |
 | frozen fast-mass CUDA | `ShearPrjFrozenGpu.cu` | `sp_detail::BSelBins::at` |
 | full-ltmz CUDA | `DSigmaPrjFullLtmzGpu.cu` | `sp_detail::BSelBins::at` |
 
 The maintained C++ helper is in
-[`src/pipelines/systematics/selection_bias/cpp/bsel_bins_t.hh`](/Users/jesteves/Documents/Dev/github/y3_cluster_cpp/src/pipelines/systematics/selection_bias/cpp/bsel_bins_t.hh).
+[`src/pipelines/systematics/selection_bias/cpp/bsel_bins_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/src/pipelines/systematics/selection_bias/cpp/bsel_bins_t.hh).
 The original `src/models/bsel_bins_t.hh` remains available for legacy
 production modules.
 It validates vector alignment, redshift midpoints, and duplicate exact rows.
@@ -283,7 +283,7 @@ The relevant checks are:
 
 - `test/sel_function.test.py`: shared HOD and selection-kernel behavior;
 - `test/shear_prj_fast_mass.test.cc`: wall geometry and theta-grid behavior;
-- `test/dsigma_prj_full_ltmz_gpu.test.cu`: full-ltmz CUDA formula assembly;
+- `test/dsigma_prj_full_ltmz_gpu.test.cu`: adaptive (projection `3d`) CUDA formula assembly;
 - `test/shear_prj_frozen_gpu.test.cu`: frozen CUDA dump replay;
 - `test/shear_prj_cross_backend.test.py`: optional cross-backend comparison.
 

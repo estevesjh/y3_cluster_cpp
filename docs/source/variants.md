@@ -2,7 +2,7 @@
 
 The main walkthrough ({doc}`running`) documents the DES Y3 reference
 pipeline (`des_y3.ini`), which swaps three DES Y1 production modules
-for algorithmically-identical `src/pipelines/des_y3` fast_mass
+for algorithmically-identical `src/pipelines/des_y3` fixed-GL (formerly `fast_mass`)
 implementations. This page lists: the DES Y1 pipeline those modules
 replace, and every other retained variant — what changes, which
 observable changes, its status (comparative / validation-only), and how
@@ -128,13 +128,13 @@ b(\ln M, z)\,\Delta\Sigma_{\rm hh}(R, z)\big), \qquad
 N_i[\Phi_{\max}](R)\,\langle\Sigma_{\rm crit}^{-1}\rangle / N_i[1].$$
 
 Implemented by
-[`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/python/shear1h2h_max.py)
+[`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/0d/python/shear1h2h_max.py)
 (`shear1h2h_max.py`, C++ `Shear1h2hMax.cc`, CUDA
 `Shear1h2hMaxGpu.cu`) — a **model option**, not part of the reference
 pipeline ({doc}`../running`, {doc}`observables/second_halo_term`).
 Unlike the one-halo operator, the two-halo term is $z$-dependent, so the
 redshift integral cannot be contracted past the profile the way
-`fast_mass` does elsewhere — `Shear1h2hMax` keeps a $z$-resolved
+the one-halo $z$-contracted `0d` path does elsewhere — `Shear1h2hMax` (also `0d`: fixed-GL only) keeps a $z$-resolved
 tabulated weight and does a double fixed-GL contraction instead.
 
 vs the reference's $1h^{\rm mis} + {\rm prj}$: no miscentering

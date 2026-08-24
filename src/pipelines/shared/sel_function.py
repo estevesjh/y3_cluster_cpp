@@ -161,7 +161,7 @@ def _plob_params(ltr, z, plob_splines, work_dtype=np.float64):
     1e-3 of its peak — same order as the erfcx/Phi polynomials already
     used in _cdf_lob_stacked_nb, and ~3 decades inside the pipeline's
     1e-3 budget.  It is opt-in per call site: ``execute()`` below asks
-    for it, every other caller (notably the des_y3 full_ltmz *reference*
+    for it, every other caller (notably the des_y3 explicit 3d (formerly full_ltmz) *reference*
     integrals, which must stay at their quoted <=1e-6) keeps float64.
 
     ``mu`` is always float64 regardless: it carries no transcendental,

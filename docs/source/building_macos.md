@@ -16,7 +16,7 @@ node, no queue. `USE_CUDA=OFF` was never optional here: no Mac has a
 CUDA-capable GPU (Apple Silicon has none at all; Intel Macs dropped NVIDIA
 driver support years ago). PAGANI/`gpuintegration` is reference-only
 anyway (see {doc}`pipeline_organization`), so this loses nothing that
-matters for day-to-day `fast_mass` work.
+matters for day-to-day fixed-GL (`0d`, formerly `fast_mass`) work.
 ```
 
 Version pins below match the NERSC `y3cl_je` conda env as of 2026-08-13
@@ -316,7 +316,7 @@ Source it in every new shell: `source ~/cosmosis_y3/cosmosis_init_macos.sh`.
 
 - **No CUDA, no PAGANI.** All `*Gpu.so` modules and the `gpuintegration`
   reference backends are unavailable — expected, not a bug. The
-  `fast_mass` C++ path (this project's actual production speed target)
+  fixed-GL C++ path (this project's actual production speed target)
   never needed them.
 - **CosmoSIS `.ini` pipelines live in sibling repos**, not this tree (see
   the top-level `CLAUDE.md`). Running an actual pipeline additionally

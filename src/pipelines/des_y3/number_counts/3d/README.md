@@ -1,8 +1,11 @@
-# Explicit count integration
+# Explicit adaptive count integration (`3d`)
 
-This strategy is the independent reference for cluster counts. It evaluates
-the selection kernels at the quadrature nodes instead of using the production
-selection table $S_{ij}(\ln M,z)$.
+This strategy (formerly `full_ltmz`; three adaptive dimensions) is the
+independent reference for cluster counts. It evaluates the selection kernels
+at the quadrature nodes instead of using the production selection table
+$S_{ij}(\ln M,z)$. The fixed-GL Python twin of the same explicit composition
+carries zero adaptive dimensions and lives in
+[`../0d/`](../0d/README.md#explicit-fixed-gl-python-reference).
 
 ## Numerical definition
 
@@ -52,7 +55,7 @@ mass integral.
 
 | Language | Algorithm and source files | Output |
 | --- | --- | --- |
-| Python | Fixed-GL module in `python/numcounts_full_ltmz.py`; the shared adaptive mass reference is in `shared/full_ltmz_core.py`. Kernels are imported from `shared/sel_kernels.py`, not copied. | `numcounts_full_ltmz/vals` |
+| Python | No module here: the fixed-GL Python twin (`numcounts_full_ltmz.py`) has zero adaptive dimensions and lives in [`../0d/`](../0d/README.md#explicit-fixed-gl-python-reference). The shared adaptive mass reference is in `shared/full_ltmz_core.py`. | see `../0d/` |
 | C++ | `cpp/NumCountsFullLtmz.cc` instantiates the immutable scalar integration template; `cpp/num_counts_full_ltmz_t.hh` supplies the Cuhre integrand and model composition. | `numcountsfullltmz/{vals,errors,probs,status,nregions}` |
 | CUDA | `cuda/NumCountsFullLtmzGpu.cu` instantiates the CUDA integration macro; `cuda/num_counts_full_ltmz_gpu_t.cuh` supplies the PAGANI integrand, composing the gpu_prj_costanzi2026 device models (`models/mor_shifted_poisson_t.cuh`, `models/emg_des_t.cuh`; Arwa Qadi, upstream PR #3) plus the local `zkernel_sj`. Note the MOR convention offset documented in the header (Costanzi-2026 form, no central-count shift). | `numcountsfullltmzgpu/{vals,errors,probs,status,nregions}` |
 
@@ -64,12 +67,12 @@ and adaptive PAGANI on GPU.
 
 Pinned 12-bin fiducial measurements:
 
-| Backend | Cost | Comparison |
-| --- | ---: | --- |
-| Python adaptive mass reference | 25 s/sample | Reference; reported error $\le 10^{-6}$ |
-| Python fixed GL | 83 ms/sample | $3.5\times10^{-5}$ vs adaptive |
-| C++ Cuhre, `eps_rel=1e-4` | 3.1 s/sample | $4.9\times10^{-4}$ vs fixed-GL reference |
-| CUDA PAGANI, A100 | 2.0 s/sample | $5.1\times10^{-4}$ vs fixed-GL reference |
+| Dims | Backend | Cost | Precision vs 3d |
+| --- | --- | ---: | --- |
+| `3d` | Python adaptive mass reference | 25 s/sample | Reference (3d); reported error $\le 10^{-6}$ |
+| `0d` | Python fixed GL (3-dim GL, in `../0d/`) | 83 ms/sample | $3.5\times10^{-5}$ |
+| `3d` | C++ Cuhre, `eps_rel=1e-4` | 3.1 s/sample | $4.9\times10^{-4}$ (baseline: the 0d fixed-GL Python, itself $3.5\times10^{-5}$ from the 3d reference) |
+| `3d` | CUDA PAGANI, A100 | 2.0 s/sample | $5.1\times10^{-4}$ (same fixed-GL baseline) |
 
 `eps_rel=1e-3` is not accepted for the Cuhre reference: it can under-integrate
 the near-delta richness ridge by about one percent in the lowest-richness bin.

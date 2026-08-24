@@ -67,9 +67,10 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "pipelines"))
 _SHEAR1H2H = REPO / "src" / "pipelines" / "des_y3" / "shear_1h2h"
-sys.path.insert(0, str(_SHEAR1H2H / "full_ltmz" / "python"))
-sys.path.insert(0, str(_SHEAR1H2H / "fast_mass" / "python"))
-sys.path.insert(0, str(_SHEAR1H2H / "radial_series" / "python"))
+sys.path.insert(0, str(_SHEAR1H2H / "0d" / "python"))
+sys.path.insert(0, str(_SHEAR1H2H / "0d" / "python"))
+sys.path.insert(0, str(_SHEAR1H2H / "0d" / "python"))
+sys.path.insert(0, str(_SHEAR1H2H / "0d" / "python"))
 
 from shared import datablock_models as dm  # noqa: E402
 from shared import lensing_profiles as lp  # noqa: E402
@@ -376,6 +377,14 @@ class TestShear1hCrossBackend(unittest.TestCase):
         # max model can only be >= the pure-1h fast_mass integral, for
         # every (bin, R) -- true regardless of the ΔΣ_hh open defect
         # (docs/known_issues/dsigma_hh_debug_flag.md).
+        #
+        # TODO(#23): currently red at the 6e-8 level in bins 5-7 where
+        # the max equals the 1h branch exactly -- the pinned arrays and
+        # the dump come from different executions and the 1e-9 pad is
+        # tighter than cross-run float reproducibility (~1e-7). Re-pin
+        # against a fresh dump or loosen the pad to 1e-6; deferred until
+        # the next Perlmutter session so all backends are re-run
+        # together (see github issue #23).
         fast_cpp_proxy = self.source.array("shear1hmissel", "vals")
         self.assertTrue(np.all(CPP_MAX_MODEL >= fast_cpp_proxy * (1.0 - 1e-9)))
 

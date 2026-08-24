@@ -471,7 +471,7 @@ That contradicts this project's own documented standard
 the **pointwise max**, $\Sigma_{\max} = \max(\Sigma_{\rm NFW},\,
 b\,\Sigma_{\rm hh})$ (Hayashi & White 2008, the DES Y1 prescription),
 implemented by
-[`shear1h2h_max.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/python/shear1h2h_max.py).
+[`shear1h2h_max.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/0d/python/shear1h2h_max.py).
 Removed rather than left showing the wrong physics. Regenerating it
 needs a real fiducial pipeline dump with `compute_lensing_2h = T` — not
 available in this environment; see {doc}`../observables/second_halo_term`

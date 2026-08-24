@@ -4,20 +4,20 @@ The `full_ltmz` reference for the shear observable: the explicit
 quadruple composition
 
     O_ij(R) = int dz int dlnM int dlt  n(M,z) dV/dOmega/dz(z) Omega(z)
-              Sigma_crit_inv(z) K_j(z) K_i(lt, z) P_HOD(lt | M, z)
-              Phi_i(R, lnM)
+              Sigma_crit_inv(z) S_j(z) S_i(lt, z) P_HOD(lt | M, z)
+              DSigma_i(R, lnM)
 
 with every selection kernel evaluated at the quadrature nodes (no
 S_ij tabulation, no interpolation) — the same shared full_ltmz
 contraction the counts reference uses
 (shared.full_ltmz_core.full_ltmz_mass_weights, here with
 Sigma_crit_inv folded into the z factors), contracted against the
-production miscentred mixture Phi_i (shared lensing_profiles, the
-interpolation-exact haloModel + gamma-table pair). Because Phi is
+production miscentred mixture DSigma_i (shared lensing_profiles, the
+interpolation-exact haloModel + gamma-table pair). Because DSigma is
 z-free (fixed concentration and reference density — the property the
 radial-factorization study established), the lt and z integrals
 commute past it exactly; the "quadruple" integral is the counts
-triple integral weighted by Phi in the final mass sum.
+triple integral weighted by DSigma in the final mass sum.
 
 Difference vs the fast_mass backend is precisely the production
 S_ij-tabulation error; difference vs radial_series is tabulation +
@@ -72,8 +72,8 @@ def compute_shear(bins, mor, plob_splines, hmf, dv, sci, profile,
     n_r = len(r_perp)
     vals = np.empty(len(bin_index) * n_r)
     for i, b in enumerate(bin_index):
-        phi = profile(b, np.asarray(r_perp)[:, None], lnm_x[None, :])
-        vals[i * n_r:(i + 1) * n_r] = phi @ (lnm_w * weights[b])
+        DSigma = profile(b, np.asarray(r_perp)[:, None], lnm_x[None, :])
+        vals[i * n_r:(i + 1) * n_r] = DSigma @ (lnm_w * weights[b])
     return vals
 
 

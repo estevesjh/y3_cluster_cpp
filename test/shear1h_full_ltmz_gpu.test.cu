@@ -2,7 +2,7 @@
 
 #include "models/emg_des_t.cuh"
 #include "models/mor_shifted_poisson_t.cuh"
-#include "pipelines/des_y3/number_counts/full_ltmz/cuda/num_counts_full_ltmz_gpu_t.cuh"
+#include "pipelines/des_y3/number_counts/3d/cuda/num_counts_full_ltmz_gpu_t.cuh"
 
 #include "models/mor_hod_t.hh"
 #include "models/plob_ltr_emg_t.hh"

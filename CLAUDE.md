@@ -283,19 +283,39 @@ Rules that bite if ignored:
   selection-bias closure live one level up in `cosmology/` (same
   sys.path convention); see `src/pipelines/cosmology/README.md`.
 
-### Strategy names
+### Strategy names (adaptive-dimension tags)
 
-`full_ltmz` = explicit (λ_true, lnM, z) integration; `fast_mass` = the z
-integral contracted on fixed GL nodes *outside* the radial operator
-(counts and 1-halo shear; the projection's exact-z core too);
-`radial_series` = offline U_ℓ tables + population moments. Note the
-traditional 1h+2h **max model** keeps z *inside* the mass integral —
-its 2-halo term is z-dependent, so `fast_mass` there means "tabulated
-S_ij", not "z contracted".
+Strategy folders are named by the number of **adaptive** integration
+dimensions (Cuhre/PAGANI — the cost driver). Fixed-GL sums and offline
+tables count zero: everything all-GL/tabulated is `0d` (fast,
+MCMC-viable). The maximum-dimension folder of each observable is
+always the adaptive reference; every lower folder is a documented
+dimension reduction from it.
+
+- `number_counts/{0d, 3d}` — 0d holds the S_ij-tabulated fast path
+  (was `fast_mass`) AND the explicit fixed-GL Python reference (was
+  `full_ltmz` Python); 3d = the adaptive explicit C++/CUDA references
+  (was `full_ltmz`).
+- `shear_1h2h/{0d, 3d}` — 0d holds four GL/table algorithms: the U_ℓ
+  radial series (was `radial_series`), the 1h z-contracted mass sum
+  (was `fast_mass`), the max model's z-resolved (lnM, z) sum, and the
+  explicit fixed-GL Python references; 3d = adaptive explicit C++/CUDA
+  (1-halo and max).
+- `shear_projection/{0d, 2d, 3d}` — 0d = region-split fixed-GL
+  (exact-z core + frozen-physics CUDA; was `fast_mass`); 2d =
+  ShearPrjCuhre (θ split-GL outer, two adaptive inner dims); 3d =
+  fully-coupled 3-D PAGANI diagnostic (was `full_ltmz` CUDA).
+
+Only the FOLDERS carry the new names: module labels, class names,
+file names, and output sections keep their historical strings
+(NumCountsFullLtmz, shear1h_fast_mass/vals, ...), so inis and
+validators reference them unchanged. Colliding validators were
+qualified: validate_fast_vs_production.py /
+validate_explicit_vs_production.py.
 
 ### Testing precision and cost
 
-Accuracy is always quoted against an **adaptive** `full_ltmz` reference
+Accuracy is always quoted against an **adaptive** explicit-integration reference
 (`shared/full_ltmz_core.py::full_ltmz_mass_integral_adaptive`,
 reported error ≤ 1e-6), never against a production `.so` — production
 carries its own approximations (S_ij tabulation ~8e-4, frozen physics

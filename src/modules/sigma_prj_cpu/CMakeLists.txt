@@ -21,16 +21,9 @@ foreach(mod SigmaPrjEvaluator DSigmaPrjEvaluator ShearPrjEvaluator)
                          -ffast-math -fopenmp-simd -march=native)
 endforeach()
 
-# Adaptive reference path: same theta outer (log-GL with breakpoints)
-# but inner (z, lnM) driven by cubacpp::Cuhre / cubacpp::Vegas.  Used
-# for head-to-head convergence diffs against ShearPrjEvaluator and
-# Python SigmaPrj.  Writes sigma_prj_cuhre / dsigma_prj_cuhre /
-# shear_prj_cuhre.
-add_library(ShearPrjCuhre MODULE ShearPrjCuhre.cc)
-target_link_libraries(ShearPrjCuhre PRIVATE cosmosis utils models
-                      ${GSL_LIBRARIES} ${CUBA_LIBRARIES} fmt::fmt)
-target_include_directories(ShearPrjCuhre PRIVATE ${CMAKE_SOURCE_DIR}/src
-                           ${CUBACPP_DIR} ${GSL_INCLUDE_DIRS})
+# The adaptive reference path (ShearPrjCuhre) moved to
+# src/pipelines/des_y3/shear_projection/2d/cpp/ — it is the C++
+# backend of the des_y3 full_ltmz projection strategy.
 
 # GSL-driven variant: QAGP over z (explicit breakpoint at z=zob),
 # fixed GL on (lnM, theta).  Legacy -- still on the old theta recipe

@@ -36,23 +36,28 @@ $$
 b(M,z)\Delta\Sigma_{hh}(R,z)\right].
 $$
 
-The numerical implementations are documented in the strategy READMEs:
-[`full_ltmz`](full_ltmz/README.md), [`fast_mass`](fast_mass/README.md), and
-[`radial_series`](radial_series/README.md).
+The numerical implementations are documented in the strategy READMEs,
+named by the number of adaptive integration dimensions:
+[`3d`](3d/README.md) (formerly `full_ltmz`, the adaptive explicit
+references) and [`0d`](0d/README.md) (no adaptive integration — the
+fixed-GL and tabulated fast backends: the one-halo z-contracted sum and
+the max model's z-resolved sum, both formerly `fast_mass`; the explicit
+fixed-GL Python references; and the moment-expanded radial series,
+formerly `radial_series`).
 
 ## Precision and cost
 
 Pinned 12-bin by 10-radius fiducial measurements; cost is per sample.
 
-| Method and backend | Cost | Comparison or status |
-| --- | ---: | --- |
-| [`full_ltmz`](full_ltmz/README.md), adaptive Python | 35 s | Reference; reported integration error at or below 1e-6 |
-| [`full_ltmz`](full_ltmz/README.md), fixed GL Python | 149 ms | 4.9e-5 vs adaptive reference |
-| [`full_ltmz`](full_ltmz/README.md), Cuhre C++ | 51 s | 3.3e-4 vs Python reference |
-| [`full_ltmz`](full_ltmz/README.md), PAGANI CUDA/A100 | 32 s | 3.4e-4 vs C++ reference |
-| [`fast_mass`](fast_mass/README.md), one-halo Python/C++ | 74 / 9 ms | 8.4e-4 vs adaptive; identity with production |
-| [`fast_mass`](fast_mass/README.md), max C++/CUDA/A100 | 11 / 8 ms | 8.3e-4 vs adaptive; CUDA agrees with C++ to 6.4e-15 |
-| [`radial_series`](radial_series/README.md), Python/C++ | 6--7 ms | Internal fixed-profile consistency only; not production accuracy |
+| Dims | Method and backend | Cost | Precision vs 3d |
+| --- | --- | ---: | --- |
+| `3d` | [`3d`](3d/README.md), adaptive Python | 35 s | Reference (3d); reported integration error at or below 1e-6 |
+| `3d` | [`3d`](3d/README.md), Cuhre C++ | 51 s | 3.3e-4 vs the 3d Python reference |
+| `3d` | [`3d`](3d/README.md), PAGANI CUDA/A100 | 32 s | 3.4e-4 (baseline: the 3d C++ twin) |
+| `0d` | [`0d`](0d/README.md), explicit Python (3-dim GL) | 149 ms | 4.9e-5 |
+| `0d` | [`0d`](0d/README.md), one-halo Python/C++ (1-dim GL, z contracted) | 74 / 9 ms | 8.4e-4; also identity with production (separate baseline) |
+| `0d` | [`0d`](0d/README.md), max C++/CUDA/A100 (2-dim GL, z-resolved) | 11 / 8 ms | 8.3e-4; CUDA agrees with C++ to 6.4e-15 (twin baseline) |
+| `0d` | [`0d`](0d/README.md), radial series Python/C++ (tables + moments) | 6--7 ms | 56--86% vs 3d (known fixed-c=4 defect, [docs/known_issues](../../../../docs/known_issues/radial_series_vs_full_ltmz_defect.md)); 3.7e-3 internal fixed-profile consistency |
 
 The traditional max model is provisional because its two-halo input has a
 separate `haloModel/dSigma_hh` data defect.

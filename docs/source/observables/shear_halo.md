@@ -14,33 +14,34 @@ profile and adds the projection term.
   (`nosel_gl_detail::SelGLCore`, shared with {doc}`number_counts`) +
   [`src/modules/num_counts_sel/lensing_weights.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/modules/num_counts_sel/lensing_weights.hh)
   (unchanged production model, immutable dependency).
-- Module driver: [`src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc)
+- Module driver: [`src/pipelines/des_y3/shear_1h2h/0d/cpp/Shear1hFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/0d/cpp/Shear1hFastMass.cc)
   (`DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE`) — bitwise-equivalent to
   DES Y1's `Shear1hMisSel.so` ({doc}`../variants`), own module label
   and output section.
 - Compiled library loaded by CosmoSIS:
-  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_fast_mass_cpp/Shear1hFastMass.so`.
+  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear1h_0d_cpp/Shear1hFastMass.so`.
 - Disk tables: `data/nfw_off_center/*gamma*` — $1000 \times 1000$ log-log
   grids of the gamma-kernel miscentred NFW in
   $(R/r_s, R_{\rm mis}/r_s)$, loaded once at module construction.
 
 ## DES Y3 implementations
 
-This module is the `fast_mass` cell — the reference pipeline's choice
+This module is the `0d` $z$-contracted cell (formerly `fast_mass`; zero adaptive dimensions) — the reference pipeline's choice
 per `src/pipelines/des_y3/README.md`'s own "Reference pipeline choices"
 table. Other implementations below
-`src/pipelines/des_y3/observables/shear_1h2h` provide the reference and
+`src/pipelines/des_y3/shear_1h2h` provide the reference and
 alternative cells described in {doc}`../pipeline_organization`:
 
-| Strategy | Backends | Implementation and status |
-|---|---|---|
-| `full_ltmz` | Python, C++, CUDA | Explicit $(\lambda_{\rm true},\ln M,z)$ one-halo miscentred references |
-| `fast_mass` | **C++ (this page)**, Python | Exact redshift contraction and direct mass sum; `Shear1hFastMass.so` is bitwise-equivalent to `Shear1hMisSel.so` |
-| `radial_series` | Python, C++ | Offline $U_\ell$ tables plus per-sample population moments; a review comment flags a possible double-counted miscentering term here — see {doc}`../variants` |
-| `fast_mass` max model | Python, C++, CUDA | `Shear1h2hMax` — traditional $\max(1h,b\,2h)$ model option, not part of this reference pipeline — see {doc}`../variants` |
+| Dims | Backends | Implementation and status | Precision vs 3d |
+|---|---|---|---|
+| `3d` | C++, CUDA | Explicit $(\lambda_{\rm true},\ln M,z)$ adaptive one-halo miscentred references | 3.3e-4 / 3.4e-4 (vs the adaptive certifier) |
+| `0d` | Python | Explicit fixed-GL 3-dim grid | 4.9e-5 |
+| `0d` | **C++ (this page)**, Python | Exact redshift contraction, 1-dim GL mass sum; `Shear1hFastMass.so` is bitwise-equivalent to `Shear1hMisSel.so` (identity recorded separately) | 8.4e-4 |
+| `0d` | Python, C++ | Offline $U_\ell$ radial-series tables plus per-sample population moments; a review comment flags a possible double-counted miscentering term here — see {doc}`../variants` | 3.7e-3 truncation vs same-profile fiducial; raw vs-3d amplitude is the open c=4 defect |
+| `0d` | Python, C++, CUDA | `Shear1h2hMax` — traditional $\max(1h,b\,2h)$ model, $z$-resolved 2-dim GL sum, not part of this reference pipeline — see {doc}`../variants` | 8.3e-4 (through the Python max chain) |
 
 The radial-series tables are versioned under `data/radial_series` and are
-loaded, never regenerated, during sampling. The `full_ltmz` cells are the
+loaded, never regenerated, during sampling. The `3d` cells are the
 accuracy references; the fast and series paths retain their own documented
 physics and interpolation approximations.
 
@@ -95,7 +96,7 @@ miscentering model: {doc}`../math/index`.
 
 ```ini
 [Shear1hFastMass]
-file = ${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_fast_mass_cpp/Shear1hFastMass.so
+file = ${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear1h_0d_cpp/Shear1hFastMass.so
 bin_index = 0 1 2 3 4 5 6 7 8 9 10 11
 r_perp = 0.0426 0.0669 0.1045 0.1652 0.2607 0.4117 0.6505 1.0257 1.6181 2.5537 4.0265 6.3490 10.0107 15.7832 24.8771
 zt_low  = 0.05

@@ -16,11 +16,11 @@ $\gamma_t^{\rm theory} = \langle\gamma_t^{1h}\rangle + \gamma_t^{\rm prj}$.
   (`sp_detail::ShearPrjCore` — the shared $\theta$-grid/$z$-grid core
   also used by DES Y1's `ShearPrjEvaluator`/`ShearPrjFrozenPhysics`,
   {doc}`../variants`).
-- Module driver: [`src/pipelines/des_y3/observables/shear_projection/fast_mass/cpp/ShearPrjFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/observables/shear_projection/fast_mass/cpp/ShearPrjFastMass.cc)
+- Module driver: [`src/pipelines/des_y3/shear_projection/0d/cpp/ShearPrjFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_projection/0d/cpp/ShearPrjFastMass.cc)
   — des_y3-namespaced wrapper over the same `ShearPrjCore`, own module
   label and output section.
 - Compiled library loaded by CosmoSIS:
-  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_prj_fast_mass_cpp/ShearPrjFastMass.so`.
+  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_prj_0d_cpp/ShearPrjFastMass.so`.
 - Disk tables (loaded once at construction, $c = 4$, **single**/delta
   offset kernel — not the gamma kernel {doc}`shear_halo` uses):
   `data/nfw_off_center/table_1000_1e-03_5e+03_single_{logx, logxmis}.txt`,
@@ -28,20 +28,21 @@ $\gamma_t^{\rm theory} = \langle\gamma_t^{1h}\rangle + \gamma_t^{\rm prj}$.
 
 ## DES Y3 implementations
 
-This module is the `fast_mass` cell — the reference pipeline's choice
+This module is the `0d` cell (formerly `fast_mass`; zero adaptive dimensions) — the reference pipeline's choice
 per `src/pipelines/des_y3/README.md`'s own "Reference pipeline choices"
 table. The namespace under
-`src/pipelines/des_y3/observables/shear_projection` also contains:
+`src/pipelines/des_y3/shear_projection` also contains:
 
-| Strategy | Backend | Implementation and status |
-|---|---|---|
-| `full_ltmz` | CUDA | `DSigmaPrjFullLtmzGpu.so`; adaptive $(\ln\theta,z,\ln M)$ PAGANI reference, with the innermost-radius convergence study still open |
-| `fast_mass` | Python | Exact-$z$ reference port of `ShearPrjCore` |
-| `fast_mass` | **C++ (this page)** | `ShearPrjFastMass.so`; exact-$z$ core emitting $\Delta\Sigma$ and shear in one pass |
-| `fast_mass` | CUDA | `ShearPrjFrozenGpu.so`; CUDA implementation of the explicitly frozen DES Y1 machinery |
-| `radial_series` | — | Planned, not implemented |
+| Dims | Backend | Implementation and status | Precision vs 3d |
+|---|---|---|---|
+| `3d` | CUDA | `DSigmaPrjFullLtmzGpu.so`; fully-coupled adaptive $(\ln\theta,z,\ln M)$ PAGANI diagnostic, with the innermost-radius convergence study still open | is the 3d diagnostic; median 9.5e-4, max 2.2% vs the region-split GL baseline |
+| `2d` | C++ | `ShearPrjCuhre.so`; feature-split $\theta$ log-GL with adaptive Cuhre/Vegas over the two dimensions $(z,\ln M)$ | pending (Perlmutter re-run) |
+| `0d` | Python | Exact-$z$ region-split GL port of `ShearPrjCore` | best-available baseline; vs-3d pending (blocked on the 3d convergence study) |
+| `0d` | **C++ (this page)** | `ShearPrjFastMass.so`; exact-$z$ core emitting $\Delta\Sigma$ and shear in one pass | 9.9e-12 vs the exact-$z$ evaluator (same core) |
+| `0d` | CUDA | `ShearPrjFrozenGpu.so`; CUDA implementation of the explicitly frozen DES Y1 machinery | machine precision vs DES Y1 frozen |
+| radial series | — | Planned, not implemented | — |
 
-Here `fast_mass` means that the redshift contraction occurs outside the
+Here `3d` (region-split fixed GL) means that the redshift contraction occurs outside the
 radial operator; it does not imply frozen physics — this module keeps
 the exact redshift dependence, unlike DES Y1's frozen-physics
 `shear_prj_frozen_physics` ({doc}`../variants`). The CUDA cell is
@@ -105,7 +106,7 @@ adaptive validation backends (`ShearPrjEvaluator`, `ShearPrjGsl`,
 
 ```ini
 [ShearPrjFastMass]
-file = ${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_prj_fast_mass_cpp/ShearPrjFastMass.so
+file = ${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_prj_0d_cpp/ShearPrjFastMass.so
 zt_low      = 0.10
 zt_high     = 0.75
 lnm_low     = 29.9336
