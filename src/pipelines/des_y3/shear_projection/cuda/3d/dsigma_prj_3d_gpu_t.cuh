@@ -44,6 +44,7 @@
 #include "models/hmf_t.cuh"
 #include "models/nfw_dsigma_mis.cuh"
 #include "models/z_kernel_data.hh"
+#include "pipelines/systematics/selection_bias/cpp/bsel_bins_t.hh"
 
 #include <cmath>
 #include <optional>
@@ -121,13 +122,11 @@ public:
     h_d_c_ = s.view<doubles>("distances", "d_c");
     h_bs_lob_ = s.view<doubles>("b_sel_marginalised", "lob");
     h_bs_zob_ = s.view<doubles>("b_sel_marginalised", "zob");
-    auto flat = [&s](char const* key) {
-      auto const nd = s.view<cosmosis::ndarray<double>>(
-        "b_sel_marginalised", key);
-      return std::vector<double>(nd.begin(), nd.end());
-    };
-    h_b_small_ = flat("b_small");
-    h_b_large_ = flat("b_large");
+    // read_bsel_vector, NOT view<ndarray<double>>: production bsel.py
+    // publishes b_small/b_large as 1-D double arrays (vector<double> on
+    // this side); the tolerant helper accepts either representation.
+    h_b_small_ = y3_cluster::sp_detail::read_bsel_vector(s, "b_small");
+    h_b_large_ = y3_cluster::sp_detail::read_bsel_vector(s, "b_large");
   }
 
   void

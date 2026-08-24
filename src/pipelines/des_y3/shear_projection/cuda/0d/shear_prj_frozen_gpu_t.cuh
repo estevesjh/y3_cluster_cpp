@@ -304,12 +304,13 @@ public:
       sample.view<std::vector<double>>("b_sel_marginalised", "zob");
     int const n_lob = int(b_sel_lob.size());
     int const n_zob = int(b_sel_zob.size());
-    auto const& nd_s =
-      sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "b_small");
-    auto const& nd_l =
-      sample.view<cosmosis::ndarray<double>>("b_sel_marginalised", "b_large");
-    std::vector<double> const b_small(nd_s.begin(), nd_s.end());
-    std::vector<double> const b_large(nd_l.begin(), nd_l.end());
+    // read_bsel_vector, NOT view<ndarray<double>>: production bsel.py
+    // publishes b_small/b_large as 1-D double arrays (vector<double> on
+    // this side); the tolerant helper accepts either representation.
+    std::vector<double> const b_small =
+      y3_cluster::sp_detail::read_bsel_vector(sample, "b_small");
+    std::vector<double> const b_large =
+      y3_cluster::sp_detail::read_bsel_vector(sample, "b_large");
 
     // ---- host part: per-slice grids and frozen weights (verbatim port).
     std::size_t const Nlz = lzob_lb_.size();
