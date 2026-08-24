@@ -1,42 +1,42 @@
-"""Miscentred one-halo shear — full (lambda_true, lnM, z) reference.
+"""Traditional 1h+2h max-model shear — full (lambda_true, lnM, z) reference.
 
-The `full_ltmz` reference for the shear observable: the explicit
-quadruple composition
+The `full_ltmz` reference for the traditional-shear observable: the
+explicit composition
 
     O_ij(R) = int dz int dlnM int dlt  n(M,z) dV/dOmega/dz(z) Omega(z)
-              Sigma_crit_inv(z) K_j(z) K_i(lt, z) P_HOD(lt | M, z)
-              Phi_i(R, lnM)
+              Sigma_crit_inv(z) S_j(z) S_i(lt, z) P_HOD(lt | M, z)
+              d_tot(R, lnM, z | bin)
 
-with every selection kernel evaluated at the quadrature nodes (no
-S_ij tabulation, no interpolation) — the same shared full_ltmz
-contraction the counts reference uses
-(shared.full_ltmz_core.full_ltmz_mass_weights, here with
-Sigma_crit_inv folded into the z factors), contracted against the
-production miscentred mixture Phi_i (shared lensing_profiles, the
-interpolation-exact haloModel + gamma-table pair). Because Phi is
-z-free (fixed concentration and reference density — the property the
-radial-factorization study established), the lt and z integrals
-commute past it exactly; the "quadruple" integral is the counts
-triple integral weighted by Phi in the final mass sum.
+    d_tot = max( DSigma_cl(R, lnM | bin),
+                 bias(lnM, z) * dSigma_hh(R, z) )
 
-Difference vs the fast_mass backend is precisely the production
-S_ij-tabulation error; difference vs radial_series is tabulation +
-truncation + the centred-profile convention (see the radial_series
-README).
+with every selection kernel evaluated at the quadrature nodes (no S_ij
+tabulation, no interpolation of the selection). Unlike the 1-halo
+full_ltmz backend, d_tot is z-dependent (the biased two-halo term) and
+the max is nonlinear, so the z integral cannot be contracted past the
+profile: this module uses the z-RESOLVED full_ltmz weight
+(shared.full_ltmz_core.full_ltmz_mass_z_weights, Sigma_crit_inv folded
+into the z factors) and performs the double fixed-GL contraction
+sum_kq W2d * d_tot per (bin, R) — the same contraction as the fast_mass
+shear1h2h_max backend, whose S_ij-tabulation error this reference
+isolates.
 
 DataBlock contract
 ------------------
 Reads (options): the union of the full_ltmz counts options
     (lam_min/lam_max/zob_min/zob_max/sigma_z per bin, zt/lnm envelope,
     n_lnm/n_z/n_q/l_lam) and the shear grid (bin_index, r_perp,
-    lob_centers).
+    lob_centers), plus include_miscentering (default T).
 Reads (datablock): the counts full_ltmz contract plus
     average_sigma_crit_inv/{zlense,sci_average},
-    halomodel/{r_sigma,lnM,dSigma_nfw}, miscentering/{f_mis,tau_mis},
-    and the fixed gamma miscentring tables.
-Writes: shear1h_full_ltmz/vals  (n_bins * n_r,)   [hardcoded section]
+    halomodel/{r_sigma, z, lnM, dSigma_nfw, dSigma_hh, bias}
+    (compute_lensing_2h = T), miscentering/{f_mis,tau_mis} (REQUIRED —
+    no in-code default fallback), and the fixed gamma miscentring
+    tables.
+Writes: shear1h2h_max_full_ltmz/vals  (n_bins * n_r,)  [hardcoded section]
 
-Status: reference implementation. Production remains Shear1hMisSel.so.
+Status: reference implementation. The fast_mass shear1h2h_max backends
+validate against this module.
 """
 from __future__ import annotations
 
@@ -57,23 +57,21 @@ from shared import full_ltmz_core
 from shared import lensing_profiles as lp
 from systematics.selection_richness.python import sel_kernels
 
-OUTPUT_SECTION = "shear1h_full_ltmz"
+OUTPUT_SECTION = "shear1h2h_max_full_ltmz"
 
 
-def compute_shear(bins, mor, plob_splines, hmf, dv, sci, profile,
-                  bin_index, r_perp, *, zt_low, zt_high, lnm_low, lnm_high,
-                  n_lnm=96, n_z=64, n_q=32, l_lam=6.0):
-    """Full-reference O(R) for the requested bins."""
-    lnm_x, lnm_w, weights = full_ltmz_core.full_ltmz_mass_weights(
-        bins, mor, plob_splines, hmf, dv, sci=sci,
-        zt_low=zt_low, zt_high=zt_high,
-        lnm_low=lnm_low, lnm_high=lnm_high,
-        n_lnm=n_lnm, n_z=n_z, n_q=n_q, l_lam=l_lam)
-    n_r = len(r_perp)
+def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp):
+    """O(R) = sum_kq lnm_w_k W2d[b,k,q] d_tot(b, R, lnM_k, z_q)."""
+    r_perp = np.asarray(r_perp, dtype=float)
+    n_r = r_perp.size
     vals = np.empty(len(bin_index) * n_r)
     for i, b in enumerate(bin_index):
-        phi = profile(b, np.asarray(r_perp)[:, None], lnm_x[None, :])
-        vals[i * n_r:(i + 1) * n_r] = phi @ (lnm_w * weights[b])
+        one = profile._one(b, r_perp[:, None], lnm_x[None, :])   # (r, k)
+        two = (profile._bias(lnm_x[:, None], z_x[None, :])[None, :, :]
+               * profile._hh(r_perp[:, None], z_x[None, :])[:, None, :])
+        d_tot = np.maximum(one[:, :, None], two)                 # (r, k, q)
+        vals[i * n_r:(i + 1) * n_r] = np.einsum(
+            "rkq,kq->r", d_tot, w2d[b] * lnm_w[:, None])
     return vals
 
 
@@ -102,6 +100,11 @@ def setup(options):
         cfg["l_lam"] = float(options.get_double(option_section, "l_lam"))
     except Exception:
         cfg["l_lam"] = 6.0
+    try:
+        cfg["include_miscentering"] = bool(
+            options.get_bool(option_section, "include_miscentering"))
+    except Exception:
+        cfg["include_miscentering"] = True
     return cfg
 
 
@@ -109,27 +112,30 @@ def execute(block, cfg):
     t0 = time.perf_counter()
     sf = sel_kernels.load()
     source = dm.DataBlockSource(block)
-    profile = lp.MisMixtureProfile(
+    profile = lp.MaxMixtureProfile(
         source, lob_centers=cfg["lob_centers"],
         # Required: no fallback to the fiducial defaults — a pipeline
         # missing the miscentering section must fail loudly.
         f_mis=source.scalar("miscentering", "f_mis"),
         tau_mis=source.scalar("miscentering", "tau_mis"),
-        omega_m=source.scalar("cosmological_parameters", "omega_m"))
+        omega_m=source.scalar("cosmological_parameters", "omega_m"),
+        include_miscentering=cfg["include_miscentering"])
 
-    block[OUTPUT_SECTION, "vals"] = compute_shear(
+    lnm_x, lnm_w, z_x, w2d = full_ltmz_core.full_ltmz_mass_z_weights(
         cfg, sf._read_mor(block), sf._make_plob_splines(block),
-        dm.HMF(source), dm.DVDoDz(source), dm.SigmaCritInv(source),
-        profile, cfg["bin_index"], cfg["r_perp"],
+        dm.HMF(source), dm.DVDoDz(source), sci=dm.SigmaCritInv(source),
         zt_low=cfg["zt_low"], zt_high=cfg["zt_high"],
         lnm_low=cfg["lnm_low"], lnm_high=cfg["lnm_high"],
         n_lnm=cfg["n_lnm"], n_z=cfg["n_z"], n_q=cfg["n_q"],
         l_lam=cfg["l_lam"])
+
+    block[OUTPUT_SECTION, "vals"] = compute_shear_max(
+        profile, lnm_x, lnm_w, z_x, w2d, cfg["bin_index"], cfg["r_perp"])
     dt_ms = 1000.0 * (time.perf_counter() - t0)
-    print(f"[shear1h_full_ltmz] {cfg['bin_index'].size} bins x "
+    print(f"[shear1h2h_max_full_ltmz] {cfg['bin_index'].size} bins x "
           f"{cfg['r_perp'].size} radii "
-          f"({cfg['n_lnm']}x{cfg['n_z']}x{cfg['n_q']} GL) — {dt_ms:.0f} ms",
-          flush=True)
+          f"({cfg['n_lnm']}x{cfg['n_z']}x{cfg['n_q']} GL, max 1h/2h) — "
+          f"{dt_ms:.0f} ms", flush=True)
     return 0
 
 

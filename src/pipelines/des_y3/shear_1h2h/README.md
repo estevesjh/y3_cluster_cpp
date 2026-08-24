@@ -56,3 +56,9 @@ Pinned 12-bin by 10-radius fiducial measurements; cost is per sample.
 
 The traditional max model is provisional because its two-halo input has a
 separate `haloModel/dSigma_hh` data defect.
+
+All backends read their lensing profile tables (`dSigma_nfw`, `dSigma_hh`,
+`bias`, `concentration`) from the `haloModel` datablock section, whose
+halo-model physics lives in the cosmology layer:
+[`../../cosmology/halo_model.py`](../../cosmology/halo_model.py) (driven
+through the CosmoSIS wrapper `y3_buzzard/halo_model_cosmosis.py`).

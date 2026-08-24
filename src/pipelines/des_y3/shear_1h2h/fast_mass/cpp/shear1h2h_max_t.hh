@@ -50,7 +50,7 @@
 #include "models/omega_z_des.hh"
 #include "models/p_operator_cuhre_t.hh"
 #include "models/sel_function_t.hh"
-#include "modules/num_counts_sel/lensing_weights.hh"
+#include "pipelines/shared/lensing_helpers.hh"
 #include "utils/datablock_reader.hh"
 #include "utils/interp_1d.hh"
 #include "utils/interp_2d.hh"
@@ -93,8 +93,7 @@ public:
     y3_cluster::p_op_detail::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
     y3_cluster::p_op_detail::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
     lob_centers_ =
-      y3_cluster_sel_weights::mis_detail::read_lob_centers(cfg,
-                                                           module_label());
+      y3_pipelines::read_lob_centers(cfg, module_label());
     if (lob_centers_.empty())
       throw std::runtime_error("Shear1h2hMax: lob_centers is empty");
   }
@@ -102,7 +101,7 @@ public:
   void
   set_sample(cosmosis::DataBlock& s)
   {
-    namespace w = y3_cluster_sel_weights;
+    namespace w = y3_pipelines;
 
     y3_cluster::HMF_t const hmf(s);
     y3_cluster::DV_DO_DZ_t const dv(s);
@@ -150,7 +149,7 @@ public:
 
     r_mis_.assign(n_bins_, 0.0);
     for (std::size_t b = 0; b != n_bins_; ++b)
-      r_mis_[b] = tau_mis * w::mis_detail::R_lambda(
+      r_mis_[b] = tau_mis * w::R_lambda(
                               lob_centers_[b % lob_centers_.size()]);
   }
 

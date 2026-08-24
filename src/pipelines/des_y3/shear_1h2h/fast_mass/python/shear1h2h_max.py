@@ -124,8 +124,10 @@ def execute(block, cfg):
     source = dm.DataBlockSource(block)
     profile = lp.MaxMixtureProfile(
         source, lob_centers=cfg["lob_centers"],
-        f_mis=dm.read_mis_param(source, "f_mis", dm.F_MIS_DEFAULT),
-        tau_mis=dm.read_mis_param(source, "tau_mis", dm.TAU_MIS_DEFAULT),
+        # Required: no fallback to the fiducial defaults — a pipeline
+        # missing the miscentering section must fail loudly.
+        f_mis=source.scalar("miscentering", "f_mis"),
+        tau_mis=source.scalar("miscentering", "tau_mis"),
         omega_m=source.scalar("cosmological_parameters", "omega_m"),
         include_miscentering=cfg["include_miscentering"])
     lnm_x, lnm_w, z_x, w2d = z_resolved_weights(

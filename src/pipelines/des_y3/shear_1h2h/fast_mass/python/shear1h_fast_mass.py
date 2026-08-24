@@ -102,8 +102,10 @@ def execute(block, cfg):
         lnm_lo=cfg["lnm_low"], lnm_hi=cfg["lnm_high"], include_sci=True)
     profile = lp.MisMixtureProfile(
         source, lob_centers=cfg["lob_centers"],
-        f_mis=dm.read_mis_param(source, "f_mis", dm.F_MIS_DEFAULT),
-        tau_mis=dm.read_mis_param(source, "tau_mis", dm.TAU_MIS_DEFAULT),
+        # Required: no fallback to the fiducial defaults — a pipeline
+        # missing the miscentering section must fail loudly.
+        f_mis=source.scalar("miscentering", "f_mis"),
+        tau_mis=source.scalar("miscentering", "tau_mis"),
         omega_m=source.scalar("cosmological_parameters", "omega_m"))
 
     block[OUTPUT_SECTION, "vals"] = compute_shear(

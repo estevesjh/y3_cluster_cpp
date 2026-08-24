@@ -41,6 +41,7 @@
 
 #include "models/n_operator_sel_gl_t.hh"
 #include "models/nfw_dsigma_mis.hh"
+#include "pipelines/shared/lensing_helpers.hh"
 #include "utils/interp_1d.hh"
 #include "utils/interp_2d.hh"
 #include "utils/make_grid_points.hh"
@@ -170,8 +171,7 @@ namespace y3_cluster {
           throw std::runtime_error(
             "Shear1hRadialSeries: ell_max must be 2 or 3");
         lob_centers_ =
-          y3_cluster_sel_weights::mis_detail::read_lob_centers(
-            cfg, module_label());
+          y3_pipelines::read_lob_centers(cfg, module_label());
         if (lob_centers_.empty())
           throw std::runtime_error(
             "Shear1hRadialSeries: lob_centers is empty");
@@ -180,14 +180,15 @@ namespace y3_cluster {
       void
       set_sample(cosmosis::DataBlock& s)
       {
-        namespace w = y3_cluster_sel_weights;
+        namespace w = y3_pipelines;
 
         core_.build_weights(s, /*include_sci=*/true);
 
-        f_mis_ = w::mis_detail::read_mis_param(
-          s, "f_mis", w::mis_detail::F_MIS_DEFAULT);
-        double const tau_mis = w::mis_detail::read_mis_param(
-          s, "tau_mis", w::mis_detail::TAU_MIS_DEFAULT);
+        // Required: no fallback to the fiducial defaults — a pipeline
+        // that has not published the miscentering section must fail
+        // loudly.
+        f_mis_ = s.view<double>("miscentering", "f_mis");
+        double const tau_mis = s.view<double>("miscentering", "tau_mis");
         rho_mult_ = s.view<double>("cosmological_parameters", "omega_M");
 
         // Plain central moments of y = ln r_s(M) under each bin's
@@ -223,7 +224,7 @@ namespace y3_cluster {
           }
           mu2_[b] = (n0 != 0.0) ? m2 / n0 : 0.0;
           mu3_[b] = (n0 != 0.0) ? m3 / n0 : 0.0;
-          r_mis_[b] = tau_mis * w::mis_detail::R_lambda(
+          r_mis_[b] = tau_mis * w::R_lambda(
                                   lob_centers_[b % lob_centers_.size()]);
         }
       }
@@ -270,7 +271,7 @@ namespace y3_cluster {
       RadialSeriesTable table_;
       std::vector<double> lob_centers_;
 
-      double f_mis_{y3_cluster_sel_weights::mis_detail::F_MIS_DEFAULT};
+      double f_mis_{0.0};
       double rho_mult_{1.0};
       std::vector<double> norm_, ybar_, mu2_, mu3_, r_mis_;
     };

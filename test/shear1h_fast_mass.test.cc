@@ -76,7 +76,7 @@
 #include "models/n_operator_sel_gl_t.hh"
 
 // The system under test itself -- see the ASSUMPTION note above.
-#include "pipelines/des_y3/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc"
+#include "pipelines/des_y3/shear_1h2h/fast_mass/cpp/shear1h_fast_mass_t.hh"
 
 #include <array>
 #include <stdexcept>
