@@ -378,15 +378,18 @@ class TestShear1hCrossBackend(unittest.TestCase):
         # every (bin, R) -- true regardless of the ΔΣ_hh open defect
         # (docs/known_issues/dsigma_hh_debug_flag.md).
         #
-        # TODO(#23): currently red at the 6e-8 level in bins 5-7 where
-        # the max equals the 1h branch exactly -- the pinned arrays and
-        # the dump come from different executions and the 1e-9 pad is
-        # tighter than cross-run float reproducibility (~1e-7). Re-pin
-        # against a fresh dump or loosen the pad to 1e-6; deferred until
-        # the next Perlmutter session so all backends are re-run
-        # together (see github issue #23).
+        # Pad is 1e-6, NOT 1e-9 (issue #23): the pinned arrays and the
+        # dump come from different executions, and cross-run float
+        # reproducibility is ~1e-7 (measured in test_python_fast_mass_
+        # matches_production_to_near_machine_precision below). In bins
+        # where the 2h term never wins, the max equals the 1h branch
+        # exactly and the ratio is 1.0 up to that noise, so a tighter pad
+        # flips sign on reproducibility, not physics. 1e-6 still catches
+        # any real sign/weighting bug (those show up at percent level;
+        # the 2h term moves values at 1e-3+ where it wins). Same-run
+        # regeneration: docs/figs/real_pipeline_extract_max2h.ini.
         fast_cpp_proxy = self.source.array("shear1hmissel", "vals")
-        self.assertTrue(np.all(CPP_MAX_MODEL >= fast_cpp_proxy * (1.0 - 1e-9)))
+        self.assertTrue(np.all(CPP_MAX_MODEL >= fast_cpp_proxy * (1.0 - 1e-6)))
 
 
 if __name__ == "__main__":
