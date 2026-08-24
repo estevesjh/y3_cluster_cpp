@@ -124,11 +124,11 @@ def check2_mis(table):
     return worst
 
 
-def exact_mass_integral(weights, table, src_tab, r_mis, b, f_mis, omega_m,
+def exact_mass_integral(weights, table, src_tab, r_mis, b, f_mis, rho_ref,
                         use_source_table):
     """Exact fixed-GL mass sum of the mixture profile for one bin."""
     lnm, w_gl = weights.lnm_x, weights.lnm_w
-    y = pf.y_of_lnM(lnm)
+    y = pf.y_of_lnM(lnm, rho_ref)
     out = np.empty(R_PERP.size)
     for i, r in enumerate(R_PERP):
         lnx = np.log(r) - y
@@ -137,8 +137,8 @@ def exact_mass_integral(weights, table, src_tab, r_mis, b, f_mis, omega_m,
             u_mis = src_tab.u(lnx, lnxm)          # production-path table
         else:
             u_mis = table.u_mis(0, lnx, lnxm)     # committed U_0
-        phi = pf.A0_of_y(y) * ((1.0 - f_mis) * pf.u_cen(np.exp(lnx))
-                               + f_mis * omega_m * u_mis)
+        phi = pf.A0_of_y(y, rho_ref) * ((1.0 - f_mis) * pf.u_cen(np.exp(lnx))
+                                        + f_mis * u_mis)
         out[i] = np.dot(w_gl, weights.W[b] * phi)
     return out
 
@@ -163,7 +163,8 @@ def main():
                               zt_lo=ZT_LO, zt_hi=ZT_HI,
                               lnm_lo=LNM_LO, lnm_hi=LNM_HI,
                               include_sci=True)
-    norm, ybar, mu = weights.moments_of(pf.y_of_lnM, ell_max=3)
+    norm, ybar, mu = weights.moments_of(
+        lambda lnm: pf.y_of_lnM(lnm, rho_ref), ell_max=3)
 
     n_prod = source.array("numcountssel", "vals")
     counts = dm.MassZWeights(source, n_lnm=96, n_z=64,
@@ -174,7 +175,7 @@ def main():
           f"max |ratio-1| = {np.max(np.abs(counts / n_prod - 1)):.2e}")
 
     f_mis, tau_mis = dm.F_MIS_DEFAULT, dm.TAU_MIS_DEFAULT
-    omega_m = source.scalar("cosmological_parameters", "omega_m")
+    rho_ref = source.scalar("halomodel", "rho_m_ref")
     lob = np.asarray(dm.DEFAULT_LOB_CENTERS)
 
     shear_prod = source.array("shear1hmissel", "vals").reshape(12, -1)
@@ -186,13 +187,13 @@ def main():
     for b in range(12):
         r_mis = tau_mis * float(dm.R_lambda(lob[b % lob.size]))
         exact = exact_mass_integral(weights, table, src_tab, r_mis, b,
-                                    f_mis, omega_m, use_source_table=False)
+                                    f_mis, rho_ref, use_source_table=False)
         exact_src = exact_mass_integral(weights, table, src_tab, r_mis, b,
-                                        f_mis, omega_m, use_source_table=True)
+                                        f_mis, rho_ref, use_source_table=True)
         s2 = evaluate_series(table, R_PERP, r_mis, norm[b], ybar[b], mu[b],
-                             f_mis=f_mis, rho_mult=omega_m, ell_max=2)
+                             f_mis=f_mis, rho_ref=rho_ref, ell_max=2)
         s3 = evaluate_series(table, R_PERP, r_mis, norm[b], ybar[b], mu[b],
-                             f_mis=f_mis, rho_mult=omega_m, ell_max=3)
+                             f_mis=f_mis, rho_ref=rho_ref, ell_max=3)
         e2 = np.max(np.abs(s2 / exact - 1.0))
         e3 = np.max(np.abs(s3 / exact - 1.0))
         esrc = np.max(np.abs(s3 / exact_src - 1.0))

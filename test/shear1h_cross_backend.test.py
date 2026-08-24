@@ -335,16 +335,17 @@ class TestShear1hCrossBackend(unittest.TestCase):
         weights = dm.MassZWeights(
             self.source, n_lnm=96, n_z=64, zt_lo=ZT_LOW, zt_hi=ZT_HIGH,
             lnm_lo=LNM_LOW, lnm_hi=LNM_HIGH, include_sci=True)
-        norm, ybar, mu = weights.moments_of(pf.y_of_lnM, ell_max=3)
+        rho_ref = self.source.scalar("halomodel", "rho_m_ref")
+        norm, ybar, mu = weights.moments_of(
+            lambda lnm: pf.y_of_lnM(lnm, rho_ref), ell_max=3)
         f_mis, tau_mis = dm.F_MIS_DEFAULT, dm.TAU_MIS_DEFAULT
-        omega_m = self.source.scalar("cosmological_parameters", "omega_m")
         lob = np.asarray(dm.DEFAULT_LOB_CENTERS)
 
         vals = np.empty((12, R_PERP.size))
         for b in range(12):
             r_mis = tau_mis * float(dm.R_lambda(lob[b % lob.size]))
             vals[b] = evaluate_series(table, R_PERP, r_mis, norm[b], ybar[b],
-                                      mu[b], f_mis=f_mis, rho_mult=omega_m,
+                                      mu[b], f_mis=f_mis, rho_ref=rho_ref,
                                       ell_max=2)
         np.testing.assert_allclose(vals.ravel(), CPP_RADIAL_SERIES, rtol=3e-4)
 

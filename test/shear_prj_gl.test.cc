@@ -35,8 +35,8 @@
 // NFW_DSIGMA_MIS convention note (c=4 vs c=5): ShearPrjCore constructs
 // its miscentering kernel as
 //   dsigma_mis_.emplace(4.0, 2.77533742639e+11, SINGLE);
-//   dsigma_mis_->set_rho_mult(omega_m);
-// i.e. concentration c=4, rho_s built from rho_crit * rho_mult (rho_mult
+//   dsigma_mis_->set_rho_ref(haloModel/rho_m_ref);
+// i.e. concentration c=4, boundary AND rho_s on rho_m_ref (unified rho_m
 // set to Omega_m -> rho_mean), single-offset kernel.  Per CLAUDE.md,
 // this is NOT yet apples-to-apples with the legacy Python reference
 // (richness_selection.nfw.NFWMiscentered, c=5).  This test therefore
@@ -169,42 +169,39 @@ TEST_CASE("sigma_prj LoS-slab exclusion angle (theta_excl_at_z) matches the Pyth
 
 TEST_CASE("ShearPrjCore's DSigma_mis convention (c=4, single kernel) matches the shared Python replica")
 {
-  // Exactly ShearPrjCore's ctor line (systematics/shear_prj/cpp/sigma_prj_t.hh):
+  // Exactly ShearPrjCore's production wiring (sigma_prj_t.hh):
   //   dsigma_mis_.emplace(4.0, 2.77533742639e+11, SINGLE);
-  //   dsigma_mis_->set_rho_mult(omega_m);
+  //   dsigma_mis_->set_rho_ref(haloModel/rho_m_ref);
+  // UNIFIED rho_m convention (2026-08-24): one density for the halo
+  // boundary AND the amplitude; here rho_m_ref = Omega_m rho_crit,0
+  // (the comoving z_density = 0 default).
   y3_cluster::NFW_DSIGMA_MIS dsigma_mis(4.0, 2.77533742639e+11,
                                        y3_cluster::SINGLE);
-  double const omega_m = 0.3096;
-  dsigma_mis.set_rho_mult(omega_m);
+  double const rho_ref = 0.3096 * 2.77533742639e+11;
+  dsigma_mis.set_rho_ref(rho_ref);
 
   struct Point {
     double R, r_mis, lnM, expected;
   };
   // Golden values from shared/lensing_profiles.py::
-  // NfwDsigmaMisProduction(kernel="single")(R, r_mis, lnM, rho_mult=omega_m)
-  // -- the c=4/rho_crit-convention replica of this same class, not the
-  // legacy c=5 richness_selection reference (see file header).
-  // Regenerated 2026-08-24 with the SIGNED single-kernel table (the
-  // merge campaign's reader-parity fix); C++ and the Python replica
-  // agree to 6+ digits on these.
+  // NfwDsigmaMisProduction(kernel="single", rho_ref=0.3096*RHOC) -- the
+  // unified rho_m replica of this same class. Regenerated 2026-08-24
+  // for the unified convention (signed table + rho_m boundary/amplitude).
   Point const pts[] = {
-    {0.4117, 0.30, 32.0, 9.725459160361723},
-    {1.0257, 0.75, 33.5, 11.013469742434905},
-    {4.0265, 1.50, 34.5, 8.772512689218514},
+    {0.4117, 0.30, 32.0, 19.5101377487909},
+    {1.0257, 0.75, 33.5, 23.0268833950299},
+    {4.0265, 1.50, 34.5, 21.7039426371394},
   };
   for (auto const& p : pts) {
     CHECK(dsigma_mis(p.R, p.r_mis, p.lnM) == Approx(p.expected).epsilon(1e-3));
   }
 
-  // rho_mult enters as a pure multiplicative amplitude (see operator()'s
-  // "norm" term) -- an exact algebraic identity, independent of the
-  // interpolation table, so it gets a much tighter tolerance than the
-  // golden-value pins above.
-  y3_cluster::NFW_DSIGMA_MIS dsigma_unit(4.0, 2.77533742639e+11,
-                                        y3_cluster::SINGLE);
-  double const raw = dsigma_unit(pts[0].R, pts[0].r_mis, pts[0].lnM);
+  // set_rho_ref must be exactly equivalent to constructing with that
+  // density -- an algebraic identity of the unified convention.
+  y3_cluster::NFW_DSIGMA_MIS dsigma_ctor(4.0, rho_ref, y3_cluster::SINGLE);
   CHECK(dsigma_mis(pts[0].R, pts[0].r_mis, pts[0].lnM) ==
-        Approx(omega_m * raw).epsilon(1e-9));
+        Approx(dsigma_ctor(pts[0].R, pts[0].r_mis, pts[0].lnM))
+          .epsilon(1e-12));
 }
 
 TEST_CASE("ShearPrjCore construction parses its own wall grid and (lambda_bin, zob) slicing")

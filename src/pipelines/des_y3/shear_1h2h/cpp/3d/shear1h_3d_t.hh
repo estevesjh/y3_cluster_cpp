@@ -84,6 +84,7 @@ private:
   y3_cluster::NFW_DSIGMA_MIS dsigma_mis_{y3_cluster::CONC, y3_cluster::RHOC,
                                          y3_cluster::GAMMA};
   double f_mis_{0.0};
+  bool phys_density_{false};
   double tau_mis_{0.0};
 
   int current_bin_{0};
@@ -128,8 +129,15 @@ public:
     // has not published the miscentering section must fail loudly.
     f_mis_ = sample.view<double>("miscentering", "f_mis");
     tau_mis_ = sample.view<double>("miscentering", "tau_mis");
-    dsigma_mis_.set_rho_mult(
-      sample.view<double>("cosmological_parameters", "omega_M"));
+    // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+    // haloModel/rho_m_ref (same density as the centred dSigma_nfw table).
+    dsigma_mis_.set_rho_ref(sample.view<double>("haloModel", "rho_m_ref"));
+    // Physical mean density (opt-in): exact per-zt identity in the
+    // integrand, DSigma_phys(R|zt) = (1+zt)^2 DSigma_com(R (1+zt)).
+    int phys = 0;
+    if (sample.has_val("haloModel", "one_halo_physical_density"))
+      sample.get_val("haloModel", "one_halo_physical_density", phys);
+    phys_density_ = (phys != 0);
   }
 
   void
@@ -152,9 +160,11 @@ public:
     double const s_j = y3_cluster::richness_zkernel(
       zt, zob_min_[current_bin_], zob_max_[current_bin_],
       sigma_z_[current_bin_]);
-    double const d_cen = dsigma_nfw_->clamp(current_R_, lnM);
-    double const d_mis = dsigma_mis_(current_R_, current_r_mis_, lnM);
-    double const d_tot = (1.0 - f_mis_) * d_cen + f_mis_ * d_mis;
+    double const q = phys_density_ ? 1.0 + zt : 1.0;
+    double const d_cen = dsigma_nfw_->clamp(current_R_ * q, lnM);
+    double const d_mis = dsigma_mis_(current_R_ * q, current_r_mis_ * q, lnM);
+    double const d_tot = (q * q) *
+                         ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
     return (*hmf_)(lnM, zt) * (*dv_do_dz_)(zt) * (*omega_z_)(zt) *
            sci_->clamp(zt) * s_j * s_i_[current_bin_](lt, zt, *plob_) *
            (*mor_)(lt, lnM, zt) * d_tot;

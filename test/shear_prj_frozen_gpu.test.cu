@@ -202,6 +202,8 @@ TEST_CASE("ShearPrjFrozenGpu.so matches its CPU counterpart "
                  read_column(D + "/b_sel_marginalised/lob.txt"));
   sample.put_val("b_sel_marginalised", "zob",
                  read_column(D + "/b_sel_marginalised/zob.txt"));
+  sample.put_val("haloModel", "rho_m_ref",
+                 read_scalar(D + "/halomodel/values.txt", "rho_m_ref"));
   sample.put_val("b_sel_marginalised", "b_small",
                  read_column(D + "/b_sel_marginalised/b_small.txt"));
   sample.put_val("b_sel_marginalised", "b_large",

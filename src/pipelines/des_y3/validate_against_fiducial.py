@@ -89,15 +89,17 @@ def main():
     from shear1h_radial_series import RadialSeriesTable, evaluate_series
     tab = RadialSeriesTable()
 
+    rho_ref = src.scalar("halomodel", "rho_m_ref")
+
     def fixed_profile(b, r_perp, lnm):
-        y = pf.y_of_lnM(lnm)
+        y = pf.y_of_lnM(lnm, rho_ref)
         lnx = np.log(r_perp) - y
         rmis = dm.TAU_MIS_DEFAULT * float(
             dm.R_lambda(np.asarray(dm.DEFAULT_LOB_CENTERS)[b % 4]))
         u = ((1 - dm.F_MIS_DEFAULT) * pf.u_cen(np.exp(lnx))
-             + dm.F_MIS_DEFAULT * profile.omega_m
+             + dm.F_MIS_DEFAULT
              * tab.u_mis(0, lnx, np.log(rmis) - y))
-        return pf.A0_of_y(y) * u
+        return pf.A0_of_y(y, rho_ref) * u
 
     fid = np.empty((12, R_PERP.size))
     for b in range(12):
@@ -106,14 +108,15 @@ def main():
     mzw = dm.MassZWeights(src, n_lnm=96, n_z=64, zt_lo=ENV["zt_low"],
                           zt_hi=ENV["zt_high"], lnm_lo=ENV["lnm_low"],
                           lnm_hi=ENV["lnm_high"], include_sci=True)
-    norm, ybar, mu = mzw.moments_of(pf.y_of_lnM, ell_max=3)
+    norm, ybar, mu = mzw.moments_of(
+        lambda lnm: pf.y_of_lnM(lnm, rho_ref), ell_max=3)
     rs = np.empty((12, R_PERP.size))
     for b in range(12):
         rmis = dm.TAU_MIS_DEFAULT * float(
             dm.R_lambda(np.asarray(dm.DEFAULT_LOB_CENTERS)[b % 4]))
         rs[b] = evaluate_series(tab, R_PERP, rmis, norm[b], ybar[b], mu[b],
                                 f_mis=dm.F_MIS_DEFAULT,
-                                rho_mult=profile.omega_m, ell_max=2)
+                                rho_ref=rho_ref, ell_max=2)
     print(f"  radial_series ell<=2, total (tabulation+truncation+interp): "
           f"{np.max(np.abs(rs/fid-1)):.1e}")
 

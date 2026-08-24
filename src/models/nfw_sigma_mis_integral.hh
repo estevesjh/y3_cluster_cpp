@@ -2,7 +2,7 @@
 // Wright & Brainerd (2000) NFW profile, using GSL ADAPTIVE quadrature
 // (gsl_integration_qags).  Drop-in for the "single" lookup-table classes
 // NFW_SIGMA_MIS / NFW_DSIGMA_MIS (same operator()(r, rmis, lnM),
-// set_rho_mult, set_concentration_table, conc_at, delta_sigma).
+// set_rho_ref, set_concentration_table, conc_at, delta_sigma).
 //
 //   Sigma_mis(R|R_mis)      = (1/pi) int_0^pi Sigma_NFW(s(phi)) dphi,
 //                             s(phi) = sqrt(R^2 + R_mis^2 - 2 R R_mis cos phi)
@@ -32,7 +32,7 @@
 // Sigma [Msun/h/pc^2], R,R_mis [cMpc/h], M via lnM [Msun/h] (M_200c),
 // delta_c = (200 c^3/3)/(ln(1+c) - c/(1+c)),
 // r_200 = cbrt(3 exp(lnM)/(800 pi rhoc)), r_s = r_200/c,
-// coeff = 2 r_s delta_c rhoc rho_mult * 1e-12.
+// coeff = 2 r_s delta_c rho_ref * 1e-12.
 #ifndef Y3_CLUSTER_NFW_SIGMA_MIS_INTEGRAL_HH
 #define Y3_CLUSTER_NFW_SIGMA_MIS_INTEGRAL_HH
 
@@ -54,7 +54,7 @@ namespace y3_cluster {
                                     double rhoc = 2.77533742639e+11,
                                     std::size_t n_ws = 512,
                                     double eps = 1.0e-6)
-      : _c(c), _rhoc(rhoc), _rho_mult(1.0), _eps(eps), _n_ws(n_ws)
+      : _c(c), _rhoc(rhoc), _rho_b(rhoc), _eps(eps), _n_ws(n_ws)
     {
       gsl_set_error_handler_off();   // return codes instead of abort()
       _ws_phi = gsl_integration_workspace_alloc(n_ws);
@@ -73,13 +73,15 @@ namespace y3_cluster {
     NFW_SIGMA_MIS_INTEGRAL(NFW_SIGMA_MIS_INTEGRAL const&) = delete;
     NFW_SIGMA_MIS_INTEGRAL& operator=(NFW_SIGMA_MIS_INTEGRAL const&) = delete;
     NFW_SIGMA_MIS_INTEGRAL(NFW_SIGMA_MIS_INTEGRAL&& o) noexcept
-      : _c(o._c), _rhoc(o._rhoc), _rho_mult(o._rho_mult), _eps(o._eps),
+      : _c(o._c), _rhoc(o._rhoc), _rho_b(o._rho_b), _eps(o._eps),
         _n_ws(o._n_ws), _c_tab(std::move(o._c_tab)),
         _ws_phi(o._ws_phi), _ws_rad(o._ws_rad)
     { o._ws_phi = nullptr; o._ws_rad = nullptr; }
     NFW_SIGMA_MIS_INTEGRAL& operator=(NFW_SIGMA_MIS_INTEGRAL&&) = delete;
 
-    void set_rho_mult(double m) { _rho_mult = m; }
+    // UNIFIED rho_m convention: one density for boundary AND amplitude
+    // (haloModel/rho_m_ref). Normalization factors live OUTSIDE.
+    void set_rho_ref(double rho) { _rho_b = rho; }
     void set_concentration_table(Interp1D t) { _c_tab = std::move(t); }
     double conc_at(double lnM) const { return _c_tab ? _c_tab->clamp(lnM) : _c; }
 
@@ -104,16 +106,16 @@ namespace y3_cluster {
 
    private:
     // ---- profile constants (pipeline M200c recipe) ---------------------
-    // r_s [cMpc/h]; coeff = 2 r_s delta_c rhoc rho_mult / 1e12 [Msun/h/pc^2].
+    // r_s [cMpc/h]; coeff = 2 r_s delta_c rho_ref / 1e12 [Msun/h/pc^2].
     void
     profile_consts_(double lnM, double& rs, double& coeff, double& c) const
     {
       c = conc_at(lnM);
       double const delta_c =
         (200.0 * c * c * c / 3.0) / (std::log(1.0 + c) - c / (1.0 + c));
-      double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rhoc));
+      double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rho_b));
       rs = r_200 / c;
-      coeff = 2.0 * rs * delta_c * _rhoc * _rho_mult * 1.0e-12;
+      coeff = 2.0 * rs * delta_c * _rho_b * 1.0e-12;
     }
 
     // Centered analytic NFW Sigma (Wright & Brainerd 2000), regularized so
@@ -186,7 +188,7 @@ namespace y3_cluster {
       return (2.0 / (R * R)) * res;
     }
 
-    double _c, _rhoc, _rho_mult, _eps;
+    double _c, _rhoc, _rho_b, _eps;
     std::size_t _n_ws;
     std::optional<Interp1D> _c_tab;
     gsl_integration_workspace* _ws_phi = nullptr;

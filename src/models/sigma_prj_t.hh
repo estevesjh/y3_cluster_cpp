@@ -407,12 +407,15 @@ namespace y3_cluster {
       ln_mass_shift_ = 0.0;
       h0_ = sample.view<double>("cosmological_parameters", "h0");
 
-      // Switch the NFW normalisation to rho_mean = Omega_m * rho_crit
-      // (matches Python richness_selection.nfw.NFWMiscentered which
-      // builds rho_s from rho_mean).  Affects every Sigma_mis / DSigma_mis
-      // call from here on for this sample.
-      sigma_mis_ ->set_rho_mult(omm);
-      dsigma_mis_->set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude of
+      // Sigma_mis / DSigma_mis on haloModel/rho_m_ref -- the density the
+      // centred tables are built with (Omega_m rho_crit,0 (1+z_density)^3).
+      // Replaces the 200c/rho_crit*Omega_m hybrid.
+      {
+        double const rho_ref = sample.view<double>("haloModel", "rho_m_ref");
+        sigma_mis_ ->set_rho_ref(rho_ref);
+        dsigma_mis_->set_rho_ref(rho_ref);
+      }
 
       // Per-mass concentration (issue #13): the x = r/r_s lookup tables
       // are c-universal, so feeding c(lnM) here changes only the
@@ -1127,9 +1130,12 @@ namespace y3_cluster {
       ln_mass_shift_ = 0.0;
       h0_ = sample.view<double>("cosmological_parameters", "h0");
 
-      // NFW rho_mean normalisation (see ShearPrjEvaluator).
-      sigma_mis_ ->set_rho_mult(omm);
-      dsigma_mis_->set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24, see ShearPrjEvaluator).
+      {
+        double const rho_ref = sample.view<double>("haloModel", "rho_m_ref");
+        sigma_mis_ ->set_rho_ref(rho_ref);
+        dsigma_mis_->set_rho_ref(rho_ref);
+      }
 
       chi_ref_.resize(N_zt_ref_);
       dv_ref_.resize(N_zt_ref_);
@@ -1565,9 +1571,12 @@ namespace y3_cluster {
       ln_mass_shift_ = 0.0;
       h0_ = sample.view<double>("cosmological_parameters", "h0");
 
-      // NFW rho_mean normalisation (see ShearPrjEvaluator).
-      sigma_mis_ ->set_rho_mult(omm);
-      dsigma_mis_->set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24, see ShearPrjEvaluator).
+      {
+        double const rho_ref = sample.view<double>("haloModel", "rho_m_ref");
+        sigma_mis_ ->set_rho_ref(rho_ref);
+        dsigma_mis_->set_rho_ref(rho_ref);
+      }
 
       chi_ref_.resize(N_zt_ref_);
       dv_ref_.resize(N_zt_ref_);

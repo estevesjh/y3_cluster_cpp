@@ -10,7 +10,7 @@
 //   O_ij(R) ~= N_ij A0(ybar) [ u_mix,0 + mu2 u_mix,2 (+ mu3 u_mix,3) ]
 //   u_mix,ell = (1 - f_mis) U_ell^cen + f_mis Omega_m U_ell^mis
 //
-// with A0(y) = 2 e^y delta_c rho_crit 1e-12 and the NFW_DSIGMA_MIS
+// with A0(y) = 2 e^y delta_c rho_m_ref 1e-12 and the NFW_DSIGMA_MIS
 // conventions (c = 4, rho_crit = RHOC, gamma kernel).  IMPORTANT: c = 4 is
 // fixed for every mass and redshift.  There is no concentration--mass or
 // concentration--redshift evolution in this profile family.  The redshift
@@ -70,19 +70,25 @@ namespace y3_cluster {
              (std::log(1.0 + CONC) - CONC / (1.0 + CONC));
     }
 
+    // UNIFIED rho_m convention (2026-08-24): rho_ref =
+    // haloModel/rho_m_ref drives BOTH the boundary (y = ln r_s with
+    // r_200 from 800 pi rho_ref) and the amplitude A0. The old
+    // rho_crit/200c family (with Omega_m only on the mis component)
+    // was the dominant root cause of the 56-86% radial-series offset
+    // (docs/known_issues/radial_series_vs_full_ltmz_defect.md).
     inline double
-    y_of_lnM(double lnM)
+    y_of_lnM(double lnM, double rho_ref)
     {
       double const r_200 =
-        std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * RHOC));
+        std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * rho_ref));
       return std::log(r_200 / CONC);
     }
 
     // A0(y) in Msun/(h pc^2) per unit u: DSigma = A_sample * A0 * u.
     inline double
-    A0_of_y(double y)
+    A0_of_y(double y, double rho_ref)
     {
-      return 2.0 * std::exp(y) * delta_c_nfw() * RHOC * 1.0e-12;
+      return 2.0 * std::exp(y) * delta_c_nfw() * rho_ref * 1.0e-12;
     }
 
     // Loader/interpolator for the committed text tables.  Constructed
@@ -117,12 +123,14 @@ namespace y3_cluster {
         return mis_[ell].clamp(lnx, lnxm);
       }
 
+      // Both components share the SAME rho_ref inside A0, so the mix
+      // is a plain f_mis blend (the old Omega_m factor on the mis
+      // component is gone with the unified convention).
       double
-      u_mix(int ell, double lnx, double lnxm, double f_mis,
-            double rho_mult) const
+      u_mix(int ell, double lnx, double lnxm, double f_mis) const
       {
         return (1.0 - f_mis) * u_cen(ell, lnx) +
-               f_mis * rho_mult * u_mis(ell, lnx, lnxm);
+               f_mis * u_mis(ell, lnx, lnxm);
       }
 
       // The full series for one query: norm * A0(ybar) *
@@ -130,15 +138,15 @@ namespace y3_cluster {
       // test and the module share the exact arithmetic.
       double
       series(double R, double r_mis, double norm, double ybar, double mu2,
-             double mu3, double f_mis, double rho_mult, int ell_max) const
+             double mu3, double f_mis, double rho_ref, int ell_max) const
       {
         double const lnx = std::log(R) - ybar;
         double const lnxm = std::log(r_mis) - ybar;
-        double acc = u_mix(0, lnx, lnxm, f_mis, rho_mult) +
-                     mu2 * u_mix(2, lnx, lnxm, f_mis, rho_mult);
+        double acc = u_mix(0, lnx, lnxm, f_mis) +
+                     mu2 * u_mix(2, lnx, lnxm, f_mis);
         if (ell_max >= 3)
-          acc += mu3 * u_mix(3, lnx, lnxm, f_mis, rho_mult);
-        return norm * A0_of_y(ybar) * acc;
+          acc += mu3 * u_mix(3, lnx, lnxm, f_mis);
+        return norm * A0_of_y(ybar, rho_ref) * acc;
       }
 
      private:
@@ -189,7 +197,8 @@ namespace y3_cluster {
         // loudly.
         f_mis_ = s.view<double>("miscentering", "f_mis");
         double const tau_mis = s.view<double>("miscentering", "tau_mis");
-        rho_mult_ = s.view<double>("cosmological_parameters", "omega_M");
+        // UNIFIED rho_m convention: one density for boundary + amplitude.
+        rho_ref_ = s.view<double>("haloModel", "rho_m_ref");
 
         // Plain central moments of y = ln r_s(M) under each bin's
         // weight.  SelGlWeights is immutable and only carries the lnM
@@ -200,7 +209,7 @@ namespace y3_cluster {
         auto const& ws = core_.lnm_w();
         std::vector<double> y(xs.size());
         for (std::size_t k = 0; k != xs.size(); ++k)
-          y[k] = y_of_lnM(xs[k]);
+          y[k] = y_of_lnM(xs[k], rho_ref_);
 
         norm_.assign(nb, 0.0);
         ybar_.assign(nb, 0.0);
@@ -238,7 +247,7 @@ namespace y3_cluster {
           throw std::out_of_range(
             "Shear1hRadialSeries: bin_index outside sel_function range");
         return {table_.series(R, r_mis_[b], norm_[b], ybar_[b], mu2_[b],
-                              mu3_[b], f_mis_, rho_mult_, ell_max_)};
+                              mu3_[b], f_mis_, rho_ref_, ell_max_)};
       }
 
       static char const*
@@ -272,7 +281,7 @@ namespace y3_cluster {
       std::vector<double> lob_centers_;
 
       double f_mis_{0.0};
-      double rho_mult_{1.0};
+      double rho_ref_{0.0};
       std::vector<double> norm_, ybar_, mu2_, mu3_, r_mis_;
     };
 

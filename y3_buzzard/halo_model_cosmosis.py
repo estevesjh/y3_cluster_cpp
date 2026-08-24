@@ -152,11 +152,34 @@ def setup(options):
     except Exception:
         z_density = 0.0
 
+    # one_halo_physical_density: the RIGOROUS in-integrand treatment of the
+    # physical mean density rho_m(z) = rho_m0 (1+z)^3 (2026-08-24 decision,
+    # resolves the issue-#22 approximation above for the shear evaluators).
+    # It uses the exact fixed-c NFW identity
+    #     DSigma_phys(R | z) = (1+z)^2 * DSigma_com(R (1+z)),
+    # i.e. the boundary shrink r_s -> r_s/(1+z) (the "c(1+z)" rescale) plus
+    # the net (1+z)^2 amplitude. Consumers apply it as: (1+z)^2 folded into
+    # the shear z-weight (exact per z node) + the query-radius rescale
+    # (exact where z is live in the integrand; at the bin's
+    # selection-weighted z_eff in the z-contracted 0d evaluators).
+    # NUMBER COUNTS ARE NEVER TOUCHED. Requires z_density = 0 (comoving
+    # tables) -- combining both would double count the density evolution.
+    try:
+        physical_density = bool(options.get_bool(
+            section, "one_halo_physical_density", default=False))
+    except Exception:
+        physical_density = False
+    if physical_density and z_density != 0.0:
+        raise ValueError(
+            "halo_model: one_halo_physical_density=T requires "
+            "one_halo_z_density = 0 (comoving tables); combining both "
+            "double-counts the (1+z)^3 density evolution")
+
     params_out = (R_perp_min, R_perp_max, R_perp_bins,
                   Radii_min, Radii_max, Radii_bins,
                   M_min, M_max, M_bins,
                   compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
-                  z_density)
+                  z_density, physical_density)
     return params_out
     
 
@@ -167,7 +190,7 @@ def execute(block, config):
      Radii_min, Radii_max, Radii_bins,
      M_min, M_max, M_bins,
      compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
-     z_density) = config
+     z_density, physical_density) = config
 
     # cosmo parameters
     omega_m = block[cosmo_names, "omega_m"]
@@ -242,6 +265,26 @@ def execute(block, config):
     block[section_name, "lnM"] = logM
     block[section_name, "z"] = z
     block[section_name, "rhoc"] = rho_mz
+    # rho_m_ref: THE single NFW reference density every profile consumer
+    # (CPU/CUDA mis readers, Python replicas, radial-series family) uses
+    # for BOTH the halo boundary r_200 = [3M/(800 pi rho_m_ref)]^(1/3)
+    # and the amplitude rho_s = delta_c * rho_m_ref. Identical to the
+    # density first_halo_term builds the centred tables with:
+    # rho_m0 * (1+z_density)^3 (comoving at the default z_density = 0,
+    # physical when one_halo_z_density is set). Unified-convention
+    # decision 2026-08-24 (supersedes the 200c/rho_crit mis-profile
+    # hybrid); see docs/known_issues/radial_series_vs_full_ltmz_defect.md.
+    # h-unit convention: masses are Msun/h and radii Mpc/h, so rho_ref
+    # must be the h-unit critical density (2.775e11 Msun h^2/Mpc^3) --
+    # the SAME constant lensingModel.rhoc0 uses for the centred tables.
+    # (execute()'s astropy rho_m above is PHYSICAL Msun/Mpc^3 and feeds
+    # only the published rhoc(z) array.)
+    RHOC_HUNITS = 2.77533742639e+11
+    block[section_name, "rho_m_ref"] = (omega_m * RHOC_HUNITS
+                                        * (1.0 + z_density) ** 3)
+    # 0/1 flag for the rigorous physical-density treatment (see setup);
+    # every shear-profile consumer reads this SAME entry.
+    block[section_name, "one_halo_physical_density"] = int(physical_density)
     block[section_name, "bias"] = Bias
     # xi_NL(r, z) table for the b_sel_marg / sigma_prj integrands
     block["xi_nl", "r"]     = r_xi

@@ -77,9 +77,9 @@ class BilinearTextTable:
                 + (1 - tx) * tm * tab[j + 1, i]
                 + tx * tm * tab[j + 1, i + 1])
 
-    def u_mix(self, ell, lnx, lnxm, f_mis, rho_mult):
+    def u_mix(self, ell, lnx, lnxm, f_mis):
         return ((1.0 - f_mis) * self.u_cen(ell, lnx)
-                + f_mis * rho_mult * self.u_mis(ell, lnx, lnxm))
+                + f_mis * self.u_mis(ell, lnx, lnxm))
 
 
 def main():
@@ -96,12 +96,13 @@ def main():
                               zt_lo=ZT_LO, zt_hi=ZT_HI,
                               lnm_lo=LNM_LO, lnm_hi=LNM_HI,
                               include_sci=True)
-    norm, ybar, mu = weights.moments_of(pf.y_of_lnM, ell_max=3)
+    rho_ref = source.scalar("halomodel", "rho_m_ref")
+    norm, ybar, mu = weights.moments_of(
+        lambda lnm: pf.y_of_lnM(lnm, rho_ref), ell_max=3)
 
     cubic = RadialSeriesTable()
     bilin = BilinearTextTable()
     f_mis, tau_mis = dm.F_MIS_DEFAULT, dm.TAU_MIS_DEFAULT
-    omega_m = source.scalar("cosmological_parameters", "omega_m")
     lob = np.asarray(dm.DEFAULT_LOB_CENTERS)
 
     print("radial_series backend equivalence, cubic-npz (Python) vs "
@@ -112,10 +113,10 @@ def main():
         for b in range(12):
             r_mis = tau_mis * float(dm.R_lambda(lob[b % lob.size]))
             py = evaluate_series(cubic, R_PERP, r_mis, norm[b], ybar[b],
-                                 mu[b], f_mis=f_mis, rho_mult=omega_m,
+                                 mu[b], f_mis=f_mis, rho_ref=rho_ref,
                                  ell_max=ell_max)
             cpp = evaluate_series(bilin, R_PERP, r_mis, norm[b], ybar[b],
-                                  mu[b], f_mis=f_mis, rho_mult=omega_m,
+                                  mu[b], f_mis=f_mis, rho_ref=rho_ref,
                                   ell_max=ell_max)
             w = max(w, float(np.max(np.abs(cpp / py - 1.0))))
         print(f"  ell_max={ell_max}: max rel diff over 12 bins x "

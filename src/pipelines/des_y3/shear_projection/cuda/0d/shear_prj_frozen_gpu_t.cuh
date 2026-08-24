@@ -65,8 +65,9 @@ namespace {
 
   // One thread per (wall row, theta node): contract the single-kernel
   // miscentred NFW over the fixed GL mass nodes with the rnd and
-  // frozen-cl mass weights. rho_mult (= Omega_m) is applied here — the
-  // CUDA NFW_DSIGMA_MIS predates set_rho_mult.
+  // frozen-cl mass weights. rho_mult is a generic EXTERNAL normalization
+  // hook (1.0 in the unified rho_m convention; the profile itself carries
+  // rho_ref via set_rho_ref on the host copy).
   __global__ void
   dsmis_contract(y3_cuda::NFW_DSIGMA_MIS nfw, double rho_mult,
                  int n_rows, int n_theta_max, int n_lnm,
@@ -303,9 +304,12 @@ public:
       sci_.reset();
     sigma_z_.emplace(y3_cluster::Interp1D(y3_cluster::z_kernel_z(),
                                           y3_cluster::z_kernel_sigma()));
-    double const omm =
-      sample.view<double>("cosmological_parameters", "omega_M");
     h0_ = sample.view<double>("cosmological_parameters", "h0");
+    // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+    // haloModel/rho_m_ref, set on the host copy before the by-value
+    // kernel launch (the kernel rho_mult argument is now 1.0).
+    dsigma_mis_dev_->set_rho_ref(
+      sample.view<double>("haloModel", "rho_m_ref"));
 
     auto const b_sel_lob =
       sample.view<std::vector<double>>("b_sel_marginalised", "lob");
@@ -477,7 +481,7 @@ public:
     int const threads = 256;
     int const blocks = int((n_out + threads - 1) / threads);
     dsmis_contract<<<blocks, threads>>>(
-      *dsigma_mis_dev_, omm, n_rows, n_theta_max, int(N_lnm_), d_lnm,
+      *dsigma_mis_dev_, 1.0, n_rows, n_theta_max, int(N_lnm_), d_lnm,
       d_rowR, d_rowk, d_nth, d_toff, d_theta, d_dao, d_wrnd, d_wcl, d_orn,
       d_ocl);
     cuda_check(cudaGetLastError(), "kernel launch");

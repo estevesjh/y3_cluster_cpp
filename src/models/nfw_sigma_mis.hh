@@ -33,7 +33,7 @@ namespace y3_cluster {
   class NFW_SIGMA_MIS {
    public:
     NFW_SIGMA_MIS(double c, double rhoc, std::string const& kernel)
-      : _c(c), _rhoc(rhoc), _rho_mult(1.0),
+      : _c(c), _rhoc(rhoc),
         _nfwProfile(read_vector(nfw_sig_detail::logx_file(kernel)),
                     read_vector(nfw_sig_detail::logxmis_file(kernel)),
                     read_vector(nfw_sig_detail::log_sigma_file(kernel)))
@@ -43,12 +43,14 @@ namespace y3_cluster {
       : NFW_SIGMA_MIS(4.0, 2.77533742639e+11, NFW_SIG_GAMMA)
     {}
 
-    // Multiplier applied to rho_s (= rho_crit * delta_c).  Set to
-    // Omega_m after reading cosmological_parameters to switch from
-    // the rho_crit-based normalisation to rho_mean-based, matching
-    // the Python reference (richness_selection.nfw.NFWMiscentered).
-    // Default is 1.0 (legacy rho_crit behaviour).
-    void set_rho_mult(double m) { _rho_mult = m; }
+    // UNIFIED rho_m convention (2026-08-24 decision): use `rho` --
+    // haloModel/rho_m_ref = Omega_m rho_crit,0 (1+z_density)^3, the same
+    // density first_halo_term builds the centred tables with -- for BOTH
+    // the halo boundary r_200 = [3M/(800 pi rho)]^(1/3) (a mean-density
+    // boundary) and the amplitude rho_s = delta_c * rho. Production call
+    // sites use this. Pure normalization factors (e.g. legacy Omega_m,
+    // the physical-density (1+z)^2) are applied OUTSIDE by the caller.
+    void set_rho_ref(double rho) { _rho_b = rho; }
 
     // Optional per-mass concentration c(lnM) -- see
     // NFW_DSIGMA_MIS::set_concentration_table (issue #13).
@@ -66,20 +68,20 @@ namespace y3_cluster {
       double const c       = conc_at(lnM);
       double const delta_c = (200.0 * c * c * c / 3.0) /
                              (std::log(1.0 + c) - c / (1.0 + c));
-      double const r_200   = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rhoc));
+      double const r_200   = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rho_b));
       double const r_s     = r_200 / c;
       double const x       = r / r_s;
       double const xmis    = rmis / r_s;
 
       double const log_sig = _nfwProfile.clamp(std::log(x), std::log(xmis));
-      double const norm    = 2.0 * r_s * delta_c * _rhoc * _rho_mult;
+      double const norm    = 2.0 * r_s * delta_c * _rho_b;
       return norm * std::exp(log_sig) * 1e-12;    // -> M_sun / h / pc^2
     }
 
    private:
     double const _c;
     double const _rhoc;
-    double       _rho_mult;
+    double       _rho_b{_rhoc};   // boundary+amplitude density (set_rho_ref)
     std::optional<Interp1D> _c_tab;
     Interp2D _nfwProfile;
   };

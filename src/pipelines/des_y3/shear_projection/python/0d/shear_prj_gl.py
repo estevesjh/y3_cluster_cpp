@@ -26,7 +26,7 @@ grid (per-slice breakpoints + log-GL segments), identical z grid
 40-iteration chi inversion), the parabolic photo-z weight with the
 compiled sigma_z table, the analytic Costanzi-2026 b_sel sigmoid on the
 (b_small, b_large) plateaus, the single-offset NFW table with the
-rho_mult = Omega_m amplitude, and no Omega(z) (it cancels in the
+rho_ref = haloModel/rho_m_ref (boundary AND amplitude), and no Omega(z) (it cancels in the
 surface density — the exact core hard-excludes it). The production
 `shear_prj_frozen_physics` module additionally freezes the cl-channel
 mass shape at z_ob; this port does not (no frozen-physics
@@ -164,7 +164,11 @@ class ShearPrjGl:
         bias = dm.Bilinear2D(source, "halomodel", "lnm", "z", "bias")
         xi_nl = dm.Bilinear2D(source, "xi_nl", "r", "z", "xi_nl")
         sci = dm.SigmaCritInv(source)
-        dsmis = lp.NfwDsigmaMisProduction(kernel="single")
+        # UNIFIED rho_m convention (2026-08-24): the mis profile shares
+        # the density the centred tables use (haloModel/rho_m_ref).
+        dsmis = lp.NfwDsigmaMisProduction(
+            kernel="single",
+            rho_ref=source.scalar("halomodel", "rho_m_ref"))
 
         bs_lob = np.asarray(source.array("b_sel_marginalised", "lob"),
                             dtype=float)
@@ -276,7 +280,7 @@ class ShearPrjGl:
             rnd_R, cl_R = [], []
             for r_perp in s["Rs"]:
                 ds = dsmis(r_perp, theta[:, None] * d_a_o,
-                           self.lnm_x[None, :], rho_mult=omega_m,
+                           self.lnm_x[None, :],
                            conc=(None if conc_lnm is None
                                  else conc_lnm[None, :]))
                 rnd_R.append(geom @ (ds @ wrnd))

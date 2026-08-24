@@ -56,6 +56,7 @@ private:
   std::optional<y3_cuda::MOR_SHIFTED_POISSON_t> mor_;
   std::optional<y3_cuda::EMG_DES_t> emg_;
   double f_mis_{0.0}, tau_mis_{0.0};
+  bool phys_density_{false};
 
   double cur_lam_min_{0}, cur_lam_max_{0}, cur_zob_min_{0}, cur_zob_max_{0},
     cur_sigma_z_{1}, cur_R_{0}, cur_r_mis_{0};
@@ -106,8 +107,9 @@ public:
                                "sci_average"));
     dsigma_mis_.emplace(y3_cuda::DSIGMA_MIS_CONC, y3_cuda::DSIGMA_MIS_RHOC,
                         y3_cuda::DSIGMA_MIS_GAMMA);
-    dsigma_mis_->set_rho_mult(
-      s.view<double>("cosmological_parameters", "omega_M"));
+    // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+    // haloModel/rho_m_ref (same density as the centred dSigma_nfw table).
+    dsigma_mis_->set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
     // issue #14 (opt-in): per-mass c(lnM) from haloModel/concentration;
     // default (flag off) keeps the fixed-c production path.
     if (use_halo_model_conc_)
@@ -118,6 +120,12 @@ public:
     // has not published the miscentering section must fail loudly.
     f_mis_ = s.view<double>("miscentering", "f_mis");
     tau_mis_ = s.view<double>("miscentering", "tau_mis");
+    // Physical mean density (opt-in): exact per-zt identity in the
+    // integrand, DSigma_phys(R|zt) = (1+zt)^2 DSigma_com(R (1+zt)).
+    int phys = 0;
+    if (s.has_val("haloModel", "one_halo_physical_density"))
+      s.get_val("haloModel", "one_halo_physical_density", phys);
+    phys_density_ = (phys != 0);
   }
 
   void
@@ -143,9 +151,11 @@ public:
                                                   cur_zob_max_, cur_sigma_z_);
     double const s_i = emg_->cdf(cur_lam_max_, lt, zt) -
                        emg_->cdf(cur_lam_min_, lt, zt);
-    double const d_cen = dsigma_nfw_->clamp(cur_R_, lnM);
-    double const d_mis = (*dsigma_mis_)(cur_R_, cur_r_mis_, lnM);
-    double const d_tot = (1.0 - f_mis_) * d_cen + f_mis_ * d_mis;
+    double const q = phys_density_ ? 1.0 + zt : 1.0;
+    double const d_cen = dsigma_nfw_->clamp(cur_R_ * q, lnM);
+    double const d_mis = (*dsigma_mis_)(cur_R_ * q, cur_r_mis_ * q, lnM);
+    double const d_tot = (q * q) *
+                         ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
     return (*hmf_)(lnM, zt) * (*dv_do_dz_)(zt) *
            (*omega_z_)(zt) * sci_->clamp(zt) * s_j *
            fmax(0.0, s_i) * (*mor_)(lt, lnM, zt) * d_tot;

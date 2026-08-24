@@ -83,7 +83,6 @@ namespace y3_cluster {
     NFW_DSIGMA_MIS(double c, double rhoc, std::string const& kernel)
       : _c(c),
         _rhoc(rhoc),
-        _rho_mult(1.0),
         _nfwProfile(read_vector(logx_file(kernel)),
                     read_vector(logxmis_file(kernel)),
                     read_vector(dsigma_table_file(kernel))),
@@ -93,7 +92,6 @@ namespace y3_cluster {
     NFW_DSIGMA_MIS()
     : _c(CONC),
       _rhoc(RHOC),
-      _rho_mult(1.0),
       _nfwProfile(read_vector(logx_file(GAMMA)),
                   read_vector(logxmis_file(GAMMA)),
                   read_vector(dsigma_table_file(GAMMA))),
@@ -101,9 +99,14 @@ namespace y3_cluster {
 
     { }
 
-    // See NFW_SIGMA_MIS::set_rho_mult.  Set to Omega_m per sample to
-    // use rho_mean instead of rho_crit in the rho_s normalisation.
-    void set_rho_mult(double m) { _rho_mult = m; }
+    // UNIFIED rho_m convention (2026-08-24 decision): use `rho` --
+    // haloModel/rho_m_ref = Omega_m rho_crit,0 (1+z_density)^3, identical
+    // to the density first_halo_term builds the centred tables with --
+    // for BOTH the halo boundary r_200 = [3M/(800 pi rho)]^(1/3) and the
+    // amplitude rho_s = delta_c * rho. Production call sites use this
+    // instead. Pure normalization factors (legacy Omega_m, the physical
+    // (1+z)^2) are applied OUTSIDE by the caller.
+    void set_rho_ref(double rho) { _rho_b = rho; }
 
     // Optional per-mass concentration c(lnM) (issue #13): the lookup
     // tables are universal in x = r/r_s, so ALL concentration
@@ -125,17 +128,16 @@ namespace y3_cluster {
     double
     r_s(double lnM) const
     {
-      double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rhoc));
+      double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rho_b));
       return r_200 / conc_at(lnM);
     }
 
     double
     operator()(double r, double rmis, double lnM) const
     {
-      double const rho_crit = _rhoc;
       double const c = conc_at(lnM);
       double const delta_c = (200.0 * c * c * c / 3.0) / (std::log(1.0 + c) - c / (1.0 + c));
-      double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * rho_crit));
+      double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rho_b));
       double const r_s = r_200 / c;
 
       double const x = r / r_s;
@@ -148,7 +150,7 @@ namespace y3_cluster {
       double const unfw = _is_signed ? tab : std::exp(tab);
 
       // normalization term defined in Wright & Brainerd 2000
-      double const norm = 2 * r_s * delta_c * rho_crit * _rho_mult;
+      double const norm = 2 * r_s * delta_c * _rho_b;
       double const nfw = norm * unfw;
 
       // Conversion from Msun/Mpc^2 to Msun/h pc^2
@@ -158,7 +160,7 @@ namespace y3_cluster {
   private:
     double const _c;
     double const _rhoc;
-    double       _rho_mult;
+    double       _rho_b{_rhoc};   // boundary+amplitude density (set_rho_ref)
     std::optional<Interp1D> _c_tab;
     Interp2D _nfwProfile;
     bool const _is_signed;   // true: table stores signed DeltaSigma (no exp)

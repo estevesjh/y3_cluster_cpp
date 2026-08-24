@@ -80,7 +80,7 @@ namespace {
     // calls below.
 
     cfg.put_val("cosmological_parameters", "omega_m", 0.3);   // EZ (lowercase key)
-    cfg.put_val("cosmological_parameters", "omega_M", 0.3);   // HMF_t / rho_mult (uppercase key)
+    cfg.put_val("cosmological_parameters", "omega_M", 0.3);   // HMF_t (uppercase key)
     cfg.put_val("cosmological_parameters", "omega_lambda", 0.7);
     cfg.put_val("cosmological_parameters", "omega_k", 0.0);
     cfg.put_val("cosmological_parameters", "omega_nu", 0.0);
@@ -115,6 +115,7 @@ namespace {
     // at both mass nodes (and therefore at any interpolated lnM in
     // between) -- the table the monotonic-radial-falloff test below
     // relies on.
+    cfg.put_val("haloModel", "rho_m_ref", 0.3096 * 2.77533742639e+11);
     cfg.put_val("haloModel", "r_sigma",
                std::vector<double>{0.2, 0.5, 1.0, 2.0, 5.0});
     cfg.put_val("haloModel", "lnM", std::vector<double>{30.0, 34.0});
@@ -172,7 +173,7 @@ TEST_CASE("Shear1h3d reproduces the documented O_ij integrand from its own produ
   y3_cluster::Interp2D dsigma_nfw = y3_cluster::make_Interp2D(
     cfg, "haloModel", "r_sigma", "lnM", "dSigma_nfw");
   y3_cluster::NFW_DSIGMA_MIS dsigma_mis(4.0, 2.77533742639e+11, y3_cluster::GAMMA);
-  dsigma_mis.set_rho_mult(cfg.view<double>("cosmological_parameters", "omega_M"));
+  dsigma_mis.set_rho_ref(cfg.view<double>("haloModel", "rho_m_ref"));
 
   double const r_mis =
     tau_mis * y3_cluster_sel_weights::mis_detail::R_lambda(25.0);
@@ -207,7 +208,7 @@ TEST_CASE("Shear1h3d miscentering mixture is affine in f_mis, anchored to the pr
   y3_cluster::Interp2D dsigma_nfw = y3_cluster::make_Interp2D(
     cfg0, "haloModel", "r_sigma", "lnM", "dSigma_nfw");
   y3_cluster::NFW_DSIGMA_MIS dsigma_mis(4.0, 2.77533742639e+11, y3_cluster::GAMMA);
-  dsigma_mis.set_rho_mult(cfg0.view<double>("cosmological_parameters", "omega_M"));
+  dsigma_mis.set_rho_ref(cfg0.view<double>("haloModel", "rho_m_ref"));
   double const r_mis_F =
     tau_mis_F * y3_cluster_sel_weights::mis_detail::R_lambda(25.0);
   double const d_cen = dsigma_nfw.clamp(R_Q, LNM_Q);

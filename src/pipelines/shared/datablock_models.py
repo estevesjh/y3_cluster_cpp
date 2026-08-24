@@ -923,6 +923,14 @@ def read_mis_param(source, key, default):
         return default
 
 
+def physical_density_flag(source):
+    """haloModel/one_halo_physical_density (0/1; absent -> off)."""
+    try:
+        return bool(int(source.scalar("halomodel", "one_halo_physical_density")))
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Fixed-GL z-marginalised mass weights (SelGLCore replica)
 # ---------------------------------------------------------------------------
@@ -939,7 +947,13 @@ class MassZWeights:
     """
 
     def __init__(self, source, *, n_lnm=96, n_z=64,
-                 zt_lo, zt_hi, lnm_lo, lnm_hi, include_sci=False):
+                 zt_lo, zt_hi, lnm_lo, lnm_hi, include_sci=False,
+                 z_amp_power=0.0):
+        """z_amp_power: fold (1+z)^p into the z weight -- the exact
+        amplitude half of the physical-density identity
+        DSigma_phys(R|z) = (1+z)^2 DSigma_com(R (1+z)). Shear consumers
+        pass 2 when haloModel/one_halo_physical_density is on; number
+        counts never pass it. Mirrors SelGLCore::build_weights."""
         self.lnm_x, self.lnm_w = gl_nodes(lnm_lo, lnm_hi, n_lnm)
         self.z_x, self.z_w = gl_nodes(zt_lo, zt_hi, n_z)
 
@@ -951,14 +965,25 @@ class MassZWeights:
         zfac = self.z_w * dv(self.z_x) * omega_z_des(self.z_x)
         if include_sci:
             zfac = zfac * SigmaCritInv(source)(self.z_x)
+        if z_amp_power != 0.0:
+            zfac = zfac * (1.0 + self.z_x) ** z_amp_power
 
         lnm_grid = self.lnm_x[:, None]
         z_grid = self.z_x[None, :]
         hmf_kq = hmf(lnm_grid, z_grid)                      # (n_lnm, n_z)
         self.W = np.empty((self.n_bins, self.lnm_x.size))
+        Wz = np.empty_like(self.W)
         for b in range(self.n_bins):
             s_kq = sel(b, lnm_grid, z_grid)                 # (n_lnm, n_z)
-            self.W[b] = (hmf_kq * s_kq) @ zfac
+            t = hmf_kq * s_kq
+            self.W[b] = t @ zfac
+            Wz[b] = t @ (zfac * self.z_x)
+        # Selection-weighted mean redshift per bin (the query point for
+        # the physical-density radius rescale in z-contracted evaluators).
+        n0 = self.W @ self.lnm_w
+        with np.errstate(divide="ignore", invalid="ignore"):
+            self.z_eff = np.where(n0 != 0.0, (Wz @ self.lnm_w) / n0,
+                                  0.5 * (zt_lo + zt_hi))
 
     def norm(self):
         """int dlnM W_ij for every bin — the NumCountsSel observable."""

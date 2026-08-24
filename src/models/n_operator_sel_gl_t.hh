@@ -88,8 +88,15 @@ namespace y3_cluster {
         p_op_detail::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
       }
 
+      // z_amp_power: fold (1+z)^p into the z-only weight factor. Used by
+      // the SHEAR evaluators with p = 2 when haloModel/
+      // one_halo_physical_density is on -- the exact amplitude half of
+      // the fixed-c physical-density identity
+      //   DSigma_phys(R|z) = (1+z)^2 DSigma_com(R (1+z)).
+      // Number-count weights never pass it (profile-only physics).
       void
-      build_weights(cosmosis::DataBlock& s, bool include_sci)
+      build_weights(cosmosis::DataBlock& s, bool include_sci,
+                    double z_amp_power = 0.0)
       {
         y3_cluster::HMF_t const       hmf(s);
         y3_cluster::DV_DO_DZ_t const  dv(s);
@@ -104,6 +111,8 @@ namespace y3_cluster {
           double const z = z_x_[q];
           zfac[q] = z_w_[q] * dv(z) * omega(z) *
                     (sci ? sci->clamp(z) : 1.0);
+          if (z_amp_power != 0.0)
+            zfac[q] *= std::pow(1.0 + z, z_amp_power);
         }
 
         int const n_bins = nosel_detail::n_bins_from_block(s);
@@ -111,16 +120,22 @@ namespace y3_cluster {
         norm_.assign(n_bins, 0.0);
         lnm_eff_.assign(n_bins, 0.0);
         mu2_.assign(n_bins, 0.0);
+        z_eff_.assign(n_bins, 0.0);
 
+        std::vector<double> Wz(lnm_x_.size());
         for (int b = 0; b != n_bins; ++b) {
           SelFunction_t const sel(s, b);
           auto& Wb = W_[b];
           for (std::size_t k = 0; k != lnm_x_.size(); ++k) {
             double const lnM = lnm_x_[k];
-            double acc = 0.0;
-            for (std::size_t q = 0; q != z_x_.size(); ++q)
-              acc += zfac[q] * hmf(lnM, z_x_[q]) * sel(lnM, z_x_[q]);
+            double acc = 0.0, acc_z = 0.0;
+            for (std::size_t q = 0; q != z_x_.size(); ++q) {
+              double const t = zfac[q] * hmf(lnM, z_x_[q]) * sel(lnM, z_x_[q]);
+              acc += t;
+              acc_z += t * z_x_[q];
+            }
             Wb[k] = acc;
+            Wz[k] = acc_z;
           }
 
           // Plain moments of lnM under Wij -- the pairing that makes
@@ -133,6 +148,13 @@ namespace y3_cluster {
           }
           norm_[b]    = n0;
           lnm_eff_[b] = (n0 != 0.0) ? n1 / n0 : 0.5 * (lnm_lo_ + lnm_hi_);
+          // Selection-weighted mean redshift of the bin -- the query
+          // point for the physical-density radius rescale in the
+          // z-contracted evaluators.
+          double nz = 0.0;
+          for (std::size_t k = 0; k != lnm_x_.size(); ++k)
+            nz += lnm_w_[k] * Wz[k];
+          z_eff_[b] = (n0 != 0.0) ? nz / n0 : 0.5 * (zt_lo_ + zt_hi_);
           double m2 = 0.0;
           for (std::size_t k = 0; k != lnm_x_.size(); ++k) {
             double const d = lnm_x_[k] - lnm_eff_[b];
@@ -154,6 +176,7 @@ namespace y3_cluster {
       }
       double norm(int b) const { return norm_[b]; }
       double lnm_eff(int b) const { return lnm_eff_[b]; }
+      double z_eff(int b) const { return z_eff_[b]; }
       double mu2(int b) const { return mu2_[b]; }
       std::vector<double> const& lnm_x() const { return lnm_x_; }
       std::vector<double> const& lnm_w() const { return lnm_w_; }
@@ -169,6 +192,7 @@ namespace y3_cluster {
       std::vector<double> norm_;
       std::vector<double> lnm_eff_;
       std::vector<double> mu2_;
+      std::vector<double> z_eff_;
     };
 
   } // namespace nosel_gl_detail
@@ -271,7 +295,17 @@ namespace y3_cluster {
     {
       namespace w = y3_cluster_sel_weights;
 
-      core_.build_weights(s, /*include_sci=*/true);
+      // Physical mean density rho_m(z) = rho_m0 (1+z)^3 (opt-in via
+      // [halo_model] one_halo_physical_density): exact fixed-c identity
+      // DSigma_phys(R|z) = (1+z)^2 DSigma_com(R (1+z)). The (1+z)^2 rides
+      // in the z-weight (exact per z node); the radius rescale is applied
+      // at the bin's selection-weighted z_eff in phi().
+      int phys = 0;
+      if (s.has_val("haloModel", "one_halo_physical_density"))
+        s.get_val("haloModel", "one_halo_physical_density", phys);
+      phys_density_ = (phys != 0);
+      core_.build_weights(s, /*include_sci=*/true,
+                          phys_density_ ? 2.0 : 0.0);
 
       dsigma_nfw_.emplace(
         make_Interp2D(s, "haloModel", "r_sigma", "lnM", "dSigma_nfw"));
@@ -279,8 +313,12 @@ namespace y3_cluster {
                                                w::mis_detail::F_MIS_DEFAULT);
       tau_mis_ = w::mis_detail::read_mis_param(s, "tau_mis",
                                                w::mis_detail::TAU_MIS_DEFAULT);
-      double const omm = s.view<double>("cosmological_parameters", "omega_M");
-      dsigma_mis_.set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude of
+      // the miscentered NFW on haloModel/rho_m_ref -- the same density
+      // first_halo_term builds the centred dSigma_nfw table with
+      // (Omega_m rho_crit,0 (1+z_density)^3). Replaces the old hybrid
+      // (200c boundary from rho_crit + rho_crit*Omega_m amplitude).
+      dsigma_mis_.set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
       // OPT-IN (miscentering/use_halo_model_conc != 0, default 0 = the
       // ratified fixed-c production path): feed haloModel/concentration
       // (Child18 x concentration_amplitude) into the miscentered NFW so
@@ -355,8 +393,11 @@ namespace y3_cluster {
     double
     phi(int b, double R, double lnM) const
     {
-      double const d_cen = dsigma_nfw_->clamp(R, lnM);
-      double const d_mis = dsigma_mis_(R, r_mis_[b], lnM);
+      // Physical-density radius rescale at the bin's z_eff (see
+      // set_sample); q = 1 in the comoving default.
+      double const q = phys_density_ ? 1.0 + core_.z_eff(b) : 1.0;
+      double const d_cen = dsigma_nfw_->clamp(R * q, lnM);
+      double const d_mis = dsigma_mis_(R * q, r_mis_[b] * q, lnM);
       return (1.0 - f_mis_) * d_cen + f_mis_ * d_mis;
     }
 
@@ -369,6 +410,7 @@ namespace y3_cluster {
     y3_cluster::NFW_DSIGMA_MIS          dsigma_mis_;
     double f_mis_  {y3_cluster_sel_weights::mis_detail::F_MIS_DEFAULT};
     double tau_mis_{y3_cluster_sel_weights::mis_detail::TAU_MIS_DEFAULT};
+    bool phys_density_{false};
     std::vector<double> r_mis_;
   };
 

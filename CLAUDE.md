@@ -242,16 +242,29 @@ These bit future-you; enforce in any new integrand:
   and silently produces wrong HMF values.
 - **`lt` integration range**: Costanzi-2026 operators integrate lt on
   `(0, lob_centre]` *per grid point*, not a fixed `[lt_low, lt_high]`.
-- **NFW/profile density normalisation is rho_m0 = Omega_m0 · rho_crit,0
-  (comoving, NO redshift dependence) EVERYWHERE** — owner-ratified
-  convention (review 2026-08-20): the 1h term
-  (`haloModel.py::first_halo_term` must stay at z=0 — its internal
-  `rhom0*(1+z)^3` is physical and would break the comoving tables, see
-  the `one_halo_z` comment), the shearPrj miscentred profile
-  (`NFW_DSIGMA_MIS`: `2 r_s Δ_c rho_crit,0 · Omega_m`), and the 2h term
-  (cluster_toolkit `Sigma_at_R` / CLensPy, both on `Omega_m0 rho_c0`).
-  Any new profile code follows the same rule; redshift enters only
-  through concentration, bias, xi, and the kernels.
+- **UNIFIED rho_m convention (owner decision 2026-08-24, supersedes the
+  2026-08-20 hybrid)**: every NFW profile component — centred AND
+  miscentred, CPU/CUDA/Python/radial-series — uses ONE reference density
+  for BOTH the halo boundary `r_200 = [3M/(800π rho)]^(1/3)` and the
+  amplitude `rho_s = δ_c·rho`: **`haloModel/rho_m_ref`** =
+  Omega_m·rho_crit,0·(1+`one_halo_z_density`)³, published always-on by
+  `halo_model_cosmosis.py` (comoving rho_m0 at the default 0). The mis
+  readers take it via `set_rho_ref` (the old `rho_mult` machinery is
+  removed; pure normalization factors are applied OUTSIDE the profile
+  classes). The old hybrid — mis profile on a rho_crit/200c boundary
+  with a rho_crit·Omega_m amplitude — caused the 56-86% radial-series
+  offset (see `docs/known_issues/radial_series_vs_full_ltmz_defect.md`,
+  now RESOLVED).
+- **Physical density rho_m(z) = rho_m0(1+z)³ in the integrand** (opt-in,
+  `[halo_model] one_halo_physical_density = T`, incompatible with
+  `one_halo_z_density != 0`): implemented via the exact fixed-c identity
+  `ΔΣ_phys(R|z) = (1+z)² ΔΣ_com(R(1+z))` — the (1+z)² rides in the SHEAR
+  z-weight (`SelGLCore::build_weights` z_amp_power; exact per z node)
+  and the query-radius rescale is exact at live z (3d, live-zt weights,
+  max z-sum) and at the bin's selection-weighted `z_eff` in the
+  z-contracted 0d evaluators. Number counts are never touched. Not
+  implemented (fails loudly): Shear1h2hMaxGpu, the Python explicit/max
+  mirrors.
 - **Concentration convention** (owner-ratified, same review): the
   **1-halo term** uses the concentration evaluated at the cluster
   redshift (`[halo_model] one_halo_z`; Child18 `stacked_nfw`); the

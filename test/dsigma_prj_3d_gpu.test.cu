@@ -80,6 +80,7 @@ namespace {
 
     // haloModel bias: constant 2.0.
     db.put_val("haloModel", "lnM", std::vector<double>{20.0, 40.0});
+    db.put_val("haloModel", "rho_m_ref", 0.3 * 2.77533742639e+11);
     db.put_val("haloModel", "z", std::vector<double>{0.0, 0.6});
     db.put_val("haloModel", "bias",
               cosmosis::ndarray<double>(std::vector<double>{2.0, 2.0, 2.0, 2.0},
@@ -180,11 +181,15 @@ TEST_CASE("DSigmaPrj3dGpu integrand matches its documented formula assembly")
   (void)dchi;   // recomputed inside the integrand from (chi_z, chi_o, theta);
                // exposed here only to document the geometry being probed.
 
+  // UNIFIED rho_m convention: the module reads haloModel/rho_m_ref and
+  // the profile carries it for boundary AND amplitude (no external
+  // omega_m factor in the integrand any more).
   y3_cuda::NFW_DSIGMA_MIS dsmis_model(4.0, 2.77533742639e+11, "single");
+  dsmis_model.set_rho_ref(0.3 * 2.77533742639e+11);
   double const dsmis = dsmis_model(R, theta * d_a_o, lnM);
 
   double const expected = theta * 2.0 * M_PI * std::sin(theta) * dv_do_dz
-                         * w_pz * hmf * (1.0 + cl) * omega_m * dsmis;
+                         * w_pz * hmf * (1.0 + cl) * dsmis;
 
   double const got = eval_on_device(integrand, std::log(theta), zt, lnM);
   CHECK(got == Approx(expected).epsilon(1.0e-6));

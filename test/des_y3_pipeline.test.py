@@ -28,7 +28,11 @@ from shared import datablock_models as dm  # noqa: E402
 from shared import lensing_profiles as lp  # noqa: E402
 from systematics.selection_richness.python import sel_kernels  # noqa: E402
 import generate_radial_series_tables as generator  # noqa: E402
-import nfw_profile_family as pf  # noqa: E402
+import nfw_profile_family as pf
+
+# Convention-independent algebra tests use one fixed reference density
+# (the identities hold for any rho_ref; production reads haloModel/rho_m_ref).
+RHO_TEST = 0.3096 * pf.RHOC  # noqa: E402
 from shear1h_radial_series import (  # noqa: E402
     RadialSeriesTable,
     evaluate_series,
@@ -186,7 +190,8 @@ class TestNfwDecomposition(unittest.TestCase):
     def test_mass_scale_radius_round_trip(self):
         lnm = np.linspace(29.9336, 36.7300, 21)
         np.testing.assert_allclose(
-            pf.lnM_of_y(pf.y_of_lnM(lnm)), lnm, rtol=0.0, atol=2e-14)
+            pf.lnM_of_y(pf.y_of_lnM(lnm, RHO_TEST), RHO_TEST), lnm,
+            rtol=0.0, atol=2e-14)
 
     def test_nfw_shape_is_stable_through_x_equal_one(self):
         import mpmath as mp
@@ -197,19 +202,20 @@ class TestNfwDecomposition(unittest.TestCase):
         expected = np.array([float(pf.u_cen_mp(v, mp)) for v in x])
         np.testing.assert_allclose(got, expected, rtol=REL_TOL, atol=0.0)
 
-    def test_mixture_endpoints_and_density_factor(self):
+    def test_mixture_endpoints(self):
+        # Unified rho_m convention: both components share rho_ref inside
+        # A0, so the mix is a plain f_mis blend with exact endpoints.
         lnx = np.array([-1.2, 0.1, 1.7])
         lnxm = np.array([-0.8, -0.4, 0.2])
-        rho_mult = 0.3096
         for ell in range(4):
             cen = self.table.u_cen(ell, lnx)
             mis = self.table.u_mis(ell, lnx, lnxm)
             np.testing.assert_allclose(
-                self.table.u_mix(ell, lnx, lnxm, 0.0, rho_mult), cen,
+                self.table.u_mix(ell, lnx, lnxm, 0.0), cen,
                 rtol=0.0, atol=1e-14)
             np.testing.assert_allclose(
-                self.table.u_mix(ell, lnx, lnxm, 1.0, rho_mult),
-                rho_mult * mis, rtol=0.0, atol=1e-14)
+                self.table.u_mix(ell, lnx, lnxm, 1.0),
+                mis, rtol=0.0, atol=1e-14)
 
     def test_series_matches_direct_skewed_mass_population(self):
         r = np.array([0.20, 0.84, 3.0, 10.0])
@@ -217,7 +223,6 @@ class TestNfwDecomposition(unittest.TestCase):
         norm = 137.0
         ybar = math.log(0.30)
         f_mis = 0.22
-        rho_mult = 0.3096
 
         # Mean displacement is zero and the third central moment is nonzero.
         dy = np.array([-0.03, 0.06])
@@ -233,13 +238,13 @@ class TestNfwDecomposition(unittest.TestCase):
             y = ybar + displacement
             lnx = np.log(r) - y
             lnxm = np.full_like(r, math.log(r_mis) - y)
-            direct += weight * pf.A0_of_y(y) * self.table.u_mix(
-                0, lnx, lnxm, f_mis, rho_mult)
+            direct += weight * pf.A0_of_y(y, RHO_TEST) * self.table.u_mix(
+                0, lnx, lnxm, f_mis)
         direct *= norm
 
         series = evaluate_series(
             self.table, r, r_mis, norm, ybar, mu,
-            f_mis=f_mis, rho_mult=rho_mult, ell_max=3)
+            f_mis=f_mis, rho_ref=RHO_TEST, ell_max=3)
         np.testing.assert_allclose(series, direct, rtol=REL_TOL, atol=0.0)
 
 

@@ -102,8 +102,14 @@ namespace y3_pipelines {
       gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
     }
 
+    // z_amp_power: fold (1+z)^p into the z-only weight factor -- the
+    // exact amplitude half of the physical-density identity
+    // DSigma_phys(R|z) = (1+z)^2 DSigma_com(R (1+z)). Shear evaluators
+    // pass 2 when haloModel/one_halo_physical_density is on; number
+    // counts never pass it.
     void
-    build_weights(cosmosis::DataBlock& s, bool include_sci)
+    build_weights(cosmosis::DataBlock& s, bool include_sci,
+                  double z_amp_power = 0.0)
     {
       y3_cluster::HMF_t const       hmf(s);
       y3_cluster::DV_DO_DZ_t const  dv(s);
@@ -118,6 +124,8 @@ namespace y3_pipelines {
         double const z = z_x_[q];
         zfac[q] = z_w_[q] * dv(z) * omega(z) *
                   (sci ? sci->clamp(z) : 1.0);
+        if (z_amp_power != 0.0)
+          zfac[q] *= std::pow(1.0 + z, z_amp_power);
       }
 
       int const n_bins = n_bins_from_block(s);
@@ -125,16 +133,22 @@ namespace y3_pipelines {
       norm_.assign(n_bins, 0.0);
       lnm_eff_.assign(n_bins, 0.0);
       mu2_.assign(n_bins, 0.0);
+      z_eff_.assign(n_bins, 0.0);
 
+      std::vector<double> Wz(lnm_x_.size());
       for (int b = 0; b != n_bins; ++b) {
         y3_cluster::SelFunction_t const sel(s, b);
         auto& Wb = W_[b];
         for (std::size_t k = 0; k != lnm_x_.size(); ++k) {
           double const lnM = lnm_x_[k];
-          double acc = 0.0;
-          for (std::size_t q = 0; q != z_x_.size(); ++q)
-            acc += zfac[q] * hmf(lnM, z_x_[q]) * sel(lnM, z_x_[q]);
+          double acc = 0.0, acc_z = 0.0;
+          for (std::size_t q = 0; q != z_x_.size(); ++q) {
+            double const t = zfac[q] * hmf(lnM, z_x_[q]) * sel(lnM, z_x_[q]);
+            acc += t;
+            acc_z += t * z_x_[q];
+          }
           Wb[k] = acc;
+          Wz[k] = acc_z;
         }
 
         // Plain moments of lnM under W_ij (the pairing that makes the
@@ -146,6 +160,10 @@ namespace y3_pipelines {
         }
         norm_[b]    = n0;
         lnm_eff_[b] = (n0 != 0.0) ? n1 / n0 : 0.5 * (lnm_lo_ + lnm_hi_);
+        double nz = 0.0;
+        for (std::size_t k = 0; k != lnm_x_.size(); ++k)
+          nz += lnm_w_[k] * Wz[k];
+        z_eff_[b] = (n0 != 0.0) ? nz / n0 : 0.5 * (zt_lo_ + zt_hi_);
         double m2 = 0.0;
         for (std::size_t k = 0; k != lnm_x_.size(); ++k) {
           double const d = lnm_x_[k] - lnm_eff_[b];
@@ -160,6 +178,8 @@ namespace y3_pipelines {
     double norm(int b) const { return norm_[b]; }
     double lnm_eff(int b) const { return lnm_eff_[b]; }
     double mu2(int b) const { return mu2_[b]; }
+    // Selection-weighted mean redshift per bin (physical-density rescale).
+    double z_eff(int b) const { return z_eff_[b]; }
     std::vector<double> const& lnm_x() const { return lnm_x_; }
     std::vector<double> const& lnm_w() const { return lnm_w_; }
     std::vector<double> const& z_x() const { return z_x_; }
@@ -176,6 +196,7 @@ namespace y3_pipelines {
     std::vector<double> norm_;
     std::vector<double> lnm_eff_;
     std::vector<double> mu2_;
+    std::vector<double> z_eff_;
   };
 
 }  // namespace y3_pipelines

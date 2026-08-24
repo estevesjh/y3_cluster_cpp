@@ -117,8 +117,15 @@ public:
     // has not published the miscentering section must fail loudly.
     f_mis_ = include_mis_ ? s.view<double>("miscentering", "f_mis") : 0.0;
     double const tau_mis = s.view<double>("miscentering", "tau_mis");
-    dsigma_mis_.set_rho_mult(
-      s.view<double>("cosmological_parameters", "omega_M"));
+    // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+    // haloModel/rho_m_ref (same density as the centred dSigma_nfw table).
+    dsigma_mis_.set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
+    // Physical mean density (opt-in): exact per-z-node identity on the
+    // 1-halo mixture ONLY (see evaluate; the 2-halo row is untouched).
+    int phys = 0;
+    if (s.has_val("haloModel", "one_halo_physical_density"))
+      s.get_val("haloModel", "one_halo_physical_density", phys);
+    phys_density_ = (phys != 0);
 
     // z-only factors (Sigma_crit_inv folded in, as the shear weight
     // requires) and the z-RESOLVED weight W2d(bin; lnM, z).
@@ -175,12 +182,32 @@ public:
 
     double acc = 0.0;
     double const* w2 = &w2d_[static_cast<std::size_t>(b) * N_lnm_ * N_z_];
+    if (!phys_density_) {
+      for (std::size_t k = 0; k != N_lnm_; ++k) {
+        double const* wrow = w2 + k * N_z_;
+        double const* brow = &bias_kq_[k * N_z_];
+        double const one_k = one[k];
+        for (std::size_t q = 0; q != N_z_; ++q)
+          acc += wrow[q] * std::max(one_k, brow[q] * two[q]);
+      }
+      return {acc};
+    }
+    // Physical density: the 1-halo mixture becomes z-dependent through
+    // the exact identity DSigma_phys(R|z) = (1+z)^2 DSigma_com(R (1+z)),
+    // evaluated at every z node (slower; opt-in diagnostic mode). The
+    // 2-halo row keeps its own convention.
     for (std::size_t k = 0; k != N_lnm_; ++k) {
       double const* wrow = w2 + k * N_z_;
       double const* brow = &bias_kq_[k * N_z_];
-      double const one_k = one[k];
-      for (std::size_t q = 0; q != N_z_; ++q)
-        acc += wrow[q] * std::max(one_k, brow[q] * two[q]);
+      for (std::size_t q = 0; q != N_z_; ++q) {
+        double const qf = 1.0 + z_x_[q];
+        double const d_cen = dsigma_nfw_->clamp(R * qf, lnm_x_[k]);
+        double const d_mis =
+          dsigma_mis_(R * qf, r_mis_[b] * qf, lnm_x_[k]);
+        double const one_kq =
+          (qf * qf) * ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
+        acc += wrow[q] * std::max(one_kq, brow[q] * two[q]);
+      }
     }
     return {acc};
   }
@@ -231,6 +258,7 @@ private:
   std::optional<y3_cluster::Interp2D> dsigma_nfw_, bias_, dsigma_hh_;
   double f_mis_{0.0};
   std::size_t n_bins_{0};
+  bool phys_density_{false};
   std::vector<double> w2d_, bias_kq_, r_mis_;
 };
 

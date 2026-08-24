@@ -16,7 +16,7 @@
 // production grid, the measured cost driver of the CPU class) is a
 // single CUDA kernel over y3_cuda::NFW_DSIGMA_MIS (device-resident
 // quad::Interp2D table, passed by value exactly as the other des_y3 GPU
-// modules pass their integrands, with set_rho_mult(Omega_m) applied on
+// modules pass their integrands, with set_rho_ref(haloModel/rho_m_ref) applied on
 // the host copy before launch); the (lnM, z) contraction against the
 // z-resolved selection weight runs inside the same kernel, one thread
 // per (bin, R, lnM) node, reduced over z with atomicAdd into the
@@ -93,7 +93,7 @@ namespace y3_cuda_des_y3 {
   // of the 1-halo term (the dominant transcendental cost) and reduce
   // the max(1h, 2h) contraction over the z nodes, atomicAdd-ing the
   // partial sum into the (bin, R) accumulator. The nfw object arrives
-  // with rho_mult already set to Omega_m by the host.
+  // with rho_ref already set to haloModel/rho_m_ref by the host.
   inline __global__ void
   max_model_contract(y3_cuda::NFW_DSIGMA_MIS nfw,
                      int n_bins, int n_R, int n_lnm, int n_z,
@@ -196,8 +196,21 @@ public:
     double const f_mis_scalar =
       include_mis_ ? s.view<double>("miscentering", "f_mis") : 0.0;
     double const tau_mis = s.view<double>("miscentering", "tau_mis");
-    dsigma_mis_dev_.set_rho_mult(
-      s.view<double>("cosmological_parameters", "omega_M"));
+    // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+    // haloModel/rho_m_ref (same density as the centred dSigma_nfw table).
+    dsigma_mis_dev_.set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
+    // one_halo_physical_density is NOT implemented in this GPU backend
+    // (the kernel's centred-profile row is host-precomputed z-free);
+    // fail loudly instead of silently diverging from the CPU max model.
+    {
+      int phys = 0;
+      if (s.has_val("haloModel", "one_halo_physical_density"))
+        s.get_val("haloModel", "one_halo_physical_density", phys);
+      if (phys != 0)
+        throw std::runtime_error(
+          "Shear1h2hMaxGpu: one_halo_physical_density is not implemented "
+          "on the GPU max backend; use the CPU Shear1h2hMax");
+    }
 
     // z-only factors (Sigma_crit_inv folded in) and the z-RESOLVED
     // weight W2d(bin; lnM, z) -- identical construction to the CPU

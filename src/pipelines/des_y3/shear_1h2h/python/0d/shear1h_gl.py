@@ -60,13 +60,18 @@ from systematics.selection_richness.python import sel_kernels
 OUTPUT_SECTION = "shear1h_gl"
 
 
-def compute_shear(weights, profile, bin_index, r_perp):
-    """O(R) for the requested bins: sum_k w_k W[b,k] Phi_b(R, lnM_k)."""
+def compute_shear(weights, profile, bin_index, r_perp, physical=False):
+    """O(R) for the requested bins: sum_k w_k W[b,k] Phi_b(R, lnM_k).
+
+    physical: the radius half of the physical-density identity, applied
+    at the bin's selection-weighted z_eff (the (1+z)^2 amplitude half
+    must already be inside the weights via z_amp_power=2)."""
     n_r = len(r_perp)
     vals = np.empty(len(bin_index) * n_r)
     lnm = weights.lnm_x
     for i, b in enumerate(bin_index):
-        phi = profile(b, np.asarray(r_perp)[:, None], lnm[None, :])
+        q = 1.0 + weights.z_eff[b] if physical else 1.0
+        phi = profile(b, np.asarray(r_perp)[:, None], lnm[None, :], q=q)
         vals[i * n_r:(i + 1) * n_r] = phi @ (weights.lnm_w * weights.W[b])
     return vals
 
@@ -96,10 +101,12 @@ def setup(options):
 def execute(block, cfg):
     t0 = time.perf_counter()
     source = dm.DataBlockSource(block)
+    physical = dm.physical_density_flag(source)
     weights = dm.MassZWeights(
         source, n_lnm=cfg["n_lnm"], n_z=cfg["n_z"],
         zt_lo=cfg["zt_low"], zt_hi=cfg["zt_high"],
-        lnm_lo=cfg["lnm_low"], lnm_hi=cfg["lnm_high"], include_sci=True)
+        lnm_lo=cfg["lnm_low"], lnm_hi=cfg["lnm_high"], include_sci=True,
+        z_amp_power=2.0 if physical else 0.0)
     profile = lp.MisMixtureProfile(
         source, lob_centers=cfg["lob_centers"],
         # Required: no fallback to the fiducial defaults — a pipeline
@@ -109,7 +116,8 @@ def execute(block, cfg):
         omega_m=source.scalar("cosmological_parameters", "omega_m"))
 
     block[OUTPUT_SECTION, "vals"] = compute_shear(
-        weights, profile, cfg["bin_index"], cfg["r_perp"])
+        weights, profile, cfg["bin_index"], cfg["r_perp"],
+        physical=physical)
     dt_ms = 1000.0 * (time.perf_counter() - t0)
     print(f"[shear1h_gl] {cfg['bin_index'].size} bins x "
           f"{cfg['r_perp'].size} radii — {dt_ms:.0f} ms", flush=True)

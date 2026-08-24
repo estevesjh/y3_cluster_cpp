@@ -109,6 +109,16 @@ def setup(options):
 
 
 def execute(block, cfg):
+    # one_halo_physical_density is not yet wired into this reference
+    # mirror -- fail loudly instead of silently diverging from the C++
+    # backends (which implement the exact identity).
+    _src_flag = dm.DataBlockSource(block)
+    if dm.physical_density_flag(_src_flag):
+        raise NotImplementedError(
+            "shear1h2h_max_explicit_gl: one_halo_physical_density is not wired "
+            "into this Python mirror yet; use the C++ backend or extend "
+            "this module first")
+
     t0 = time.perf_counter()
     sf = sel_kernels.load()
     source = dm.DataBlockSource(block)

@@ -9,7 +9,7 @@ with the centred term interpolated from the per-sample
 ``haloModel/dSigma_nfw`` table (GSL bilinear, clamped) and the
 miscentred term from the fixed gamma-kernel look-up table through
 NFW_DSIGMA_MIS (bilinear in ln u over (ln x, ln x_mis), clamped, with
-the analytic 2 r_s delta_c rho_crit rho_mult amplitude and the 1e-12
+the analytic 2 r_s delta_c rho_ref amplitude and the 1e-12
 Mpc^2 -> pc^2 conversion).
 
 These are interpolation-exact replicas — linear interpolation with
@@ -78,8 +78,15 @@ class NfwDsigmaMisProduction:
     legacy "gamma" kernel keeps the log table + exp() read.
     """
 
-    def __init__(self, kernel="gamma", data_dir=None):
+    def __init__(self, kernel="gamma", data_dir=None, rho_ref=None):
+        """rho_ref: the UNIFIED reference density (haloModel/rho_m_ref =
+        Omega_m rho_crit,0 (1+z_density)^3) driving BOTH the halo boundary
+        r_200 = [3M/(800 pi rho_ref)]^(1/3) and the amplitude
+        rho_s = delta_c rho_ref -- mirrors NFW_DSIGMA_MIS::set_rho_ref
+        (2026-08-24 convention decision). Default None keeps the legacy
+        rho_crit class-level convention for dump-free unit tests."""
         d = Path(data_dir) if data_dir else _repo_root() / "data" / "nfw_off_center"
+        self.rho_ref = RHOC if rho_ref is None else float(rho_ref)
         self._lnx = np.loadtxt(d / GAMMA_TABLE.format(kernel, "logx"))
         self._lnxm = np.loadtxt(d / GAMMA_TABLE.format(kernel, "logxmis"))
         self._is_signed = kernel == "single"
@@ -97,14 +104,16 @@ class NfwDsigmaMisProduction:
         (issue #13; mirrors NFW_DSIGMA_MIS::set_concentration_table).
         The lookup table is universal in x = r/r_s, so c enters only the
         analytic r_s = r_200/c and delta_c(c). Default None = legacy
-        fixed c = CONC (= 4)."""
+        fixed c = CONC (= 4). rho_mult is a PURE EXTERNAL amplitude
+        factor (it never touches the boundary); production paths pass
+        rho_ref at construction instead."""
         lnM = np.asarray(lnM, dtype=float)
         if conc is None:
             c, delta_c = CONC, DELTA_C
         else:
             c = np.asarray(conc, dtype=float)
             delta_c = (200.0 * c**3 / 3.0) / (np.log1p(c) - c / (1.0 + c))
-        r_200 = np.cbrt(3.0 * np.exp(lnM) / (800.0 * np.pi * RHOC))
+        r_200 = np.cbrt(3.0 * np.exp(lnM) / (800.0 * np.pi * self.rho_ref))
         r_s = r_200 / c
         lnx = np.clip(np.log(np.asarray(r_perp, dtype=float) / r_s),
                       self._lnx[0], self._lnx[-1])
@@ -115,7 +124,7 @@ class NfwDsigmaMisProduction:
         # signed kernels tabulate DeltaSigma directly; legacy log kernels
         # tabulate log(DeltaSigma) (see class docstring).
         val = u if self._is_signed else np.exp(u)
-        norm = 2.0 * r_s * delta_c * RHOC * rho_mult
+        norm = 2.0 * r_s * delta_c * self.rho_ref * rho_mult
         return norm * val * 1.0e-12
 
 
@@ -124,7 +133,10 @@ class MisMixtureProfile:
 
     def __init__(self, source, *, lob_centers, f_mis, tau_mis, omega_m):
         self._cen = HaloModelDSigmaNfw(source)
-        self._mis = NfwDsigmaMisProduction()
+        # UNIFIED rho_m convention: the mis component shares the density
+        # the centred dSigma_nfw table was built with (haloModel/rho_m_ref).
+        self.rho_ref = float(source.scalar("halomodel", "rho_m_ref"))
+        self._mis = NfwDsigmaMisProduction(rho_ref=self.rho_ref)
         self._lob = np.asarray(lob_centers, dtype=float)
         self.f_mis = float(f_mis)
         self.tau_mis = float(tau_mis)
@@ -134,10 +146,15 @@ class MisMixtureProfile:
         """tau_mis R_lambda for richness bin = bin_index mod len(lob)."""
         return self.tau_mis * float(r_lambda(self._lob[bin_index % self._lob.size]))
 
-    def __call__(self, bin_index, r_perp, lnM):
-        d_cen = self._cen(r_perp, lnM)
-        d_mis = self._mis(r_perp, self.r_mis(bin_index), lnM,
-                          rho_mult=self.omega_m)
+    def __call__(self, bin_index, r_perp, lnM, q=1.0):
+        """q: physical-density query rescale (1 + z), applied to BOTH
+        comoving query radii -- the radius half of the exact identity
+        DSigma_phys(R|z) = (1+z)^2 DSigma_com(R (1+z)). The (1+z)^2
+        amplitude is the CALLER's (z-weight or explicit factor), matching
+        the C++ evaluators."""
+        d_cen = self._cen(np.asarray(r_perp) * q, lnM)
+        d_mis = self._mis(np.asarray(r_perp) * q, self.r_mis(bin_index) * q,
+                          lnM)
         return (1.0 - self.f_mis) * d_cen + self.f_mis * d_mis
 
 

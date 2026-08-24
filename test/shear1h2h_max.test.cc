@@ -138,8 +138,8 @@ TEST_CASE("shear1h2h_max one-halo mixture has exact f_mis endpoints and stays bo
 {
   Interp2D const dcen_tab = make_dcen_table();
   NFW_DSIGMA_MIS dsigma_mis(4.0, 2.77533742639e+11, GAMMA);
-  double const omega_m = 0.3096;
-  dsigma_mis.set_rho_mult(omega_m);
+  // UNIFIED rho_m convention: one density for boundary AND amplitude.
+  dsigma_mis.set_rho_ref(0.3096 * 2.77533742639e+11);
 
   double const R = 1.5, lnM = 32.0, r_mis = 0.15;
   double const d_cen = dcen_tab.clamp(R, lnM);
@@ -170,7 +170,7 @@ TEST_CASE("shear1h2h_max one-halo mixture is finite and non-negative across the 
 {
   Interp2D const dcen_tab = make_dcen_table();
   NFW_DSIGMA_MIS dsigma_mis(4.0, 2.77533742639e+11, GAMMA);
-  dsigma_mis.set_rho_mult(0.3096);
+  dsigma_mis.set_rho_ref(0.3096 * 2.77533742639e+11);
 
   // The 1-halo piece is the part of the max model that must be
   // well-defined and NaN-free on its own -- unlike the 2-halo term, it

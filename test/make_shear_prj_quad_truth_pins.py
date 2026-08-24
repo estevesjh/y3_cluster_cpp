@@ -87,7 +87,8 @@ def quad_truth_point(src, lb, zob, radii, n_per_seg=N_PER_SEG, n_m=N_M):
     hmf = dm.HMF(src)
     bias = dm.Bilinear2D(src, "halomodel", "lnm", "z", "bias")
     xi_nl = dm.Bilinear2D(src, "xi_nl", "r", "z", "xi_nl")
-    dsmis = lp.NfwDsigmaMisProduction(kernel="single")
+    dsmis = lp.NfwDsigmaMisProduction(
+        kernel="single", rho_ref=src.scalar("halomodel", "rho_m_ref"))
     bsel = dm.BSelBins.from_source(src)
 
     lobc = float(dm.DEFAULT_LOB_CENTERS[lb])
@@ -158,8 +159,7 @@ def quad_truth_point(src, lb, zob, radii, n_per_seg=N_PER_SEG, n_m=N_M):
 
     out = {}
     for r_perp in radii:
-        ds = dsmis(r_perp, theta[:, None] * d_a_o, lnms[None, :],
-                   rho_mult=omega_m)                    # (n_th, n_m)
+        ds = dsmis(r_perp, theta[:, None] * d_a_o, lnms[None, :])  # (n_th, n_m)
         rnd = geom @ (ds @ (w_m * wrnd_M))
         cl = (geom * bsel_th) @ ((ds * kcl) @ w_m)
         out[r_perp] = (float(rnd), float(cl))

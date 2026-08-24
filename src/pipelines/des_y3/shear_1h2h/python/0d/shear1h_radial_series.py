@@ -24,14 +24,15 @@ concentration dependence is required.
 
      O_ij(R) ~= N_ij A0(ybar) [ u_mix,0 + mu_2 u_mix,2 + mu_3 u_mix,3 ]
 
-     with u_mix,ell = (1 - f_mis) U_ell^cen + f_mis Omega_m U_ell^mis
-     (Omega_m is the miscentred component's rho_mult, exactly as
-     NFW_DSIGMA_MIS::set_rho_mult).
+     with u_mix,ell = (1 - f_mis) U_ell^cen + f_mis U_ell^mis
+     (both components share rho_ref = haloModel/rho_m_ref inside A0,
+     exactly as NFW_DSIGMA_MIS::set_rho_ref -- the 2026-08-24 unified
+     rho_m convention).
 
 The observable is the count-weighted stack N_ij[gamma_t^1h,full](R) on
 the production (bin_index x r_perp) cartesian grid, bin slow / R fast —
 the same grid semantics as Shear1hMisSel. The centred component is the
-fixed-convention (c = 4, rho_crit) Wright & Brainerd profile — the
+fixed-c (c = 4, rho_ref = haloModel/rho_m_ref) Wright & Brainerd profile — the
 x_mis -> 0 limit of the same family as the miscentred term — NOT the
 per-sample haloModel/dSigma_nfw table production uses; the known ~4%
 shape difference between those two centred conventions is documented in
@@ -121,26 +122,29 @@ class RadialSeriesTable:
         lnx, lnxm = self._clamp(lnx, lnxm)
         return self._mis[ell].ev(lnx, lnxm)
 
-    def u_mix(self, ell, lnx, lnxm, f_mis, rho_mult):
-        """(1 - f_mis) U_ell^cen + f_mis rho_mult U_ell^mis."""
+    def u_mix(self, ell, lnx, lnxm, f_mis):
+        """(1 - f_mis) U_ell^cen + f_mis U_ell^mis -- both components
+        share the same rho_ref inside A0 (unified rho_m convention)."""
         return ((1.0 - f_mis) * self.u_cen(ell, lnx)
-                + f_mis * rho_mult * self.u_mis(ell, lnx, lnxm))
+                + f_mis * self.u_mis(ell, lnx, lnxm))
 
 
 def evaluate_series(table, r_perp, r_mis, norm, ybar, mu, *,
-                    f_mis, rho_mult, ell_max=3):
+                    f_mis, rho_ref, ell_max=3, lnq=0.0):
     """Assemble O(R) for one bin from the offline tables and moments.
 
     mu is the central-moment vector from MassZWeights.moments_of (mu[0]=1,
     mu[1]=0); only mu[2] (and mu[3] when ell_max=3) survive.
     """
-    lnx = np.log(np.asarray(r_perp, dtype=float)) - ybar
-    lnxm = np.full_like(lnx, np.log(r_mis) - ybar)
-    acc = table.u_mix(0, lnx, lnxm, f_mis, rho_mult)
-    acc = acc + mu[2] * table.u_mix(2, lnx, lnxm, f_mis, rho_mult)
+    # lnq = ln(1 + z_eff): the query-radius half of the physical-density
+    # identity (the (1+z)^2 amplitude half rides in the weights).
+    lnx = np.log(np.asarray(r_perp, dtype=float)) - ybar + lnq
+    lnxm = np.full_like(lnx, np.log(r_mis) - ybar + lnq)
+    acc = table.u_mix(0, lnx, lnxm, f_mis)
+    acc = acc + mu[2] * table.u_mix(2, lnx, lnxm, f_mis)
     if ell_max >= 3:
-        acc = acc + mu[3] * table.u_mix(3, lnx, lnxm, f_mis, rho_mult)
-    return norm * pf.A0_of_y(ybar) * acc
+        acc = acc + mu[3] * table.u_mix(3, lnx, lnxm, f_mis)
+    return norm * pf.A0_of_y(ybar, rho_ref) * acc
 
 
 # ---------------------------------------------------------------------------
@@ -181,26 +185,31 @@ def execute(block, cfg):
     source = dm.DataBlockSource(block)
     table = cfg["table"]
 
+    physical = dm.physical_density_flag(source)
     weights = dm.MassZWeights(
         source, n_lnm=cfg["n_lnm"], n_z=cfg["n_z"],
         zt_lo=cfg["zt_low"], zt_hi=cfg["zt_high"],
-        lnm_lo=cfg["lnm_low"], lnm_hi=cfg["lnm_high"], include_sci=True)
-    norm, ybar, mu = weights.moments_of(pf.y_of_lnM, ell_max=3)
+        lnm_lo=cfg["lnm_low"], lnm_hi=cfg["lnm_high"], include_sci=True,
+        z_amp_power=2.0 if physical else 0.0)
+    # UNIFIED rho_m convention: rho_ref drives y = ln r_s AND A0.
+    rho_ref = source.scalar("halomodel", "rho_m_ref")
+    norm, ybar, mu = weights.moments_of(
+        lambda lnm: pf.y_of_lnM(lnm, rho_ref), ell_max=3)
 
     # Required: no fallback to the fiducial defaults — a pipeline
     # missing the miscentering section must fail loudly.
     f_mis = source.scalar("miscentering", "f_mis")
     tau_mis = source.scalar("miscentering", "tau_mis")
-    omega_m = source.scalar("cosmological_parameters", "omega_m")
     lob = cfg["lob_centers"]
 
     vals = np.empty(cfg["bin_index"].size * cfg["r_perp"].size)
     n_r = cfg["r_perp"].size
     for i, b in enumerate(cfg["bin_index"]):
         r_mis = tau_mis * float(dm.R_lambda(lob[b % lob.size]))
+        lnq = np.log1p(weights.z_eff[b]) if physical else 0.0
         vals[i * n_r:(i + 1) * n_r] = evaluate_series(
             table, cfg["r_perp"], r_mis, norm[b], ybar[b], mu[b],
-            f_mis=f_mis, rho_mult=omega_m, ell_max=cfg["ell_max"])
+            f_mis=f_mis, rho_ref=rho_ref, ell_max=cfg["ell_max"], lnq=lnq)
 
     block[OUTPUT_SECTION, "vals"] = vals
     block[OUTPUT_SECTION, "norm"] = norm

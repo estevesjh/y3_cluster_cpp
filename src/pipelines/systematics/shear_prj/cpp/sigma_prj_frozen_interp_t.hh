@@ -117,7 +117,9 @@ namespace y3_cluster {
 
       double const omm = sample.view<double>("cosmological_parameters", "omega_M");
       h0_ = sample.view<double>("cosmological_parameters", "h0");
-      dsigma_mis_->set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+      // haloModel/rho_m_ref (see ShearPrjEvaluator / sigma_prj_t.hh).
+      dsigma_mis_->set_rho_ref(sample.view<double>("haloModel", "rho_m_ref"));
 
       bsel_.emplace(sample);
 

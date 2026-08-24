@@ -169,6 +169,7 @@ namespace {
               cosmosis::ndarray<double>(s_stack, {2, 2, 2})); // (bin,z,lnm)
 
     s.put_val("haloModel", "r_sigma", std::vector<double>{0.05, 10.0});
+    s.put_val("haloModel", "rho_m_ref", 0.3096 * 2.77533742639e+11);
     s.put_val("haloModel", "lnM", std::vector<double>{28.0, 37.0});
     auto const dsig = [](double r) { return 5.0 - 0.3 * r; };
     s.put_val("haloModel", "dSigma_nfw",
@@ -205,8 +206,7 @@ namespace {
                                              "lnM", "dSigma_nfw"))
       , dsigma_mis(4.0, 2.77533742639e+11, y3_cluster::GAMMA)
     {
-      dsigma_mis.set_rho_mult(s.view<double>("cosmological_parameters",
-                                             "omega_m"));
+      dsigma_mis.set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
       y3_cluster::p_op_detail::gl_nodes(ZT_LO, ZT_HI, N_Z, z_x, z_w);
       y3_cluster::p_op_detail::gl_nodes(LNM_LO, LNM_HI, N_LNM, lnm_x, lnm_w);
     }

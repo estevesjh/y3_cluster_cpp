@@ -56,15 +56,23 @@ public:
   set_sample(cosmosis::DataBlock& s)
   {
     namespace w = y3_pipelines;
-    core_.build_weights(s, /*include_sci=*/true);
+    // Physical mean density (opt-in): (1+z)^2 in the z-weight + the
+    // query rescale at the bin's z_eff (see phi loop below).
+    int phys = 0;
+    if (s.has_val("haloModel", "one_halo_physical_density"))
+      s.get_val("haloModel", "one_halo_physical_density", phys);
+    phys_density_ = (phys != 0);
+    core_.build_weights(s, /*include_sci=*/true,
+                        phys_density_ ? 2.0 : 0.0);
     dsigma_nfw_.emplace(y3_cluster::make_Interp2D(
       s, "haloModel", "r_sigma", "lnM", "dSigma_nfw"));
     // Required: no fallback to the fiducial defaults — a pipeline that
     // has not published the miscentering section must fail loudly.
     f_mis_ = s.view<double>("miscentering", "f_mis");
     double const tau_mis = s.view<double>("miscentering", "tau_mis");
-    dsigma_mis_.set_rho_mult(
-      s.view<double>("cosmological_parameters", "omega_M"));
+    // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+    // haloModel/rho_m_ref (same density as the centred dSigma_nfw table).
+    dsigma_mis_.set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
     r_mis_.assign(core_.n_bins(), 0.0);
     for (std::size_t b = 0; b != core_.n_bins(); ++b)
       r_mis_[b] = tau_mis * w::R_lambda(
@@ -81,10 +89,11 @@ public:
     auto const& wb = core_.weights(b);
     auto const& xs = core_.lnm_x();
     auto const& ws = core_.lnm_w();
+    double const q = phys_density_ ? 1.0 + core_.z_eff(b) : 1.0;
     double acc = 0.0;
     for (std::size_t k = 0; k != xs.size(); ++k) {
-      double const d_cen = dsigma_nfw_->clamp(R, xs[k]);
-      double const d_mis = dsigma_mis_(R, r_mis_[b], xs[k]);
+      double const d_cen = dsigma_nfw_->clamp(R * q, xs[k]);
+      double const d_mis = dsigma_mis_(R * q, r_mis_[b] * q, xs[k]);
       double const d_tot = (1.0 - f_mis_) * d_cen + f_mis_ * d_mis;
       acc += ws[k] * wb[k] * d_tot;
     }
@@ -117,6 +126,7 @@ private:
   // concentration as the centred dSigma_nfw table.
   y3_cluster::NFW_DSIGMA_MIS dsigma_mis_;
   double f_mis_{0.0};
+  bool phys_density_{false};
   std::vector<double> r_mis_;
 };
 

@@ -1,106 +1,61 @@
-# ⚠ radial series (0d) disagrees with the 3d reference by 56-86% in raw ΔΣ
+# ✅ RESOLVED — radial series (0d) vs the 3d reference: the 56-86% offset was a density-convention mismatch
 
-**Raised 2026-08-14** while adding a cross-backend consistency test for
-one-halo miscentred shear (`test/shear1h_cross_backend.test.py`). The
-project's existing `radial_series` validator
-(`validate_radial_series.py`) only ever reported a *shape-only*
-comparison against production (normalized so both profiles equal 1 at
-the first radius, "reported only, not asserted" for a documented
-convention gap) — nobody had directly checked the raw ΔΣ values against
-the 3d adaptive reference until this pass.
+**Raised 2026-08-14; root-caused and RESOLVED 2026-08-24.** The original
+write-up attributed the offset to the hardcoded `CONC = 4.0` in
+`nfw_profile_family.py`. A quantitative decomposition (switching one
+ingredient at a time against the dump-verified production profile)
+showed that attribution was wrong:
 
-Producer: `src/pipelines/des_y3/shear_1h2h/python/0d/nfw_profile_family.py`,
-line 36: `CONC = 4.0` — a hardcoded module-level constant.
+| Effect (per halo, R = 0.2 cMpc/h) | ratio radial_series / 3d |
+|---|---|
+| concentration only (c=4 vs Child18 at z_halo=0) | 0.91 – 1.00 (small, wrong sign at low M, ~0 at high M) |
+| density/boundary convention only (rho_crit/200c vs rho_m0/200m, both c=4) | **1.78 – 1.96** (and the universal ~1.22 large-R floor) |
 
-## The measurement
+The dominant root cause: the family's CENTRED profile was pinned to the
+*miscentering-table* convention — `r_200` against **rho_crit** (200c)
+with amplitude `delta_c * rho_crit` and NO Omega_m (`rho_mult` applied
+to the mis component only) — while the 3d reference / production centred
+term (`haloModel/dSigma_nfw`) interprets the same mass as **M_200m**:
+`r_200` against rho_m0 = Omega_m rho_crit with amplitude
+`delta_c * rho_m0`. Two compounding pieces: amplitude x(1/Omega_m)=3.23
+and boundary r_s x Omega_m^(1/3)=0.677 with the query x = R/r_s shifted
+by 1.478 along the Wright & Brainerd shape. The per-bin population-level
+prediction from this decomposition reproduces the observed 1.56–1.86
+ratios and the large-R floor; the concentration piece is <= 9%.
 
-Comparing the C++ radial-series backend (`Shear1hRadialSeries.so`)
-against the C++ 3d adaptive reference (`Shear1h3d.so`, formerly
-`Shear1hFullLtmz.so`) on the
-pinned 12-bin × 10-radius wall, raw ΔΣ (not shape-normalized):
+## Resolution (owner decision, 2026-08-24): the unified rho_m convention
 
-| Richness bin | max \|ratio − 1\| | at innermost R |
-|---|---|---|
-| 0 (λ∈[20,30]) | 56-58% | 56-58% |
-| 1 (λ∈[30,45]) | 65-67% | 65-67% |
-| 2 (λ∈[45,60]) | 73-75% | 73-75% |
-| 3 (λ∈[60,200]) | **82-86%** | 82-86% |
+Every profile component in every backend (CPU, CUDA, Python, radial
+series) now uses ONE reference density for BOTH the halo boundary and
+the amplitude: `haloModel/rho_m_ref` = Omega_m rho_crit,0
+(1 + one_halo_z_density)^3, published by `halo_model_cosmosis.py` — the
+identical density `first_halo_term` builds the centred tables with.
 
-(z-bin index — 0/1/2 within each richness group — makes only a small,
-secondary difference; richness bin, i.e. mass, is what drives it.) This
-is **not just a shape/curvature effect** — the deviation is already
-56-86% at the very first (innermost) radius, i.e. a genuine amplitude
-offset, not merely a difference in how the profile falls off with R.
-Once that amplitude offset is normalized out (dividing each profile by
-its own value at R[0], matching what `validate_radial_series.py`'s
-"check 4" already does), a **further ~10%** shape/curvature residual
-remains — this second number is what the project's own validator has
-long reported, but the ~56-86% raw-amplitude offset underneath it had
-not been quantified before.
+- `NFW_DSIGMA_MIS` / `NFW_SIGMA_MIS` (`.hh`/`.cuh`): `set_rho_ref(rho)`
+  replaces the removed `rho_mult` machinery; pure normalization factors
+  are applied OUTSIDE the profile classes.
+- `nfw_profile_family.py` / `shear1h_radial_series` (py+cpp):
+  `y_of_lnM`, `A0_of_y`, `r_s_of_lnM` take `rho_ref`; the offline U_ell
+  tables are dimensionless in x and unchanged; `u_mix` is a plain f_mis
+  blend (no Omega_m on the mis component).
+- Physical density rho_m(z) = rho_m0 (1+z)^3 is available in-integrand
+  via `[halo_model] one_halo_physical_density` using the exact fixed-c
+  identity DSigma_phys(R|z) = (1+z)^2 DSigma_com(R (1+z)) — (1+z)^2 in
+  the shear z-weight + the query-radius rescale (exact at live z;
+  bin-z_eff in the z-contracted evaluators). Number counts untouched.
 
-## Why
+## What remains open
 
-`nfw_profile_family.py` hardcodes `CONC = 4.0` as a single module-level
-constant, used for **both** halves of the profile family:
+The residual radial-series-vs-3d disagreement after unification is the
+genuine content of issue #5: the fixed c=4 family vs Child18 c(M)
+(<= ~9% at inner radii, vanishing at high mass at z_halo = 0) plus the
+ell-truncation/interpolation of the series (~few x 1e-3). The
+deliberately-red pin `test_cpp_radial_series_matches_cpp_full_ltmz`
+stays until that concentration question is decided; the measured
+envelope should be re-recorded after the convention migration's pin
+regeneration.
 
-- `y_of_lnM(lnM)` — computes `r_s(M)` at the fixed `CONC`, not the
-  halo's real concentration.
-- `A0_of_y(y)` / `DELTA_C` — the profile's amplitude normalization,
-  also built from the fixed `CONC`.
-- `u_cen(x)` — the shape function itself, whose own docstring says
-  "Centred unit profile: A0(y) u_cen = DSigma_NFW **at fixed c=4**."
-
-the 3d reference, the GL fast path, and production instead read the real,
-per-sample concentration from `haloModel/dSigma_nfw` — the actual
-Child18 mass-concentration relation (this session separately measured
-it at roughly c≈3.6-5.7 across the relevant mass range, decreasing with
-mass). Since `r_s = r_200/c`, using a fixed c=4 instead of the true,
-mass-dependent concentration shifts both the overall ΔΣ amplitude and
-where a given physical radius `R` lands on the shape function
-`u(R/r_s)` — and the offset grows with mass exactly because real
-concentration moves further from 4 as mass increases, matching the
-observed richness-bin trend above.
-
-One deliberately-red test pins this (kept at the project's default
-1e-3 tolerance — see `test/shear1h_cross_backend.test.py`):
-
-- `TestShear1hCrossBackend.test_cpp_radial_series_matches_cpp_full_ltmz`
-
-This is separate from, and does not replace,
-`test_python_radial_series_matches_cpp_radial_series` (C++ vs Python
-radial_series identity, ~1.6e-4) — that test isolates a genuinely
-different question (do the two language implementations of the *same*
-fixed-c=4 family agree), which they do.
-
-## Why this wasn't caught earlier
-
-`radial_series` is documented as a "candidate moment-expansion
-implementation," not a production or reference backend
-(`docs/source/pipeline_organization.md`), and its own validator's
-production comparison was deliberately "reported only, not asserted" —
-appropriate for tracking a known modeling tradeoff, but it meant no
-CTest target ever failed loudly when the raw amplitude (as opposed to
-shape) diverged this much.
-
-## Open questions / suggested next steps
-
-1. **Decide whether `CONC = 4.0` should track the real per-sample
-   concentration.** Doing so would need per-(M,z) U_ℓ tables (or a
-   concentration-dependent correction term), which may defeat the
-   strategy's whole point (offline tables computed once, reused for
-   every sample) — or a documented, accepted amplitude-correction
-   factor could be applied instead if the shape residual (~10%) is
-   judged acceptable on its own.
-2. **Quantify whether this matters for `radial_series`'s intended use.**
-   If it's meant only as a fast shape/curvature approximation with
-   normalization applied downstream, the raw-amplitude mismatch may be
-   irrelevant in practice — but that intent isn't currently documented
-   anywhere, and this test now assumes raw ΔΣ should match unless told
-   otherwise.
-3. Re-run `test/shear1h_cross_backend.test.py` after either change and
-   update the measured-deviation table above.
-
-Related: `docs/known_issues/dsigma_hh_debug_flag.md`,
-`docs/known_issues/hod_normalization_defect.md`,
-`docs/known_issues/first_halo_term_z0_defect.md`, the sibling known-defect writeups
-this one's structure mirrors.
+Historical note: the "~4% shape difference" in the module docstrings and
+the earlier "~10% shape residual" were artifacts of shape-only
+(R0-normalized) comparisons that hid most of the amplitude convention
+mismatch.

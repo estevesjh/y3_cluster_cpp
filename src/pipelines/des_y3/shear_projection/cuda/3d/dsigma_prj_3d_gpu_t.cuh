@@ -17,7 +17,7 @@
 // the device as quad::Interp1D / quad::Interp2D: χ(z) = d_c·h0, σ_z(z)
 // (the compiled z_kernel table), halo bias, ξ_NL, and the single-offset
 // NFW look-up inside y3_cuda::NFW_DSIGMA_MIS (its CUDA reader predates
-// set_rho_mult, so the Ω_m mean-density factor is applied in the
+// set_rho_ref(haloModel/rho_m_ref), the unified rho_m convention, in the
 // integrand, host-convention identical).
 //
 // Grid: the 180-point zipped wall (lambda_bin, zo_low, zo_high, radii);
@@ -60,7 +60,7 @@ private:
   using volume_t = quad::Volume<double, 3>;
 
   std::vector<double> lob_centers_;
-  double h0_{0.7}, omega_m_{0.3};
+  double h0_{0.7};
 
   std::optional<y3_cuda::HMF_t> hmf_;
   std::optional<y3_cuda::DV_DO_DZ_t> dv_do_dz_;
@@ -121,10 +121,12 @@ public:
     xi_nl_.emplace(make_Interp2D(s, "xi_nl", "r", "z", "xi_nl"));
     dsigma_mis_.emplace(y3_cuda::DSIGMA_MIS_CONC, y3_cuda::DSIGMA_MIS_RHOC,
                         y3_cuda::DSIGMA_MIS_SINGLE);
+    // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+    // haloModel/rho_m_ref; the old in-integrand omega_m multiply is gone.
+    dsigma_mis_->set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
     if (use_halo_model_conc_)
       dsigma_mis_->set_concentration_table(s);
     h0_ = s.view<double>("cosmological_parameters", "h0");
-    omega_m_ = s.view<double>("cosmological_parameters", "omega_M");
 
     using doubles = std::vector<double>;
     h_dist_z_ = s.view<doubles>("distances", "z");
@@ -210,7 +212,7 @@ public:
     }
 
     double const dsmis =
-      omega_m_ * (*dsigma_mis_)(cur_R_, theta * d_a_o_, lnM);
+      (*dsigma_mis_)(cur_R_, theta * d_a_o_, lnM);
     return theta * 2.0 * M_PI * sin(theta) * (*dv_do_dz_)(zt) * w_pz *
            (*hmf_)(lnM, zt) * (1.0 + cl) * dsmis;   // x theta: dtheta = theta dlntheta
   }
