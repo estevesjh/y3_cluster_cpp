@@ -15,10 +15,10 @@ target_include_directories(Shear1hRadialSeries PRIVATE
 # 1h z-contracted fixed-GL backend (0 adaptive dims): SelGLCore
 # z-contracted weight + production mixture — one GL mass sum per
 # (bin, R).
-add_library(Shear1hFastMass MODULE Shear1hFastMass.cc)
-target_link_libraries(Shear1hFastMass PRIVATE cosmosis utils models
+add_library(Shear1hGl MODULE Shear1hGl.cc)
+target_link_libraries(Shear1hGl PRIVATE cosmosis utils models
                       ${GSL_LIBRARIES} ${CUBA_LIBRARIES} fmt::fmt)
-target_include_directories(Shear1hFastMass PRIVATE
+target_include_directories(Shear1hGl PRIVATE
   ${CMAKE_SOURCE_DIR}/src ${CUBACPP_DIR} ${GSL_INCLUDE_DIRS})
 
 # Traditional 1h+2h max model, fixed-GL (0 adaptive dims; the 2h term

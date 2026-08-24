@@ -2,7 +2,7 @@
 // "max model" shear -- src/pipelines/des_y3/shear_1h2h/
 // fast_mass/cpp/Shear1h2hMax.cc).
 //
-// Unlike shear1h_radial_series (RadialSeriesTable) or Shear1hFastMass
+// Unlike shear1h_radial_series (RadialSeriesTable) or Shear1hGl
 // (SelGLCore in models/n_operator_sel_gl_t.hh), Shear1h2hMax.cc has NO
 // header-only core to instantiate directly: its class is defined
 // entirely inside the module .cc, private to that translation unit, and
@@ -20,7 +20,7 @@
 // of the (lnM, z) accumulation in Shear1h2hMax::evaluate():
 //
 //   * the one-halo mixture (1-f_mis)*dSigma_nfw + f_mis*dSigma_mis --
-//     textually identical to Shear1hFastMass.cc's mixture -- is
+//     textually identical to Shear1hGl.cc's mixture -- is
 //     well-defined, finite, non-negative, and has exact f_mis endpoints;
 //   * the sanitize-NaN-to-zero-before-Interp2D technique the module uses
 //     for haloModel/dSigma_hh actually prevents NaN propagation, by
@@ -148,7 +148,7 @@ TEST_CASE("shear1h2h_max one-halo mixture has exact f_mis endpoints and stays bo
   REQUIRE(d_mis > 0.0);
 
   // Same expression as Shear1h2hMax::evaluate()'s `one[k]` (and, textually,
-  // Shear1hFastMass.cc's mixture term): a convex combination of the
+  // Shear1hGl.cc's mixture term): a convex combination of the
   // centred and miscentred profiles.
   auto mixture = [&](double f_mis) {
     return (1.0 - f_mis) * d_cen + f_mis * d_mis;

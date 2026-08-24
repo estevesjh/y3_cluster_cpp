@@ -1,4 +1,4 @@
-# ⚠ radial_series disagrees with full_ltmz by 56-86% in raw ΔΣ
+# ⚠ radial series (0d) disagrees with the 3d reference by 56-86% in raw ΔΣ
 
 **Raised 2026-08-14** while adding a cross-backend consistency test for
 one-halo miscentred shear (`test/shear1h_cross_backend.test.py`). The
@@ -7,15 +7,16 @@ project's existing `radial_series` validator
 comparison against production (normalized so both profiles equal 1 at
 the first radius, "reported only, not asserted" for a documented
 convention gap) — nobody had directly checked the raw ΔΣ values against
-the full_ltmz reference until this pass.
+the 3d adaptive reference until this pass.
 
 Producer: `src/pipelines/des_y3/shear_1h2h/python/0d/nfw_profile_family.py`,
 line 36: `CONC = 4.0` — a hardcoded module-level constant.
 
 ## The measurement
 
-Comparing the C++ `radial_series` backend (`Shear1hRadialSeries.so`)
-against the C++ `full_ltmz` reference (`Shear1hFullLtmz.so`) on the
+Comparing the C++ radial-series backend (`Shear1hRadialSeries.so`)
+against the C++ 3d adaptive reference (`Shear1h3d.so`, formerly
+`Shear1hFullLtmz.so`) on the
 pinned 12-bin × 10-radius wall, raw ΔΣ (not shape-normalized):
 
 | Richness bin | max \|ratio − 1\| | at innermost R |
@@ -49,7 +50,7 @@ constant, used for **both** halves of the profile family:
 - `u_cen(x)` — the shape function itself, whose own docstring says
   "Centred unit profile: A0(y) u_cen = DSigma_NFW **at fixed c=4**."
 
-`full_ltmz`, `fast_mass`, and production instead read the real,
+the 3d reference, the GL fast path, and production instead read the real,
 per-sample concentration from `haloModel/dSigma_nfw` — the actual
 Child18 mass-concentration relation (this session separately measured
 it at roughly c≈3.6-5.7 across the relevant mass range, decreasing with

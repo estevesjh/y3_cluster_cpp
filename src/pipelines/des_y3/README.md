@@ -16,11 +16,16 @@ all (fixed Gauss--Legendre sums and offline tables — fast, MCMC-viable);
 `Nd` means N adaptive (Cuhre/Vegas/PAGANI) dimensions. The
 maximum-dimension folder of each observable is always the adaptive
 reference, and every lower folder is a documented dimension reduction from
-it. Only the folders carry these names: module labels, class names,
-source-file names, and DataBlock output sections keep their historical
-strings (for example `NumCountsFullLtmz`, `shear1h_fast_mass/vals`,
-`numcounts_full_ltmz.py`), so inis and validators reference them
-unchanged.
+it. Code identifiers follow the same quadrature scheme: `SijGl` marks the
+S_ij-tabulated fixed-GL fast paths (`NumCountsSijGl`, `Shear1hGl`,
+`ShearPrjGl`), `explicit_gl` the explicit fixed-GL Python references
+(`numcounts_explicit_gl.py`, `shear1h_explicit_gl.py`), and `3d` the
+adaptive references (`NumCounts3d`, `Shear1h3d`, `Shear1h2hMax3d`,
+`*3dGpu`). Module labels are the ini `[section]` names and the labels
+double as DataBlock output sections (`numcounts_sij_gl/vals`,
+`shear1h_gl/vals`), so the local inis were updated in the same commit;
+the retired `fast_mass`/`full_ltmz` strings survive only in "formerly"
+notes like the ones below.
 
 The observable READMEs are the detailed documentation — each leads with
 the physics (the integral being computed and what each dims tag
@@ -144,9 +149,9 @@ The maintained smoke/reference pipeline uses:
 
 | Dims | Observable | Strategy | Backend |
 | --- | --- | --- | --- |
-| `0d` | Number counts | fast path (2-dim GL, S_ij tab) | `NumCountsFastMass.so` |
-| `0d` | One-halo miscentered shear | 1h z-contracted (1-dim GL) | `Shear1hFastMass.so` |
-| `0d` | Projection shear | region-split GL exact-z | `ShearPrjFastMass.so` |
+| `0d` | Number counts | fast path (2-dim GL, S_ij tab) | `NumCountsSijGl.so` |
+| `0d` | One-halo miscentered shear | 1h z-contracted (1-dim GL) | `Shear1hGl.so` |
+| `0d` | Projection shear | region-split GL exact-z | `ShearPrjGl.so` |
 
 These are the production or reference choices for the DES Y3 implementations.
 The corresponding `3d` adaptive methods are validation tools. The traditional

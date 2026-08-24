@@ -3,16 +3,16 @@
 
 Per the accuracy policy, the reference is adaptive: the outer mass
 integral on embedded GL-10/20 panels with reported error, with the
-z-RESOLVED full_ltmz weights inside (the two-halo term is z-dependent,
+z-RESOLVED explicit-3d weights inside (the two-halo term is z-dependent,
 so z stays inside the mass integrand). Three comparisons:
 
 1. fast path (S_ij-tabulated W2d, production GL nodes) vs the adaptive
-   z-resolved full_ltmz reference — expect the usual S-tabulation
+   z-resolved 3d adaptive reference — expect the usual S-tabulation
    class (~1e-3);
-2. full_ltmz GL (direct kernels, same nodes) vs the adaptive reference
+2. explicit-3d GL (direct kernels, same nodes) vs the adaptive reference
    — certifies the GL variant;
 3. sanity: with the 2h term forced to zero the fast path must
-   reproduce the validated 1h fast_mass backend exactly.
+   reproduce the validated 1h fixed-GL backend exactly.
 
 Usage: python validate_shear1h2h_max.py <dump_dir>   (needs a dump with
 halomodel/dsigma_hh, i.e. halo_model run with compute_lensing_2h = T)
@@ -31,13 +31,13 @@ for _p in Path(__file__).resolve().parents:
         break
 
 from shared import datablock_models as dm
-from shared import full_ltmz_core as flc
+from shared import explicit_grid_core as flc
 from shared import lensing_profiles as lp
 from systematics.selection_richness.python import sel_kernels
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from shear1h2h_max import compute_shear_max, z_resolved_weights  # noqa: E402
-from shear1h_fast_mass import compute_shear as shear_1h_only     # noqa: E402
+from shear1h_gl import compute_shear as shear_1h_only     # noqa: E402
 
 R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
                    1.19581, 1.70998, 2.44521, 3.49658, 5.00000])
@@ -57,9 +57,9 @@ def adaptive_reference(bins, mor, plob, hmf, dv, sci, phi_z, r_perp, *,
     """Adaptive mass integral with a z-dependent profile.
 
     phi_z(b, R[:, None], m[None, :], z_x) -> (n_r, n_m, n_z); the
-    z-resolved weights come from full_ltmz_mass_z_weights at the panel's
+    z-resolved weights come from explicit_mass_z_weights at the panel's
     mass nodes. Same panel-bisection scheme as
-    full_ltmz_mass_integral_adaptive.
+    explicit_mass_integral_adaptive.
     """
     sf = sel_kernels.load()
     n_bins = len(np.asarray(bins["lam_min"]))
@@ -80,7 +80,7 @@ def adaptive_reference(bins, mor, plob, hmf, dv, sci, phi_z, r_perp, *,
             x10, w10 = dm.gl_nodes(a, c, 10)
             x20, w20 = dm.gl_nodes(a, c, 20)
             m = np.concatenate([x10, x20])
-            _, _, z_x, w2d = flc.full_ltmz_mass_z_weights(
+            _, _, z_x, w2d = flc.explicit_mass_z_weights(
                 sub, mor, plob, hmf, dv, sci=sci, lnm_nodes=m, **env)
             phi = phi_z(b, r_arr[:, None, None], m[None, :, None],
                         z_x[None, None, :])                # (r, 30, q)
@@ -130,8 +130,8 @@ def main():
     fast = compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d,
                              np.arange(12), R_PERP).reshape(12, -1)
 
-    # full_ltmz GL (direct kernels, same nodes)
-    xg, wg, zg, w2dg = flc.full_ltmz_mass_z_weights(
+    # explicit-3d GL (direct kernels, same nodes)
+    xg, wg, zg, w2dg = flc.explicit_mass_z_weights(
         BINS, mor, plob, hmf, dv, sci=sci, **ENV)
     gl = np.empty((12, R_PERP.size))
     for b in range(12):
@@ -148,10 +148,10 @@ def main():
     d_fast = float(np.max(np.abs(fast / ref - 1)))
     print("shear1h2h_max (traditional pipeline), 12 bins x 10 radii:")
     print(f"  adaptive reference reported err <= {np.max(ref_err/np.abs(ref)):.1e}")
-    print(f"  full_ltmz GL vs adaptive reference: {d_gl:.2e} (tol {TOL_GL:.0e})")
+    print(f"  explicit-3d GL vs adaptive reference: {d_gl:.2e} (tol {TOL_GL:.0e})")
     print(f"  fast path   vs adaptive reference: {d_fast:.2e} (tol {TOL_FAST:.0e})")
 
-    # sanity: 2h -> 0 must reproduce the validated 1h fast_mass backend
+    # sanity: 2h -> 0 must reproduce the validated 1h fixed-GL backend
     class Zero:
         def __call__(self, *a):
             return np.zeros(np.broadcast_shapes(*[np.shape(x) for x in a]))
@@ -166,7 +166,7 @@ def main():
                           lnm_hi=ENV["lnm_high"], include_sci=True)
     oneh = shear_1h_only(mzw, profile0._one, np.arange(12), R_PERP)
     d_1h = float(np.max(np.abs(fast0 / oneh - 1)))
-    print(f"  2h->0 limit vs validated 1h fast_mass: {d_1h:.2e}")
+    print(f"  2h->0 limit vs validated 1h fixed-GL: {d_1h:.2e}")
 
     ok = (d_gl <= TOL_GL) and (d_fast <= TOL_FAST) and (d_1h <= 1e-12)
     if not ok:   # NaN must fail, not slip through a '>' compare

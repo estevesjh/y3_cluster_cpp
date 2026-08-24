@@ -5,14 +5,14 @@ link_directories(${COSMOSIS_BASE_DIR}/cosmosis/datablock)
 # existing GPU modules (gt_card_gpu et al.).
 if (USE_CUDA)
   find_library(NVTX_LIBRARY nvToolsExt PATHS ENV LD_LIBRARY_PATH)
-  add_library(NumCountsFullLtmzGpu MODULE NumCountsFullLtmzGpu.cu)
-  target_link_libraries(NumCountsFullLtmzGpu PRIVATE cosmosis
+  add_library(NumCounts3dGpu MODULE NumCounts3dGpu.cu)
+  target_link_libraries(NumCounts3dGpu PRIVATE cosmosis
                         ${NVTX_LIBRARY} utils cuda_models cuda_utils
                         fmt::fmt)
-  target_include_directories(NumCountsFullLtmzGpu PRIVATE
+  target_include_directories(NumCounts3dGpu PRIVATE
     ${CMAKE_SOURCE_DIR}/src ${CUBACPP_DIR} ${PAGANI_DIR})
-  set_target_properties(NumCountsFullLtmzGpu PROPERTIES
+  set_target_properties(NumCounts3dGpu PROPERTIES
     POSITION_INDEPENDENT_CODE ON CUDA_ARCHITECTURES ${Y3GCC_TARGET_ARCH})
-  target_compile_options(NumCountsFullLtmzGpu PRIVATE
+  target_compile_options(NumCounts3dGpu PRIVATE
     "--expt-relaxed-constexpr" "-lineinfo" "-DCURAND")
 endif ()

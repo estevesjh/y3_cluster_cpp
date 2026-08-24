@@ -15,9 +15,9 @@ the three observable stages:
 
 | DES Y3 reference (`des_y3.ini`) | DES Y1 pipeline (`mock_mcmc_buzzard.ini`) | Relationship |
 |---|---|---|
-| `NumCountsFastMass` | `NumCountsSel` | algorithmically identical ("by identity") |
-| `Shear1hFastMass` | `Shear1hMisSel` | bitwise-equivalent |
-| `ShearPrjFastMass` | `shear_prj_frozen_physics` | same `ShearPrjCore`/`ShearPrjFrozenPhysics` family, exact-$z$ instead of frozen |
+| `NumCountsSijGl` | `NumCountsSel` | algorithmically identical ("by identity") |
+| `Shear1hGl` | `Shear1hMisSel` | bitwise-equivalent |
+| `ShearPrjGl` | `shear_prj_frozen_physics` | same `ShearPrjCore`/`ShearPrjFrozenPhysics` family, exact-$z$ instead of frozen |
 
 Everything else — `consistency`, `GrowthFactor`, `cp_camb`, `MfTinker`,
 `halo_model`, `average_sigma_crit_inv`, `sel_function`, `b_sel_marg`,
@@ -27,7 +27,7 @@ compatibility before running `des_y3.ini` end-to-end.
 
 | Variant | Modules changed | Observable changed | Status |
 |---|---|---|---|
-| DES Y1 pipeline (`mock_mcmc_buzzard.ini`) | `NumCountsFastMass`/`Shear1hFastMass`/`ShearPrjFastMass` → `NumCountsSel`/`Shear1hMisSel`/`shear_prj_frozen_physics` | none (same theory vector) | previous-generation reference, see above |
+| DES Y1 pipeline (`mock_mcmc_buzzard.ini`) | `NumCountsSijGl`/`Shear1hGl`/`ShearPrjGl` → `NumCountsSel`/`Shear1hMisSel`/`shear_prj_frozen_physics` | none (same theory vector) | previous-generation reference, see above |
 | widePlanck self-closure (`mock_mcmc_cp_camb.ini`) | none (data + grids + `unity = T`) | $\Delta\Sigma$ on 10 radii instead of $\gamma_t$ on 15 | comparative (closure + sampler A/B) |
 | Mock data-vector writer (`generate_mock_dv.ini`) | `likelihoods` → `generate_mock_dv` | none (writes the DV) | tooling |
 | Full projection evaluator (`shear_prj`) | `shear_prj_frozen_physics` → `ShearPrjEvaluator` | same $\gamma_t^{\rm prj}$, exact $z$-resolved clustered channel | validation-only |

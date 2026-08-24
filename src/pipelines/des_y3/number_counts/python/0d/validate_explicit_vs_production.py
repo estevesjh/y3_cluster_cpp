@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Validate full_ltmz counts against the production fast_mass pipeline.
+"""Validate 3d counts against the production fixed-GL pipeline.
 
 Replays a real test-sampler dump (docs/figs/real_pipeline_extract.ini —
 real HMF, distances, HOD parameters) and compares the explicit
@@ -35,7 +35,7 @@ for _p in Path(__file__).resolve().parents:
 from shared import datablock_models as dm
 from systematics.selection_richness.python import sel_kernels
 
-from numcounts_full_ltmz import compute_counts  # noqa: E402  (same dir)
+from numcounts_explicit_gl import compute_counts  # noqa: E402  (same dir)
 
 TOL = 5e-3
 
@@ -72,9 +72,9 @@ def main():
         lnm_low=LNM_LOW, lnm_high=LNM_HIGH)
 
     n_prod = source.array("numcountssel", "vals")
-    print("full_ltmz (explicit lambda_tr, lnM, z) vs production "
-          "NumCountsSel.so (fast_mass):")
-    print(f"  {'bin':>3s} {'N_full_ltmz':>14s} {'N_production':>14s} "
+    print("explicit-3d (explicit lambda_tr, lnM, z) vs production "
+          "NumCountsSel.so (fixed-GL):")
+    print(f"  {'bin':>3s} {'N_explicit-3d':>14s} {'N_production':>14s} "
           f"{'ratio':>9s}")
     worst = 0.0
     for b in range(vals.size):
@@ -83,7 +83,7 @@ def main():
         print(f"  {b:3d} {vals[b]:14.6e} {n_prod[b]:14.6e} {ratio:9.5f}")
     print(f"  max |ratio - 1| = {worst:.2e}  (tolerance {TOL:.0e})")
     if worst > TOL:
-        sys.exit("FAIL: full_ltmz counts outside tolerance")
+        sys.exit("FAIL: 3d counts outside tolerance")
     print("PASS")
 
 

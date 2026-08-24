@@ -1,6 +1,6 @@
 # Shear Projection
 
-`C++` · `y3_cluster_cpp` (`src/pipelines/des_y3`) · `Cluster observable` · module `ShearPrjFastMass` · `~82 ms/sample`
+`C++` · `y3_cluster_cpp` (`src/pipelines/des_y3`) · `Cluster observable` · module `ShearPrjGl` · `~82 ms/sample`
 
 Computes $\Sigma^{\rm prj}$ — in the paper's language, **the two-halo
 term sourced by correlated line-of-sight structure**, carrying the
@@ -16,11 +16,11 @@ $\gamma_t^{\rm theory} = \langle\gamma_t^{1h}\rangle + \gamma_t^{\rm prj}$.
   (`sp_detail::ShearPrjCore` — the shared $\theta$-grid/$z$-grid core
   also used by DES Y1's `ShearPrjEvaluator`/`ShearPrjFrozenPhysics`,
   {doc}`../variants`).
-- Module driver: [`src/pipelines/des_y3/shear_projection/cpp/0d/ShearPrjFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_projection/cpp/0d/ShearPrjFastMass.cc)
+- Module driver: [`src/pipelines/des_y3/shear_projection/cpp/0d/ShearPrjGl.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_projection/cpp/0d/ShearPrjGl.cc)
   — des_y3-namespaced wrapper over the same `ShearPrjCore`, own module
   label and output section.
 - Compiled library loaded by CosmoSIS:
-  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_prj_0d_cpp/ShearPrjFastMass.so`.
+  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_prj_0d_cpp/ShearPrjGl.so`.
 - Disk tables (loaded once at construction, $c = 4$, **single**/delta
   offset kernel — not the gamma kernel {doc}`shear_halo` uses):
   `data/nfw_off_center/table_1000_1e-03_5e+03_single_{logx, logxmis}.txt`,
@@ -35,10 +35,10 @@ table. The namespace under
 
 | Dims | Backend | Implementation and status | Precision vs 3d |
 |---|---|---|---|
-| `3d` | CUDA | `DSigmaPrjFullLtmzGpu.so`; fully-coupled adaptive $(\ln\theta,z,\ln M)$ PAGANI diagnostic, with the innermost-radius convergence study still open | is the 3d diagnostic; median 9.5e-4, max 2.2% vs the region-split GL baseline |
+| `3d` | CUDA | `DSigmaPrj3dGpu.so`; fully-coupled adaptive $(\ln\theta,z,\ln M)$ PAGANI diagnostic, with the innermost-radius convergence study still open | is the 3d diagnostic; median 9.5e-4, max 2.2% vs the region-split GL baseline |
 | `2d` | C++ | `ShearPrjCuhre.so`; feature-split $\theta$ log-GL with adaptive Cuhre/Vegas over the two dimensions $(z,\ln M)$ | pending (Perlmutter re-run) |
 | `0d` | Python | Exact-$z$ region-split GL port of `ShearPrjCore` | best-available baseline; vs-3d pending (blocked on the 3d convergence study) |
-| `0d` | **C++ (this page)** | `ShearPrjFastMass.so`; exact-$z$ core emitting $\Delta\Sigma$ and shear in one pass | 9.9e-12 vs the exact-$z$ evaluator (same core) |
+| `0d` | **C++ (this page)** | `ShearPrjGl.so`; exact-$z$ core emitting $\Delta\Sigma$ and shear in one pass | 9.9e-12 vs the exact-$z$ evaluator (same core) |
 | `0d` | CUDA | `ShearPrjFrozenGpu.so`; CUDA implementation of the explicitly frozen DES Y1 machinery | machine precision vs DES Y1 frozen |
 | radial series | — | Planned, not implemented | — |
 
@@ -105,8 +105,8 @@ adaptive validation backends (`ShearPrjEvaluator`, `ShearPrjGsl`,
 ## CosmoSIS setup
 
 ```ini
-[ShearPrjFastMass]
-file = ${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_prj_0d_cpp/ShearPrjFastMass.so
+[ShearPrjGl]
+file = ${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_prj_0d_cpp/ShearPrjGl.so
 zt_low      = 0.10
 zt_high     = 0.75
 lnm_low     = 29.9336
@@ -124,7 +124,7 @@ slow / radius fast; full arrays in
 
 - Ordering: **after `bsel`** (needs the bias plateaus), `halo_model`,
   `MfTinker`, `cp_camb`, `average_sigma_crit_inv`; before `likelihoods`.
-- The ini section name must be `ShearPrjFastMass` — it is the
+- The ini section name must be `ShearPrjGl` — it is the
   hard-coded `module_label()`.
 - Left at `ShearPrjCore`'s class defaults for `n_lnm`/`n_per_seg`/
   `n_zring`/`n_zouter` (24/30/20/20) — see Configuration options below.
@@ -175,8 +175,8 @@ Six arrays, each of length 180:
 
 | DataBlock output | Meaning | Units / shape | Consumed by |
 |---|---|---|---|
-| `dsigma_prj_fast_mass/{vals, rnd, cl}` | $\Delta\Sigma^{\rm prj}$: total, random-point channel, clustered channel | $M_\odot/(h\,\mathrm{pc}^2)$, `(180,)` | diagnostics |
-| `shear_prj_fast_mass/{vals, rnd, cl}` | $\gamma_t^{\rm prj} = \Delta\Sigma^{\rm prj}\,\langle\Sigma_{\rm crit}^{-1}\rangle(z^{\rm ob})$ | dimensionless, `(180,)` | — |
+| `dsigma_prj_gl/{vals, rnd, cl}` | $\Delta\Sigma^{\rm prj}$: total, random-point channel, clustered channel | $M_\odot/(h\,\mathrm{pc}^2)$, `(180,)` | diagnostics |
+| `shear_prj_gl/{vals, rnd, cl}` | $\gamma_t^{\rm prj} = \Delta\Sigma^{\rm prj}\,\langle\Sigma_{\rm crit}^{-1}\rangle(z^{\rm ob})$ | dimensionless, `(180,)` | — |
 
 Unlike DES Y1's `shear_prj_frozen_physics` (which additionally aliases
 its output to `shear_prj/*` for drop-in `likelihood_cp.py`

@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""The namespace accuracy report: every path vs the full_ltmz fiducial.
+"""The namespace accuracy report: every path vs the explicit-reference fiducial.
 
 Implements the accuracy policy (src/pipelines/des_y3/README.md,
 "Validation required"): accuracy is quoted against the fully explicit
-`full_ltmz` calculation, whose own precision is first certified by
+`explicit-3d` calculation, whose own precision is first certified by
 internal quadrature convergence; production agreement is an
 algorithm-identity check, not an accuracy statement.
 
@@ -19,7 +19,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from shared import datablock_models as dm            # noqa: E402
-from shared import full_ltmz_core                    # noqa: E402
+from shared import explicit_grid_core                    # noqa: E402
 from shared import lensing_profiles as lp            # noqa: E402
 from systematics.selection_richness.python import sel_kernels  # noqa: E402
 
@@ -48,7 +48,7 @@ def main():
         omega_m=src.scalar("cosmological_parameters", "omega_m"))
 
     def weights(**kw):
-        return full_ltmz_core.full_ltmz_mass_weights(
+        return explicit_grid_core.explicit_mass_weights(
             BINS, mor, plob, hmf, dv, **ENV, **kw)
 
     def shear_of(x, w, big_w):
@@ -76,9 +76,9 @@ def main():
     prod_n = src.array("numcountssel", "vals")
     prod_s = src.array("shear1hmissel", "vals").reshape(12, -1)
     print("error vs fiducial:")
-    print(f"  counts fast path (production / fast_mass): "
+    print(f"  counts fast path (production / fixed-GL): "
           f"{np.max(np.abs(prod_n/n0-1)):.1e}")
-    print(f"  shear  fast path (production / fast_mass): "
+    print(f"  shear  fast path (production / fixed-GL): "
           f"{np.max(np.abs(prod_s/s0-1)):.1e}")
 
     # 3. radial_series total error vs a same-profile doubled-node fiducial

@@ -48,7 +48,7 @@ against a different baseline, the baseline is stated.
 
 | Dims | Method and backend | Cost | Precision vs 3d |
 | --- | --- | ---: | --- |
-| `3d` | [adaptive Python mass reference](#the-3d-backends) (`shared/full_ltmz_core.py`) | 25 s | Reference (3d); reported integration error at or below 1e-6 |
+| `3d` | [adaptive Python mass reference](#the-3d-backends) (`shared/explicit_grid_core.py`) | 25 s | Reference (3d); reported integration error at or below 1e-6 |
 | `3d` | [Cuhre C++](#the-3d-backends) | 3.1 s | 4.9e-4 (baseline: the 0d explicit fixed-GL Python, which is 3.5e-5 from the 3d reference) |
 | `3d` | [PAGANI CUDA/A100](#the-3d-backends) | 2.0 s | 5.1e-4 (same fixed-GL baseline) |
 | `0d` | [explicit Python (3-dim GL)](#explicit-fixed-gl-python-reference) | 83 ms | 3.5e-5 |
@@ -82,7 +82,11 @@ N_{ij}=\int d\ln M\;W_{ij}(M).
 $$
 
 The radial-series population moments use the same $W_{ij}(M)$, which is
-why the shared fixed-GL weight builder is kept in `shared/`. This is a
+why the fixed-GL weight builder is kept in the shared layer: the
+pipeline-owned `shared/sel_gl_weights.hh`
+(`y3_pipelines::SelGlWeights`, identity-certified against the
+production `SelGLCore`) on the C++ side, and
+`shared/datablock_models.py::MassZWeights` on the Python side. This is a
 computational re-expression of the production algorithm: it does not
 remove the production table's interpolation error, and the residual
 against the adaptive reference (7.6e-4) is dominated by that
@@ -107,9 +111,9 @@ weights on $[-1,1]$ affine-mapped to the integration interval,
 $x' = \tfrac{b-a}{2}x + \tfrac{b+a}{2}$, $w' = \tfrac{b-a}{2}w$
 (`shared/datablock_models.py::gl_nodes`, via
 `numpy.polynomial.legendre.leggauss`; the C++ twin
-`y3_cluster::p_op_detail::gl_nodes` in `src/models/p_operator_cuhre_t.hh`
-computes the same Legendre roots by Newton iteration and applies the
-same map). The mass grid places `n_lnm` nodes (default 96) on
+`y3_pipelines::gl_nodes` in the pipeline-owned
+`shared/sel_gl_weights.hh` computes the same Legendre roots by Newton
+iteration and applies the same map). The mass grid places `n_lnm` nodes (default 96) on
 $[\ln M_{\rm low}, \ln M_{\rm high}]$ and the redshift grid `n_z` nodes
 (default 64) on $[z_{\rm low}, z_{\rm high}]$; the composed weight is
 $W(b;k,q) = w^z_q\,\tfrac{dV}{d\Omega dz}(z_q)\,\Omega(z_q)\,
@@ -141,7 +145,7 @@ as above, with the true-richness limits
 $\lambda_\pm=\mu_{\rm eff}\pm L_\lambda\sigma_{\rm eff}$ (lower bound
 clipped at zero), integrated by adaptive Cuhre (C++) or PAGANI (CUDA)
 over the full three-dimensional volume per bin. The adaptive Python
-mass reference in `shared/full_ltmz_core.py` uses the same inner
+mass reference in `shared/explicit_grid_core.py` uses the same inner
 fixed-GL contraction and adaptively subdivides the outer mass integral
 to a reported error at or below 1e-6.
 
@@ -159,13 +163,13 @@ shift; `MOR_SP(ltr) = MOR_HOD(ltr+1)` above `Mmin`).
 
 | Dims | Language | Sources | Module / output |
 | --- | --- | --- | --- |
-| `0d` | Python | `python/0d/numcounts_fast_mass.py` (+ validator `python/0d/validate_fast_vs_production.py`) | `numcounts_fast_mass/vals` |
-| `0d` | C++ | `cpp/0d/NumCountsFastMass.cc`, physics in `cpp/0d/num_counts_fast_mass_t.hh` | `NumCountsFastMass.so` in `release-build/src/modules/des_y3_numcounts_0d_cpp/`, section `numcounts_fast_mass` |
-| `0d` | Python | `python/0d/numcounts_full_ltmz.py` (+ validator `python/0d/validate_explicit_vs_production.py`) | `numcounts_full_ltmz/vals` |
-| `3d` | C++ | `cpp/3d/NumCountsFullLtmz.cc`, physics in `cpp/3d/num_counts_full_ltmz_t.hh` | `NumCountsFullLtmz.so` in `des_y3_numcounts_3d_cpp/`, `numcountsfullltmz/{vals,errors,probs,status,nregions}` |
-| `3d` | CUDA | `cuda/3d/NumCountsFullLtmzGpu.cu`, physics in `cuda/3d/num_counts_full_ltmz_gpu_t.cuh` | `NumCountsFullLtmzGpu.so` in `des_y3_numcounts_3d_cuda/`, `numcountsfullltmzgpu/{...}` |
+| `0d` | Python | `python/0d/numcounts_sij_gl.py` (+ validator `python/0d/validate_fast_vs_production.py`) | `numcounts_sij_gl/vals` |
+| `0d` | C++ | `cpp/0d/NumCountsSijGl.cc`, physics in `cpp/0d/num_counts_sij_gl_t.hh` | `NumCountsSijGl.so` in `release-build/src/modules/des_y3_numcounts_0d_cpp/`, section `numcounts_sij_gl` |
+| `0d` | Python | `python/0d/numcounts_explicit_gl.py` (+ validator `python/0d/validate_explicit_vs_production.py`) | `numcounts_explicit_gl/vals` |
+| `3d` | C++ | `cpp/3d/NumCounts3d.cc`, physics in `cpp/3d/num_counts_3d_t.hh` | `NumCounts3d.so` in `des_y3_numcounts_3d_cpp/`, `numcounts3d/{vals,errors,probs,status,nregions}` |
+| `3d` | CUDA | `cuda/3d/NumCounts3dGpu.cu`, physics in `cuda/3d/num_counts_3d_gpu_t.cuh` | `NumCounts3dGpu.so` in `des_y3_numcounts_3d_cuda/`, `numcounts3dgpu/{...}` |
 
 No CUDA `0d` backend is provided: a one-dimensional mass contraction
-does not justify a GPU kernel in the current pipeline. Module labels,
-class names, file names, and output sections keep their historical
-strings — only the folders carry the dims tags.
+does not justify a GPU kernel in the current pipeline. Module labels
+are the ini `[section]` names, so a pipeline drives these backends with
+`[NumCountsSijGl]`-style sections pointing at the `.so` paths above.

@@ -1,8 +1,8 @@
 // Unit tests for the shared richness/photo-z kernel headers
 // (src/models/richness_kernel_t.hh, src/models/plob_ltr_emg_t.hh) used by
-// NumCountsFullLtmz and Shear1hFullLtmz -- the "kernels inside the main
+// NumCounts3d and Shear1h3d -- the "kernels inside the main
 // modules" review flagged as untested: the existing composition tests
-// (numcounts_full_ltmz_test, shear1h_full_ltmz_test) only spot-check a few
+// (numcounts_3d_test, shear1h_3d_test) only spot-check a few
 // golden values of the fully-composed operator(), never the kernel's own
 // mathematical properties in isolation.
 //

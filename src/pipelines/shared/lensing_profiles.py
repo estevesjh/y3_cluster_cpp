@@ -126,7 +126,7 @@ class MaxMixtureProfile:
     (MisMixtureProfile; set include_miscentering=False for the pure
     centred term) and the two-halo term is z-dependent — callers must
     keep z inside the mass integral (see
-    full_ltmz_core.full_ltmz_mass_z_weights).
+    explicit_grid_core.explicit_mass_z_weights).
     """
 
     def __init__(self, source, *, lob_centers, f_mis, tau_mis, omega_m,

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-"""Validate the full_ltmz shear reference.
+"""Validate the explicit 3d shear reference.
 
 Two comparisons on the real extraction dump, all 12 pinned bins on the
 production radial grid:
 
-1. vs the fast_mass backend (same profile, same GL mass/z nodes; the
+1. vs the fixed-GL backend (same profile, same GL mass/z nodes; the
    only difference is direct kernel evaluation vs the production S_ij
    tabulation) — isolates the tabulation error, expected at the same
    few-1e-4..1e-3 level the counts references measured;
@@ -30,7 +30,7 @@ from shared import datablock_models as dm
 from shared import lensing_profiles as lp
 from systematics.selection_richness.python import sel_kernels
 
-from shear1h_full_ltmz import compute_shear  # noqa: E402  (same dir)
+from shear1h_explicit_gl import compute_shear  # noqa: E402  (same dir)
 
 TOL = 5e-3
 R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
@@ -70,7 +70,7 @@ def main():
     from shared import datablock_models  # noqa: F401
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]
                            / "python" / "0d"))
-    from shear1h_fast_mass import compute_shear as fast_shear
+    from shear1h_gl import compute_shear as fast_shear
     weights = dm.MassZWeights(source, n_lnm=96, n_z=64,
                               zt_lo=ZT_LO, zt_hi=ZT_HI,
                               lnm_lo=LNM_LO, lnm_hi=LNM_HI,
@@ -80,8 +80,8 @@ def main():
 
     dev_fast = float(np.max(np.abs(full / fast - 1.0)))
     dev_prod = float(np.max(np.abs(full / prod - 1.0)))
-    print("full_ltmz shear (12 bins x 10 radii):")
-    print(f"  vs fast_mass backend (isolates S_ij tabulation): "
+    print("explicit-3d shear (12 bins x 10 radii):")
+    print(f"  vs fixed-GL backend (isolates S_ij tabulation): "
           f"max |ratio - 1| = {dev_fast:.2e}")
     print(f"  vs production Shear1hMisSel.so:                  "
           f"max |ratio - 1| = {dev_prod:.2e}  (tolerance {TOL:.0e})")

@@ -11,10 +11,10 @@
 //             S_ij(lnM, z) d_tot(R, lnM, z).
 //
 // Structure note: the two-halo term is z-dependent, so — unlike
-// Shear1hFastMass, which reuses SelGLCore's z-contracted weight — the
+// Shear1hGl, which reuses SelGlWeights's z-contracted weight — the
 // redshift integral must stay inside the mass integral. This driver
 // therefore builds the z-RESOLVED weight W2d(bin; lnM, z) on the same
-// fixed GL nodes (same term composition as SelGLCore, just without the
+// fixed GL nodes (same term composition as SelGlWeights, just without the
 // z sum) and contracts (lnM, z) per (bin, R).
 //
 // Every table is read through the project's interpolation primitives
@@ -22,11 +22,11 @@
 // bias and dSigma_hh, average_sigma_crit_inv, the selection tensor via
 // SelFunction_t, and the miscentred NFW look-up via NFW_DSIGMA_MIS.
 //
-// dSigma_hh carries NaN over ~60% of its (R, z) table by construction
-// (see docs/known_issues/dsigma_hh_debug_flag.md); the values are sanitized to 0
-// BEFORE being handed to Interp2D, which is exact for a max model
-// (max(1h, 0) = 1h where the 2h term is undefined) and keeps NaN out
-// of the interpolator's stencil. Requires compute_lensing_2h = T.
+// dSigma_hh historically carried NaN over part of its (R, z) table
+// (docs/known_issues/dsigma_hh_debug_flag.md — since FIXED in the
+// producer); the sanitize-to-0 step is kept as a defensive guard, which
+// is exact for a max model (max(1h, 0) = 1h wherever the 2h term were
+// undefined). Requires compute_lensing_2h = T.
 //
 // Options: bin_index x r_perp cartesian grid (bin slow / R fast),
 // zt_low/zt_high/lnm_low/lnm_high (required), n_lnm (96), n_z (64),
@@ -45,10 +45,9 @@
 
 #include "models/dv_do_dz_t.hh"
 #include "models/hmf_t.hh"
-#include "models/n_operator_sel_gl_t.hh"
+#include "pipelines/shared/sel_gl_weights.hh"
 #include "models/nfw_dsigma_mis.hh"
 #include "models/omega_z_des.hh"
-#include "models/p_operator_cuhre_t.hh"
 #include "models/sel_function_t.hh"
 #include "pipelines/shared/lensing_helpers.hh"
 #include "utils/datablock_reader.hh"
@@ -90,8 +89,8 @@ public:
     // concentration as the centred dSigma_nfw table.
     , dsigma_mis_(y3_cluster::CONC, y3_cluster::RHOC, y3_cluster::GAMMA)
   {
-    y3_cluster::p_op_detail::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
-    y3_cluster::p_op_detail::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
+    y3_pipelines::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
+    y3_pipelines::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
     lob_centers_ =
       y3_pipelines::read_lob_centers(cfg, module_label());
     if (lob_centers_.empty())
@@ -127,7 +126,7 @@ public:
     for (std::size_t q = 0; q != z_x_.size(); ++q)
       zfac[q] = z_w_[q] * dv(z_x_[q]) * omega(z_x_[q]) * sci.clamp(z_x_[q]);
 
-    int const n_bins = y3_cluster::nosel_detail::n_bins_from_block(s);
+    int const n_bins = y3_pipelines::n_bins_from_block(s);
     n_bins_ = static_cast<std::size_t>(n_bins);
     w2d_.assign(n_bins_ * N_lnm_ * N_z_, 0.0);
     for (int b = 0; b != n_bins; ++b) {
@@ -203,7 +202,8 @@ public:
 
 private:
   // haloModel/dSigma_hh through Interp2D, with the producer's NaNs
-  // replaced by 0 first (docs/known_issues/dsigma_hh_debug_flag.md). The datablock
+  // replaced by 0 first (docs/known_issues/dsigma_hh_debug_flag.md — since fixed;
+  // guard kept). The datablock
   // ndarray is (n_z, n_r) row-major, which is exactly the column-major
   // (x = r_sigma fastest) layout Interp2D's vector constructor wants.
   static y3_cluster::Interp2D

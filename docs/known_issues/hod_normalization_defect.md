@@ -58,7 +58,7 @@ than a silent regression either direction.
 ## Why this wasn't caught earlier
 
 `sel_function.py` (and its C++ sibling `mor_hod_t.hh`) had no dedicated
-unit tests before this file — every consumer (`numcounts_fast_mass`,
+unit tests before this file — every consumer (`numcounts_sij_gl` (formerly numcounts_fast_mass),
 `shear1h_fast_mass`, ...) only ever exercised it indirectly, through its
 own composed output, which never isolated the HOD density's own
 normalization.

@@ -8,18 +8,18 @@ docs/source/pipeline_organization.md:
     full_ltmz  -> Python, C++, CUDA   (explicit-selection accuracy references)
     fast_mass  -> Python, C++ (production `NumCountsSel.so`, by identity)
 
-The reference is the C++ `full_ltmz` backend (`NumCountsFullLtmz.so`,
+The reference is the C++ `full_ltmz` backend (`NumCounts3d.so`,
 adaptive Cuhre, eps_rel=1e-4) -- the project's designated accuracy
 reference (docs/source/pipeline_organization.md "Validation policy").
-Its values, and the CUDA `full_ltmz` backend's (`NumCountsFullLtmzGpu.so`,
+Its values, and the CUDA `full_ltmz` backend's (`NumCounts3dGpu.so`,
 PAGANI), are hard-coded below: reproducing them needs a full CosmoSIS
 pipeline run of the compiled .so modules (and, for CUDA, a GPU), which
 this lightweight, portable unittest does not attempt. They were
 generated (2026-08-12, SLURM job 56780752 companion run) from a single
 pipeline execution -- `gpu_smoke.ini`, modules `consistency prj_params
 GrowthFactor cp_camb MfTinker halo_model average_sigma_crit_inv
-sel_function NumCountsSel numcounts_full_ltmz NumCountsFullLtmz
-NumCountsFullLtmzGpu` -- with the SAME `mock_mcmc_widePlanck_values.ini`
+sel_function NumCountsSel numcounts_explicit_gl NumCounts3d
+NumCounts3dGpu` -- with the SAME `mock_mcmc_widePlanck_values.ini`
 fiducial point and the SAME pinned 12-bin wall used everywhere else in
 this repo's tests.
 
@@ -34,11 +34,11 @@ process (they need real .so modules through a full CosmoSIS pipeline)
 are pinned as literals.
 
 To regenerate CPP_FULL_LTMZ / CUDA_FULL_LTMZ after a real change to
-either backend: run a pipeline with `NumCountsFullLtmz`/
-`NumCountsFullLtmzGpu` appended to `docs/figs/real_pipeline_extract.ini`
+either backend: run a pipeline with `NumCounts3d`/
+`NumCounts3dGpu` appended to `docs/figs/real_pipeline_extract.ini`
 (same bin wall, `zt_low=0.05, zt_high=0.80, lnm_low=29.9336,
 lnm_high=36.7300`, `lt_low`/`lt_high` per bin =
-{0.1, 4*lam_max}) and read back `numcountsfullltmz(gpu)/vals`.
+{0.1, 4*lam_max}) and read back `numcounts3d(gpu)/vals`.
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ sys.path.insert(0, str(REPO / "src" / "pipelines" / "des_y3"
 
 from shared import datablock_models as dm  # noqa: E402
 from systematics.selection_richness.python import sel_kernels  # noqa: E402
-from numcounts_full_ltmz import compute_counts  # noqa: E402
+from numcounts_explicit_gl import compute_counts  # noqa: E402
 
 DUMP_DIR = REPO / "docs" / "figs" / "real_pipeline_extract_output"
 HAS_DUMP = (DUMP_DIR / "matter_power_lin" / "p_k.txt").is_file()
@@ -74,7 +74,7 @@ BINS = dict(
 ZT_LOW, ZT_HIGH = 0.05, 0.80
 LNM_LOW, LNM_HIGH = 29.9336, 36.7300
 
-# C++ full_ltmz (NumCountsFullLtmz.so) -- THE reference. See module
+# C++ full_ltmz (NumCounts3d.so) -- THE reference. See module
 # docstring for provenance.
 CPP_FULL_LTMZ = np.array([
     1.380690148279805726e+03, 5.137561651299496361e+02,
@@ -85,7 +85,7 @@ CPP_FULL_LTMZ = np.array([
     1.778104398634395693e+02, 8.783936722369612937e+01,
 ])
 
-# CUDA full_ltmz (NumCountsFullLtmzGpu.so, PAGANI).
+# CUDA full_ltmz (NumCounts3dGpu.so, PAGANI).
 CUDA_FULL_LTMZ = np.array([
     1.380700754976703820e+03, 5.137602886997940459e+02,
     1.414300187864491818e+02, 9.167849217128190276e+01,

@@ -92,8 +92,8 @@ dimensions do not count, whatever their number.
 
 Only the folders carry the new names: module labels, class names, file
 names, and DataBlock output sections keep their historical strings
-(`NumCountsFullLtmz`, `shear1h_fast_mass/vals`, `numcounts_full_ltmz.py`,
-`shared/full_ltmz_core.py`, ...), so existing ini files and validators
+(`NumCounts3d`, `shear1h_gl/vals`, `numcounts_explicit_gl.py`,
+`shared/explicit_grid_core.py`, ...), so existing ini files and validators
 reference them unchanged. The only file renames are the merged `0d`
 validators, qualified as `validate_fast_vs_production.py` and
 `validate_explicit_vs_production.py`.
@@ -127,9 +127,9 @@ fast (`0d`, fixed-GL) C++ cell for each observable:
 | Observable | Selected backend |
 |---|---|
 | Number counts | Production `NumCountsSel.so` (the same algorithm as the `0d` fast backend) |
-| One-halo miscentred shear | `Shear1hFastMass.so` |
+| One-halo miscentred shear | `Shear1hGl.so` |
 | Traditional 1h+2h max model | `Shear1h2hMax.so` |
-| Projection shear | `ShearPrjFastMass.so` |
+| Projection shear | `ShearPrjGl.so` |
 
 On GPU nodes, `Shear1h2hMaxGpu.so` and `ShearPrjFrozenGpu.so` provide CUDA
 alternatives for the max-model and frozen-projection arms respectively.

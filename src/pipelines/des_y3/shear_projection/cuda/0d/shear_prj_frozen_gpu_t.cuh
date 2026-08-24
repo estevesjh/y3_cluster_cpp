@@ -35,6 +35,7 @@
 #include "models/omega_z_des.hh"
 #include "pipelines/systematics/shear_prj/cpp/sigma_prj_t.hh"
 #include "models/z_kernel_data.hh"
+#include "pipelines/shared/sel_gl_weights.hh"
 #include "utils/datablock_reader.hh"
 #include "utils/interp_1d.hh"
 #include "utils/interp_2d.hh"
@@ -166,12 +167,12 @@ private:
 
     std::vector<double> z_ring, w_ring, u_x, u_w;
     if (ring_hi > ring_lo)
-      y3_cluster::p_op_detail::gl_nodes(ring_lo, ring_hi, N_zring_, z_ring, w_ring);
+      y3_pipelines::gl_nodes(ring_lo, ring_hi, N_zring_, z_ring, w_ring);
 
     std::vector<double> z_fg, w_fg, z_bg, w_bg;
     double const dis_fg_max = chi_o - chi_fg_lo;
     if (r_excl < dis_fg_max) {
-      y3_cluster::p_op_detail::gl_nodes(std::log(r_excl), std::log(dis_fg_max),
+      y3_pipelines::gl_nodes(std::log(r_excl), std::log(dis_fg_max),
                             N_zouter_, u_x, u_w);
       z_fg.resize(N_zouter_);
       w_fg.resize(N_zouter_);
@@ -185,7 +186,7 @@ private:
     }
     double const dis_bg_max = chi_bg_hi - chi_o;
     if (r_excl < dis_bg_max) {
-      y3_cluster::p_op_detail::gl_nodes(std::log(r_excl), std::log(dis_bg_max),
+      y3_pipelines::gl_nodes(std::log(r_excl), std::log(dis_bg_max),
                             N_zouter_, u_x, u_w);
       z_bg.resize(N_zouter_);
       w_bg.resize(N_zouter_);
@@ -229,7 +230,7 @@ public:
                                          "include_omega_z") != 0
                          : true)
   {
-    y3_cluster::p_op_detail::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
+    y3_pipelines::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
     if (cfg.has_val(module_label(), "lob_centers")) {
       lob_centers_ = get_vector_double(cfg, module_label(), "lob_centers");
     } else {

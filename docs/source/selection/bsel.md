@@ -261,9 +261,9 @@ wall row -> exact (lambda_bin, zob) lookup
 |---|---|---|
 | production CPU | `src/pipelines/systematics/shear_prj/cpp/sigma_prj_t.hh` (`ShearPrjCore`, GSL, Cuhre) | `sp_detail::BSelBins::at` |
 | frozen CPU | `src/pipelines/systematics/shear_prj/cpp/sigma_prj_frozen_t.hh` and `sigma_prj_frozen_interp_t.hh` | `sp_detail::BSelBins::at` |
-| `3d` fixed-GL Python | `shear_prj_fast_mass.py` | `dm.BSelBins.values` |
+| `3d` fixed-GL Python | `shear_prj_gl.py` | `dm.BSelBins.values` |
 | frozen fast-mass CUDA | `ShearPrjFrozenGpu.cu` | `sp_detail::BSelBins::at` |
-| full-ltmz CUDA | `DSigmaPrjFullLtmzGpu.cu` | `sp_detail::BSelBins::at` |
+| full-ltmz CUDA | `DSigmaPrj3dGpu.cu` | `sp_detail::BSelBins::at` |
 
 The maintained C++ helper is in
 [`src/pipelines/systematics/selection_bias/cpp/bsel_bins_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/src/pipelines/systematics/selection_bias/cpp/bsel_bins_t.hh).
@@ -282,8 +282,8 @@ contract above.
 The relevant checks are:
 
 - `test/sel_function.test.py`: shared HOD and selection-kernel behavior;
-- `test/shear_prj_fast_mass.test.cc`: wall geometry and theta-grid behavior;
-- `test/dsigma_prj_full_ltmz_gpu.test.cu`: adaptive (projection `3d`) CUDA formula assembly;
+- `test/shear_prj_gl.test.cc`: wall geometry and theta-grid behavior;
+- `test/dsigma_prj_3d_gpu.test.cu`: adaptive (projection `3d`) CUDA formula assembly;
 - `test/shear_prj_frozen_gpu.test.cu`: frozen CUDA dump replay;
 - `test/shear_prj_cross_backend.test.py`: optional cross-backend comparison.
 

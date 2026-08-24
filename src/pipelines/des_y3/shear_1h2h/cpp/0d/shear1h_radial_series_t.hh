@@ -4,7 +4,7 @@
 // (../python/shear1h_radial_series.py) and the same committed derived
 // data (data/radial_series/, text export): the offline unit-profile
 // tables U_ell(ln x, ln x_mis), the exact fixed-GL redshift contraction
-// W_ij(lnM) (SelGLCore, reused untouched), the plain central moments of
+// W_ij(lnM) (SelGlWeights, reused untouched), the plain central moments of
 // y = ln r_s(M), and the per-(bin, R) assembly
 //
 //   O_ij(R) ~= N_ij A0(ybar) [ u_mix,0 + mu2 u_mix,2 (+ mu3 u_mix,3) ]
@@ -32,14 +32,14 @@
 //
 // This file follows the approved plan's rules for new C++ work: it
 // instantiates the immutable CosmoSISScalarEvaluatorModule template
-// from a thin driver and composes the immutable SelGLCore; nothing
+// from a thin driver and composes the immutable SelGlWeights; nothing
 // under src/models or src/utils is modified.
 #ifndef Y3_CLUSTER_CPP_DES_Y3_SHEAR1H_RADIAL_SERIES_T_HH
 #define Y3_CLUSTER_CPP_DES_Y3_SHEAR1H_RADIAL_SERIES_T_HH
 
 #include "cosmosis/datablock/datablock.hh"
 
-#include "models/n_operator_sel_gl_t.hh"
+#include "pipelines/shared/sel_gl_weights.hh"
 #include "models/nfw_dsigma_mis.hh"
 #include "pipelines/shared/lensing_helpers.hh"
 #include "utils/interp_1d.hh"
@@ -192,7 +192,7 @@ namespace y3_cluster {
         rho_mult_ = s.view<double>("cosmological_parameters", "omega_M");
 
         // Plain central moments of y = ln r_s(M) under each bin's
-        // weight.  SelGLCore is immutable and only carries the lnM
+        // weight.  SelGlWeights is immutable and only carries the lnM
         // moments through mu2, so the y moments (incl. mu3) are built
         // here from its public weights and nodes.
         std::size_t const nb = core_.n_bins();
@@ -266,7 +266,7 @@ namespace y3_cluster {
       }
 
      private:
-      nosel_gl_detail::SelGLCore core_;
+      y3_pipelines::SelGlWeights core_;
       int ell_max_;
       RadialSeriesTable table_;
       std::vector<double> lob_centers_;

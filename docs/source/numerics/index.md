@@ -44,7 +44,7 @@ records) is in
 | `3d` | C++ (Cuhre) | 3.1 s | 4.9e-4 |
 | `3d` | CUDA (PAGANI) | 2.0 s | 5.1e-4 |
 | `0d` | Python — 2-dim GL sum, $S_{ij}$ tabulated | 5 ms | 7.6e-4 |
-| `0d` | C++ (`NumCountsFastMass.so`) — 2-dim GL sum, $S_{ij}$ tabulated | 6 ms | 7.6e-4; identity **vs production `NumCountsSel.so`** recorded separately |
+| `0d` | C++ (`NumCountsSijGl.so`) — 2-dim GL sum, $S_{ij}$ tabulated | 6 ms | 7.6e-4; identity **vs production `NumCountsSel.so`** recorded separately |
 
 **One-halo miscentred shear** (12 bins × 10 radii; DES Y1
 `Shear1hMisSel.so` = 9 ms):
@@ -56,7 +56,7 @@ records) is in
 | `3d` | C++ (Cuhre) | 51 s | 3.3e-4 |
 | `3d` | CUDA (PAGANI) | 32 s | 3.4e-4 |
 | `0d` | Python — $z$-contracted 1-dim GL mass sum | 74 ms | 8.4e-4 |
-| `0d` | C++ (`Shear1hFastMass.so`) — $z$-contracted 1-dim GL mass sum | 9 ms | 8.4e-4; bitwise identity **vs production `Shear1hMisSel.so`** recorded separately |
+| `0d` | C++ (`Shear1hGl.so`) — $z$-contracted 1-dim GL mass sum | 9 ms | 8.4e-4; bitwise identity **vs production `Shear1hMisSel.so`** recorded separately |
 | `0d` | Python — radial series ($\ell\le2$, offline tables) | 6 ms | 3.7e-3 |
 | `0d` | C++ (`Shear1hRadialSeries.so`) — radial series | 7 ms | 3.7e-3 (truncation, **vs same-profile doubled-node fiducial**) + 1.6e-4 interp difference **vs its Python twin**; raw vs-3d amplitude is the open c=4 defect |
 | `0d` | max model C++ (`Shear1h2hMax.so`) — $z$-resolved 2-dim GL sum | 11 ms | 8.3e-4 (measured through the Python max-model chain); see {doc}`../variants` |
@@ -69,7 +69,7 @@ records) is in
 |---|---|---:|---:|
 | `3d` | CUDA (PAGANI over $\ln\theta, z, \ln M$) | 95 s | is the 3d diagnostic; median 9.5e-4, max 2.2% **vs the region-split GL baseline** — its own convergence study is open |
 | `0d` | Python — exact $z$, region-split 3-dim GL | 270 ms | best-available baseline; vs-3d pending (Perlmutter re-run, blocked on the 3d convergence study) |
-| `0d` | C++ (`ShearPrjFastMass.so`) — region-split GL | 154 ms | 9.9e-12 **vs the exact-**$z$** evaluator** (same core); vs-3d pending |
+| `0d` | C++ (`ShearPrjGl.so`) — region-split GL | 154 ms | 9.9e-12 **vs the exact-**$z$** evaluator** (same core); vs-3d pending |
 | `0d` | DES Y1 frozen (`ShearPrjFrozenPhysics.so`, production) | 82 ms | 5.5e-5 **vs the exact-**$z$** baseline** |
 | `0d` | CUDA (`ShearPrjFrozenGpu.so`, frozen) | 8.3 ms | machine precision **vs DES Y1 frozen** |
 
@@ -192,7 +192,7 @@ Code pointers: `shared/datablock_models.py::gl_nodes` and
 `src/models/p_operator_cuhre_t.hh::p_op_detail::gl_nodes` (node
 construction); `systematics/selection_richness/python/sel_function.py::`
 `_compute_lam_nodes_and_P_HOD` (richness envelope);
-`shared/full_ltmz_core.py::full_ltmz_mass_z_weights` and
+`shared/explicit_grid_core.py::explicit_mass_z_weights` and
 `shear_1h2h/cpp/0d/shear1h2h_max_t.hh` (weight chain);
 `systematics/shear_prj/cpp/sigma_prj_t.hh::sp_detail::build_theta_grid`
 ($\theta$ breakpoints, ring + fg/bg $z$ split, `n_per_seg`/`n_zring`/
@@ -246,7 +246,11 @@ the reference ini).*
 The full numerical recipe of the two population-operator modules
 (`NumCountsSel`, {doc}`../observables/number_counts`, and
 `Shear1hMisSel`, {doc}`../observables/shear_halo`), which share one
-engine (`SelGLCore` in `src/models/n_operator_sel_gl_t.hh`). The target:
+engine (`SelGLCore` in `src/models/n_operator_sel_gl_t.hh`; the des_y3
+pipeline twins `NumCountsSijGl`/`Shear1hGl` use the pipeline-owned
+re-implementation `y3_pipelines::SelGlWeights` in
+`src/pipelines/shared/sel_gl_weights.hh`, identity-certified against
+this engine). The target:
 
 $$N_i[f] = \int d\ln M \int dz\;
 \Omega(z)\,\frac{dV}{d\Omega\,dz}\,\frac{dn}{d\ln M}(M,z)\,

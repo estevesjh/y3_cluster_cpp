@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Validate the fast_mass shear backend against Shear1hMisSel.so.
+"""Validate the fixed-GL shear backend against Shear1hMisSel.so.
 
 Same exact z contraction (SelGLCore twin), same GL nodes, and
 interpolation-exact replicas of both profile tables — the comparison
@@ -25,7 +25,7 @@ from shared import datablock_models as dm
 from shared import lensing_profiles as lp
 from systematics.selection_richness.python import sel_kernels
 
-from shear1h_fast_mass import compute_shear  # noqa: E402  (same dir)
+from shear1h_gl import compute_shear  # noqa: E402  (same dir)
 
 TOL = 1e-10
 R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
@@ -52,7 +52,7 @@ def main():
     vals = compute_shear(weights, profile, np.arange(12), R_PERP)
     prod = source.array("shear1hmissel", "vals")
     worst = float(np.max(np.abs(vals / prod - 1.0)))
-    print("fast_mass shear vs production Shear1hMisSel.so "
+    print("fixed-GL shear vs production Shear1hMisSel.so "
           f"(12 bins x {R_PERP.size} radii): "
           f"max |ratio - 1| = {worst:.2e}  (tolerance {TOL:.0e})")
     if worst > TOL:

@@ -7,7 +7,7 @@ link_directories(${COSMOSIS_BASE_DIR}/cosmosis/datablock)
 # breakpoints) but inner (z, lnM) driven by cubacpp::Cuhre /
 # cubacpp::Vegas.  Used for head-to-head convergence diffs against
 # ShearPrjEvaluator, Python SigmaPrj, and the fully-coupled
-# DSigmaPrjFullLtmzGpu diagnostic.  Writes sigma_prj_cuhre /
+# DSigmaPrj3dGpu diagnostic.  Writes sigma_prj_cuhre /
 # dsigma_prj_cuhre / shear_prj_cuhre (sections unchanged by the move).
 add_library(ShearPrjCuhre MODULE ShearPrjCuhre.cc)
 target_link_libraries(ShearPrjCuhre PRIVATE cosmosis utils models

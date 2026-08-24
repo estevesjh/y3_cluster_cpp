@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Validate the fast_mass counts backend against NumCountsSel.so.
+"""Validate the fixed-GL counts backend against NumCountsSel.so.
 
 Same algorithm, same GL nodes, same bilinear S_stack interpolation —
 the comparison should be at machine precision.
@@ -40,7 +40,7 @@ def main():
                            include_sci=False).norm()
     prod = source.array("numcountssel", "vals")
     worst = float(np.max(np.abs(norm / prod - 1.0)))
-    print("fast_mass counts vs production NumCountsSel.so: "
+    print("fixed-GL counts vs production NumCountsSel.so: "
           f"max |ratio - 1| = {worst:.2e}  (tolerance {TOL:.0e})")
     if worst > TOL:
         sys.exit("FAIL")

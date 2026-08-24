@@ -33,16 +33,16 @@ from shear1h_radial_series import (  # noqa: E402
     RadialSeriesTable,
     evaluate_series,
 )
-from numcounts_full_ltmz import compute_counts as full_ltmz_counts  # noqa: E402
-from shear1h_fast_mass import compute_shear as fast_mass_shear  # noqa: E402
+from numcounts_explicit_gl import compute_counts as full_ltmz_counts  # noqa: E402
+from shear1h_gl import compute_shear as fast_mass_shear  # noqa: E402
 from shear1h2h_max import compute_shear_max, z_resolved_weights  # noqa: E402
-from shear1h_full_ltmz import compute_shear as full_ltmz_shear  # noqa: E402
+from shear1h_explicit_gl import compute_shear as full_ltmz_shear  # noqa: E402
 
 SHEAR_PRJ_FAST_MASS_PY = (PIPELINES / "des_y3"
                           / "shear_projection" / "python" / "0d")
 sys.path.insert(0, str(SHEAR_PRJ_FAST_MASS_PY))
-from shear_prj_fast_mass import (  # noqa: E402
-    ShearPrjFastMass,
+from shear_prj_gl import (  # noqa: E402
+    ShearPrjGl,
     build_theta_grid,
     theta_excl_at_z,
 )
@@ -221,8 +221,8 @@ class TestOfflineRadialGenerator(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
-class TestNumCountsFastMass(unittest.TestCase):
-    """des_y3/number_counts/python/0d/numcounts_fast_mass.py"""
+class TestNumCountsSijGl(unittest.TestCase):
+    """des_y3/number_counts/python/0d/numcounts_sij_gl.py"""
 
     def test_matches_production_numcountssel(self):
         source = dm.DumpSource(str(DUMP_DIR))
@@ -236,8 +236,8 @@ class TestNumCountsFastMass(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
-class TestNumCountsFullLtmz(unittest.TestCase):
-    """des_y3/number_counts/python/0d/numcounts_full_ltmz.py"""
+class TestNumCounts3d(unittest.TestCase):
+    """des_y3/number_counts/python/0d/numcounts_explicit_gl.py"""
 
     def test_matches_production_within_tabulation_error(self):
         source = dm.DumpSource(str(DUMP_DIR))
@@ -254,8 +254,8 @@ class TestNumCountsFullLtmz(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
-class TestShear1hFastMass(unittest.TestCase):
-    """des_y3/shear_1h2h/python/0d/shear1h_fast_mass.py"""
+class TestShear1hGl(unittest.TestCase):
+    """des_y3/shear_1h2h/python/0d/shear1h_gl.py"""
 
     def test_matches_production_shear1hmissel(self):
         source = dm.DumpSource(str(DUMP_DIR))
@@ -273,8 +273,8 @@ class TestShear1hFastMass(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)
-class TestShear1hFullLtmz(unittest.TestCase):
-    """des_y3/shear_1h2h/python/0d/shear1h_full_ltmz.py"""
+class TestShear1h3d(unittest.TestCase):
+    """des_y3/shear_1h2h/python/0d/shear1h_explicit_gl.py"""
 
     def test_matches_production_within_tabulation_error(self):
         source = dm.DumpSource(str(DUMP_DIR))
@@ -376,13 +376,13 @@ class TestShear1h2hMax(unittest.TestCase):
         self.assertGreater(np.max(full - oneh), 0.0)
 
 
-class TestShearPrjFastMass(unittest.TestCase):
-    """des_y3/shear_projection/python/0d/shear_prj_fast_mass.py
+class TestShearPrjGl(unittest.TestCase):
+    """des_y3/shear_projection/python/0d/shear_prj_gl.py
 
-    ShearPrjFastMass.set_sample() needs a full real-pipeline sample (HMF,
+    ShearPrjGl.set_sample() needs a full real-pipeline sample (HMF,
     halo bias, xi_nl, distances, b_sel_marginalised) that no dump checked
     into (or regenerable from) this repo currently provides -- see the C++
-    sibling test/shear_prj_fast_mass.test.cc for the same conclusion, which
+    sibling test/shear_prj_gl.test.cc for the same conclusion, which
     pins the DataBlock-free building blocks instead. This test does the
     same for the Python port: build_theta_grid / theta_excl_at_z, checked
     both against independently-derived closed-form bounds (non-circular)
@@ -421,7 +421,7 @@ class TestShearPrjFastMass(unittest.TestCase):
         sum_w = float(weight.sum())
         self.assertAlmostEqual(sum_w, theta_max - lower, delta=1e-6 * sum_w)
 
-        # Golden values, also pinned in test/shear_prj_fast_mass.test.cc.
+        # Golden values, also pinned in test/shear_prj_gl.test.cc.
         np.testing.assert_allclose(theta[0], 5.8237767207010004e-05,
                                    rtol=REL_TOL)
         np.testing.assert_allclose(theta[theta.size // 2],
@@ -455,7 +455,7 @@ class TestShearPrjFastMass(unittest.TestCase):
 
     @unittest.skipUnless(HAS_DUMP_PRJ2H, _SKIP_MSG_PRJ2H)
     def test_matches_exact_evaluator_and_frozen_physics(self):
-        # Full end-to-end ShearPrjFastMass.set_sample()/wall_outputs()
+        # Full end-to-end ShearPrjGl.set_sample()/wall_outputs()
         # against a real sample with the projection chain populated
         # (docs/figs/real_pipeline_extract_prj2h.ini): machine precision
         # vs the exact DSigmaPrjEvaluator.so (same core), and within the
@@ -464,7 +464,7 @@ class TestShearPrjFastMass(unittest.TestCase):
         # n_lnm=24 matches docs/figs/real_pipeline_extract_prj2h.ini's
         # [dsigma_prj] section (the class default of 16 is a different,
         # coarser resolution and would only agree at the ~0.2% level).
-        core = ShearPrjFastMass(_pinned_prj_wall(), n_lnm=24,
+        core = ShearPrjGl(_pinned_prj_wall(), n_lnm=24,
                                 lob_centers=dm.DEFAULT_LOB_CENTERS)
         core.set_sample(source)
         rnd, cl, _sci = core.wall_outputs()

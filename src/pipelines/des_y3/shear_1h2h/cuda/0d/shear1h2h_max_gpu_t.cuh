@@ -1,6 +1,6 @@
 // Traditional 1h+2h shear via the max model — GPU adaptation.
 //
-// A port of the des_y3 fast_mass C++ backend (../cpp/shear1h2h_max_t.hh):
+// A port of the des_y3 fixed-GL C++ backend (../cpp/shear1h2h_max_t.hh):
 // same observable,
 //
 //   d_tot(R, lnM, z | bin) = max( DSigma_cl(R, lnM | bin),
@@ -30,9 +30,11 @@
 // All (bin, R) wall results are assembled at the end of set_sample;
 // evaluate() only reads the cache.
 //
-// dSigma_hh carries NaN over ~60% of its (R, z) table by construction
-// (see docs/known_issues/dsigma_hh_debug_flag.md); sanitized to 0 before Interp2D,
-// same convention as the CPU backend.
+// dSigma_hh historically carried NaN over part of its (R, z) table
+// (docs/known_issues/dsigma_hh_debug_flag.md — since FIXED in the
+// producer); the sanitize-to-0 step is kept as a defensive guard, which
+// is exact for a max model (max(1h, 0) = 1h wherever the 2h term were
+// undefined).
 //
 // Options: bin_index x r_perp cartesian grid (bin slow / R fast),
 // zt_low/zt_high/lnm_low/lnm_high (required), n_lnm (96), n_z (64),
@@ -57,10 +59,9 @@
 
 #include "models/dv_do_dz_t.hh"
 #include "models/hmf_t.hh"
-#include "models/n_operator_sel_gl_t.hh"
+#include "pipelines/shared/sel_gl_weights.hh"
 #include "models/nfw_dsigma_mis.cuh"
 #include "models/omega_z_des.hh"
-#include "models/p_operator_cuhre_t.hh"
 #include "models/sel_function_t.hh"
 #include "pipelines/shared/lensing_helpers.hh"
 #include "utils/datablock_reader.hh"
@@ -153,8 +154,8 @@ public:
     , dsigma_mis_dev_(y3_cuda::DSIGMA_MIS_CONC, y3_cuda::DSIGMA_MIS_RHOC,
                       y3_cuda::DSIGMA_MIS_GAMMA)
   {
-    y3_cluster::p_op_detail::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
-    y3_cluster::p_op_detail::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
+    y3_pipelines::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
+    y3_pipelines::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
     lob_centers_ =
       y3_pipelines::read_lob_centers(cfg, module_label());
     if (lob_centers_.empty())
@@ -199,7 +200,7 @@ public:
     for (std::size_t q = 0; q != N_z_; ++q)
       zfac[q] = z_w_[q] * dv(z_x_[q]) * omega(z_x_[q]) * sci.clamp(z_x_[q]);
 
-    int const n_bins = y3_cluster::nosel_detail::n_bins_from_block(s);
+    int const n_bins = y3_pipelines::n_bins_from_block(s);
     n_bins_ = static_cast<std::size_t>(n_bins);
     std::vector<double> w2d(n_bins_ * N_lnm_ * N_z_, 0.0);
     for (int b = 0; b != n_bins; ++b) {
@@ -304,7 +305,8 @@ public:
 
 private:
   // haloModel/dSigma_hh through Interp2D, with the producer's NaNs
-  // replaced by 0 first (docs/known_issues/dsigma_hh_debug_flag.md), same convention
+  // replaced by 0 first (defensive guard; the producer defect in
+  // docs/known_issues/dsigma_hh_debug_flag.md is fixed), same convention
   // as the CPU backend.
   static y3_cluster::Interp2D
   make_sanitized_hh(cosmosis::DataBlock& s)

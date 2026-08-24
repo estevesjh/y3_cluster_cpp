@@ -11,9 +11,9 @@ every other cell, per the matrix in docs/source/pipeline_organization.md:
                                                an open debugging flag, see
                                                docs/known_issues/dsigma_hh_debug_flag.md)
 
-The reference is the C++ full_ltmz backend (Shear1hFullLtmz.so, adaptive
+The reference is the C++ full_ltmz backend (Shear1h3d.so, adaptive
 Cuhre eps_rel=1e-4). Its values, the CUDA full_ltmz backend's
-(Shear1hFullLtmzGpu.so, PAGANI), the C++ radial_series backend's
+(Shear1h3dGpu.so, PAGANI), the C++ radial_series backend's
 (Shear1hRadialSeries.so), and the C++/CUDA max-model backends'
 (Shear1h2hMax.so / Shear1h2hMaxGpu.so) are hard-coded below: reproducing
 them needs a full CosmoSIS pipeline run of the compiled .so modules
@@ -29,7 +29,7 @@ fast_mass/radial_series/max-model C++/CUDA backends), same
 regenerate: append the relevant module(s) to
 docs/figs/real_pipeline_extract.ini (same bin wall; for the max model,
 also set halo_model's `compute_lensing_2h = T`) and read back
-`shear1hfullltmz(gpu)/vals`, `shear1h_radial_series/vals`,
+`shear1h3d(gpu)/vals`, `shear1h_radial_series/vals`,
 `shear1h2h_max(_gpu)/vals`.
 
 The Python full_ltmz, fast_mass, and radial_series backends, and
@@ -75,8 +75,8 @@ sys.path.insert(0, str(_SHEAR1H2H / "python" / "0d"))
 from shared import datablock_models as dm  # noqa: E402
 from shared import lensing_profiles as lp  # noqa: E402
 from systematics.selection_richness.python import sel_kernels  # noqa: E402
-from shear1h_full_ltmz import compute_shear as compute_shear_full_ltmz  # noqa: E402
-from shear1h_fast_mass import compute_shear as compute_shear_fast_mass  # noqa: E402
+from shear1h_explicit_gl import compute_shear as compute_shear_full_ltmz  # noqa: E402
+from shear1h_gl import compute_shear as compute_shear_fast_mass  # noqa: E402
 import nfw_profile_family as pf  # noqa: E402
 from shear1h_radial_series import RadialSeriesTable, evaluate_series  # noqa: E402
 
@@ -97,7 +97,7 @@ BINS = dict(
 ZT_LOW, ZT_HIGH = 0.05, 0.80
 LNM_LOW, LNM_HIGH = 29.9336, 36.7300
 
-# C++ full_ltmz (Shear1hFullLtmz.so) -- THE reference. See module
+# C++ full_ltmz (Shear1h3d.so) -- THE reference. See module
 # docstring for provenance.
 CPP_FULL_LTMZ = np.array([
     106973.00873038164, 89182.7622178334, 70884.60892666598, 53408.59567669171,
@@ -132,7 +132,7 @@ CPP_FULL_LTMZ = np.array([
     3049.8779446309213, 2009.9107928184026, 1270.4978315397923, 776.1969190847334,
 ])
 
-# CUDA full_ltmz (Shear1hFullLtmzGpu.so, PAGANI).
+# CUDA full_ltmz (Shear1h3dGpu.so, PAGANI).
 CUDA_FULL_LTMZ = np.array([
     106974.60871599588, 89184.1147310699, 70885.74060913107, 53409.469311380875,
     38007.20538406441, 25627.773711298505, 16486.422832803688, 10219.861693609255,

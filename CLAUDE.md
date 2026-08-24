@@ -309,17 +309,21 @@ GL nodes/weights explained, software mechanics last).
   inner dims); cuda/3d = fully-coupled 3-D PAGANI diagnostic (was
   `full_ltmz` CUDA).
 
-Only the FOLDERS carry the new names: module labels, class names,
-file names, and output sections keep their historical strings
-(NumCountsFullLtmz, shear1h_fast_mass/vals, ...), so inis and
-validators reference them unchanged. Colliding validators were
-qualified: validate_fast_vs_production.py /
+Code identifiers follow the quadrature scheme: `SijGl` = S_ij-tabulated
+fixed-GL (NumCountsSijGl/numcounts_sij_gl, Shear1hGl/shear1h_gl,
+ShearPrjGl/{dsigma,shear}_prj_gl), `explicit_gl` = explicit fixed-GL
+Python references (numcounts_explicit_gl.py, shear1h_explicit_gl.py,
+shear1h2h_max_explicit_gl.py), `3d` = adaptive references
+(NumCounts3d/numcounts3d, Shear1h3d, Shear1h2hMax3d, *3dGpu). The
+retired fast_mass/full_ltmz strings survive only as "formerly" notes.
+Module labels ARE ini [section] names — inis were updated in the same
+commit. Validators: validate_fast_vs_production.py /
 validate_explicit_vs_production.py.
 
 ### Testing precision and cost
 
 Accuracy is always quoted against an **adaptive** explicit-integration reference
-(`shared/full_ltmz_core.py::full_ltmz_mass_integral_adaptive`,
+(`shared/explicit_grid_core.py::explicit_mass_integral_adaptive`,
 reported error ≤ 1e-6), never against a production `.so` — production
 carries its own approximations (S_ij tabulation ~8e-4, frozen physics
 ~5e-5). Agreement with production is reported separately as an

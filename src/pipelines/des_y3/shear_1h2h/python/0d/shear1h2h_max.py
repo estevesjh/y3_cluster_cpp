@@ -16,11 +16,11 @@ compute_lensing_2h = T). The observable is the count-weighted stack
     O_ij(R) = int dz int dlnM  n dV/dOmegadz Omega Sigma_crit^-1
               S_ij(lnM, z) Phi_max(R, lnM, z)
 
-**The two-halo term is z-dependent, so — unlike the 1h-only fast_mass —
+**The two-halo term is z-dependent, so — unlike the 1h-only fixed-GL —
 the redshift integral cannot be contracted past the profile.** The fast
 path therefore keeps the z-resolved tabulated weight
 W2d(lnM, z) = zfac * hmf * S_stack (the S_ij tabulation is still the
-fast_mass hallmark) and performs the double fixed-GL contraction
+S_ij-tabulation hallmark) and performs the double fixed-GL contraction
 sum_kq W2d * Phi_max per (bin, R).
 
 DataBlock contract
@@ -34,7 +34,7 @@ Reads (datablock): the Shear1hMisSel contract plus
 Writes: shear1h2h_max/vals  (n_bins * n_r,)   [hardcoded section]
 
 Status: reference implementation of the traditional-shear model
-(validated against its full_ltmz z-resolved reference; see README.md).
+(validated against its explicit-3d z-resolved reference; see README.md).
 """
 from __future__ import annotations
 

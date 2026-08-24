@@ -509,7 +509,7 @@ namespace y3_cluster {
         // Per-slice z-axis caches (wall-independent at fixed lob, zob).
         // Builds:
         //   zs, wzs      -- adaptive ring+fg/bg grid
-        //   common_z[iz] = dV(z) * om(z) * w_zgl(z) * w_photoz(z, zob)
+        //   common_z[iz] = dV(z) * om(z) * w_zgl(z) * w_pz(z, zob)
         //                  with the parabolic photo-z window folded in.
         //   hmf_z, hmb_z -- (Nz, N_lnm_) evaluated directly from the
         //                   HMF / HMB splines at the adaptive z-nodes.

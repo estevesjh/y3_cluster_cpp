@@ -3,23 +3,23 @@
 
 Per the matrix in docs/source/pipeline_organization.md:
 
-    full_ltmz  -> CUDA only (DSigmaPrjFullLtmzGpu.so)
+    full_ltmz  -> CUDA only (DSigmaPrj3dGpu.so)
     fast_mass  -> Python, C++, CUDA (Python/C++ exact-z; CUDA reproduces
                   the frozen production machinery)
 
 Covered here: fast_mass Python (exact-z, "best available reference" per
-the README), fast_mass C++ (ShearPrjFastMass.so, identity vs Python),
+the README), fast_mass C++ (ShearPrjGl.so, identity vs Python),
 production/C++ frozen (ShearPrjFrozenPhysics.so, the documented
 frozen-physics approximation), and CUDA frozen (ShearPrjFrozenGpu.so).
 
 NOT covered (deliberately, not silently): `full_ltmz` CUDA
-(DSigmaPrjFullLtmzGpu.so) has its own open wall-edge convergence study
+(DSigmaPrj3dGpu.so) has its own open wall-edge convergence study
 (docs/source/pipeline_organization.md: "median 9.5e-4 vs refined GL; max
 2.2% at innermost radii") -- an acknowledged unresolved research
 question, not a settled cross-backend target, so it is left out of this
 pass-or-fail suite rather than papering over it with a loose tolerance.
 A separate `DSigmaPrjFastMassGpu.so` (under
-des_y3_shear_prj_fast_mass_cuda/) also exists but its relationship to
+des_y3_shear_prj_gl_cuda/) also exists but its relationship to
 the two documented CUDA backends was not resolved in this pass; follow
 up before adding it here.
 
@@ -32,10 +32,10 @@ real pipeline run rather than computed live. Provenance: `prj_full_backends.ini`
 `mock_mcmc_widePlanck_values.ini` fiducial point), modules `consistency
 prj_params GrowthFactor cp_camb MfTinker halo_model
 average_sigma_crit_inv sel_function b_sel_marg bsel dsigma_prj
-shear_prj_frozen_physics ShearPrjFastMass ShearPrjFrozenGpu`. The
+shear_prj_frozen_physics ShearPrjGl ShearPrjFrozenGpu`. The
 Python fast_mass reference (`PYTHON_FAST_MASS_REF`) is the pinned wall's
-`shear_prj_fast_mass` output from a standalone run of
-`shear_prj_fast_mass.py` (2026-08-12, job companion to prjjob_56795501);
+`shear_prj_gl` output from a standalone run of
+`shear_prj_gl.py` (2026-08-12, job companion to prjjob_56795501);
 CosmoSIS's `put_val` does not overwrite an existing section, so the
 Python and C++ fast_mass backends were never run together in one
 pipeline -- see docs/source/pipeline_organization.md's "put_val
@@ -45,7 +45,7 @@ To regenerate: append the relevant module(s) to a pipeline like
 prj_frozen_gpu.ini's (see systematics/selection_function/prj_params.py for
 `plob_ltr_params`,
 b_sel_marg + bsel for the upstream marginalized-bias chain) and read
-back `shear_prj_fast_mass/vals`, `shear_prj_frozen_physics/vals`,
+back `shear_prj_gl/vals`, `shear_prj_frozen_physics/vals`,
 `shear_prj_frozen_gpu/vals`.
 """
 from __future__ import annotations
@@ -104,7 +104,7 @@ PYTHON_FAST_MASS_REF = np.array([
     10.214487836455572, 10.269623388288622, 10.2457033886817, 10.314562309843007,
 ])
 
-# C++ fast_mass (ShearPrjFastMass.so).
+# C++ fast_mass (ShearPrjGl.so).
 CPP_FAST_MASS = np.array([
     0.08385397611785347, 0.1799673137028041, 0.3591537036956065, 0.6789698477631255,
     1.1816243378087807, 1.8940311084835675, 2.7459249342286527, 3.582387023023263,

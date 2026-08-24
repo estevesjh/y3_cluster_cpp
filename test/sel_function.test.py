@@ -2,8 +2,8 @@
 """Unit tests for the canonical systematics selection function.
 
 This module had zero dedicated test coverage before this file: every
-des_y3 backend that reads sel_function/S_stack (numcounts_fast_mass,
-shear1h_fast_mass, ...) only exercised it indirectly, through its own
+des_y3 backend that reads sel_function/S_stack (numcounts_sij_gl,
+shear1h_gl, ...) only exercised it indirectly, through its own
 composed output. This file tests sel_function's own kernels directly,
 against independent re-derivations (fresh scipy calls, not calls back
 into sel_function's own helpers), following

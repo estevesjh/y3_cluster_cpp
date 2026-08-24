@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Validate the fast_mass projection shear against the C++ evaluators.
+"""Validate the fixed-GL projection shear against the C++ evaluators.
 
 Replays a test-sampler dump that contains the projection chain
 (b_sel_marginalised, xi_nl, halomodel bias, distances, plus the outputs
@@ -30,7 +30,7 @@ for _p in Path(__file__).resolve().parents:
 from shared import datablock_models as dm  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from shear_prj_fast_mass import ShearPrjFastMass  # noqa: E402
+from shear_prj_gl import ShearPrjGl  # noqa: E402
 
 TOL_EXACT = 1e-9
 RADII = [0.0426, 0.0669, 0.1045, 0.1652, 0.2607, 0.4117, 0.6505, 1.0257,
@@ -56,7 +56,7 @@ def main():
     dump = Path(sys.argv[1])
     source = dm.DumpSource(str(dump))
 
-    core = ShearPrjFastMass(pinned_wall(),
+    core = ShearPrjGl(pinned_wall(),
                             lob_centers=dm.DEFAULT_LOB_CENTERS)
     core.set_sample(source)
     rnd, cl, sci = core.wall_outputs()
@@ -70,7 +70,7 @@ def main():
     d_c = float(np.max(np.abs(cl / ex_c - 1)))
     d_v = float(np.max(np.abs((rnd + cl) / ex_v - 1)))
     d_f = float(np.max(np.abs((rnd + cl) / fr_v - 1)))
-    print("fast_mass projection shear (180-point wall):")
+    print("fixed-GL projection shear (180-point wall):")
     print(f"  vs exact DSigmaPrjEvaluator.so:  rnd {d_r:.2e}  cl {d_c:.2e}"
           f"  vals {d_v:.2e}  (tolerance {TOL_EXACT:.0e})")
     print(f"  vs frozen production module:     vals {d_f:.2e}  "

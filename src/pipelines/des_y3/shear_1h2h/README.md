@@ -115,7 +115,11 @@ $$
 The production fast path evaluates or interpolates $S_{ij}$ on its
 fixed grid and performs this mass contraction directly on the two
 $\Delta\Sigma$ components. It is the maintained fast path for one-halo
-shear.
+shear. The weight builder is the pipeline-owned
+`shared/sel_gl_weights.hh` (`y3_pipelines::SelGlWeights`,
+identity-certified against the production `SelGLCore` — pipeline C++
+includes no production operator headers); the Python twin is
+`shared/datablock_models.py::MassZWeights`.
 
 | Dims | Backend | Cost | Precision vs 3d |
 | --- | --- | ---: | --- |
@@ -146,9 +150,9 @@ tabulation is still the fast-path hallmark.
 | `0d` | Max model CUDA / A100 (2-dim GL, z-resolved) | 8 ms/sample | $6.4\times10^{-15}$ vs C++ twin (separate baseline); vs-3d inherited through the C++ row |
 
 The explicit references this algorithm validates against are the
-[3d backends](#the-3d-backends) (`Shear1h2hMaxFullLtmz` C++) and the
+[3d backends](#the-3d-backends) (`Shear1h2hMax3d` C++) and the
 [explicit fixed-GL section](#explicit-fixed-gl-python-references)
-(`shear1h2h_max_full_ltmz.py`). The max-model two-halo term has a
+(`shear1h2h_max_explicit_gl.py`). The max-model two-halo term has a
 separate known data defect; see
 [`docs/known_issues/dsigma_hh_debug_flag.md`](../../../../docs/known_issues/dsigma_hh_debug_flag.md)
 before using it as a scientific reference.
@@ -164,8 +168,8 @@ dimensions. Their adaptive C++/CUDA twins are the
 
 | Dims | Module | Observable | Output | Cost / accuracy |
 | --- | --- | --- | --- | --- |
-| `0d` | `python/0d/shear1h_full_ltmz.py` (3-dim GL) | one-halo shear | `shear1h_full_ltmz/vals` | 149 ms/sample; $4.9\times10^{-5}$ vs the adaptive reference |
-| `0d` | `python/0d/shear1h2h_max_full_ltmz.py` (3-dim GL) | 1h+2h max model | `shear1h2h_max_full_ltmz/vals` | z-RESOLVED weight (`full_ltmz_mass_z_weights`) × `MaxMixtureProfile`; the explicit reference the max-model GL backends validate against |
+| `0d` | `python/0d/shear1h_explicit_gl.py` (3-dim GL) | one-halo shear | `shear1h_explicit_gl/vals` | 149 ms/sample; $4.9\times10^{-5}$ vs the adaptive reference |
+| `0d` | `python/0d/shear1h2h_max_explicit_gl.py` (3-dim GL) | 1h+2h max model | `shear1h2h_max_explicit_gl/vals` | z-RESOLVED weight (`explicit_mass_z_weights`) × `MaxMixtureProfile`; the explicit reference the max-model GL backends validate against |
 | `0d` | `python/0d/validate_explicit_vs_production.py` | validator | — | explicit fixed-GL vs production |
 
 Both read `miscentering/{f_mis,tau_mis}` strictly — no in-code default
@@ -179,9 +183,9 @@ weights on $[-1,1]$ affine-mapped to the interval,
 $x' = \tfrac{b-a}{2}x + \tfrac{b+a}{2}$, $w' = \tfrac{b-a}{2}w$
 (`shared/datablock_models.py::gl_nodes`, via
 `numpy.polynomial.legendre.leggauss`; the C++ twin
-`y3_cluster::p_op_detail::gl_nodes` in `src/models/p_operator_cuhre_t.hh`
-computes the same Legendre roots by Newton iteration and applies the
-same map). Mass: `n_lnm` nodes (default 96) on
+`y3_pipelines::gl_nodes` in the pipeline-owned
+`shared/sel_gl_weights.hh` computes the same Legendre roots by Newton
+iteration and applies the same map). Mass: `n_lnm` nodes (default 96) on
 $[\ln M_{\rm low}, \ln M_{\rm high}]$; redshift: `n_z` nodes (default
 64) on $[z_{\rm low}, z_{\rm high}]$. The composed shear weight is
 $W(b;k,q) = w^z_q\,\tfrac{dV}{d\Omega dz}(z_q)\,\Omega(z_q)\,
@@ -285,12 +289,12 @@ n\,\frac{dV}{d\Omega dz}\,\Omega\,
 $$
 
 one adaptive Cuhre (C++) or PAGANI (CUDA) triple integral per
-(bin, R). The adaptive Python reference in `shared/full_ltmz_core.py`
+(bin, R). The adaptive Python reference in `shared/explicit_grid_core.py`
 shares the inner fixed-GL selection contraction and adaptively
 subdivides the outer mass integral (reported error at or below 1e-6).
 
 The max-model observable has its explicit adaptive reference here too
-(`Shear1h2hMaxFullLtmz`): because the two-halo term is $z$-dependent
+(`Shear1h2hMax3d`): because the two-halo term is $z$-dependent
 and the max nonlinear, the whole integrand rides inside the adaptive
 volume with $d_{\rm tot} = \max(\text{1h mixture},\,
 b\cdot\Delta\Sigma_{hh})$. Both max backends require
@@ -300,7 +304,7 @@ interpolation (exact under the max), and all backends here read
 
 | Dims | Backend | Cost | Precision vs 3d |
 | --- | --- | ---: | --- |
-| `3d` | Python adaptive reference (`shared/full_ltmz_core.py`) | 35 s/sample | Reference (3d); reported error $\le 10^{-6}$ |
+| `3d` | Python adaptive reference (`shared/explicit_grid_core.py`) | 35 s/sample | Reference (3d); reported error $\le 10^{-6}$ |
 | `3d` | C++ Cuhre, `eps_rel=1e-4` | 51 s/sample | $3.3\times10^{-4}$ vs the 3d Python reference |
 | `3d` | CUDA PAGANI, A100 | 32 s/sample | $3.4\times10^{-4}$ (baseline: the 3d C++ twin) |
 
@@ -311,19 +315,20 @@ production timing is supplied by the `0d` fixed-GL C++ backends.
 
 | Dims | Language | Sources | Module / output |
 | --- | --- | --- | --- |
-| `0d` | Python | `python/0d/shear1h_fast_mass.py` (+ `validate_fast_vs_production.py`) | `shear1h_fast_mass/vals` |
-| `0d` | C++ | `cpp/0d/Shear1hFastMass.cc` (physics `cpp/0d/shear1h_fast_mass_t.hh`) | `Shear1hFastMass.so`, section `shear1h_fast_mass` |
+| `0d` | Python | `python/0d/shear1h_gl.py` (+ `validate_fast_vs_production.py`) | `shear1h_gl/vals` |
+| `0d` | C++ | `cpp/0d/Shear1hGl.cc` (physics `cpp/0d/shear1h_gl_t.hh`) | `Shear1hGl.so`, section `shear1h_gl` |
 | `0d` | Python | `python/0d/shear1h2h_max.py` (+ `validate_shear1h2h_max.py`) | `shear1h2h_max/vals` |
 | `0d` | C++ | `cpp/0d/Shear1h2hMax.cc` (physics `cpp/0d/shear1h2h_max_t.hh`) | `Shear1h2hMax.so`, section `shear1h2h_max` |
 | `0d` | CUDA | `cuda/0d/Shear1h2hMaxGpu.cu` (physics `cuda/0d/shear1h2h_max_gpu_t.cuh`) | `Shear1h2hMaxGpu.so` in `des_y3_shear1h_0d_cuda/`, section `shear1h2h_max_gpu` |
-| `0d` | Python | `python/0d/shear1h_full_ltmz.py`, `python/0d/shear1h2h_max_full_ltmz.py` (+ `validate_explicit_vs_production.py`) | `shear1h_full_ltmz/vals`, `shear1h2h_max_full_ltmz/vals` |
+| `0d` | Python | `python/0d/shear1h_explicit_gl.py`, `python/0d/shear1h2h_max_explicit_gl.py` (+ `validate_explicit_vs_production.py`) | `shear1h_explicit_gl/vals`, `shear1h2h_max_explicit_gl/vals` |
 | `0d` | Python/C++ | radial series: `python/0d/{generate_radial_series_tables,nfw_profile_family,shear1h_radial_series,validate_radial_series}.py`; `cpp/0d/Shear1hRadialSeries.cc` (physics `cpp/0d/shear1h_radial_series_t.hh`) | `shear1h_radial_series/vals` |
-| `3d` | C++ | `cpp/3d/Shear1hFullLtmz.cc`, `cpp/3d/Shear1h2hMaxFullLtmz.cc` (physics `cpp/3d/shear1h_full_ltmz_t.hh`, `cpp/3d/shear1h2h_max_full_ltmz_t.hh`) | `shear1hfullltmz/…`, `shear1h2hmaxfullltmz/…` in `des_y3_shear1h_3d_cpp/` |
-| `3d` | CUDA | `cuda/3d/Shear1hFullLtmzGpu.cu` (physics `cuda/3d/shear1h_full_ltmz_gpu_t.cuh`) | `shear1hfullltmzgpu/…` in `des_y3_shear1h_3d_cuda/` |
+| `3d` | C++ | `cpp/3d/Shear1h3d.cc`, `cpp/3d/Shear1h2hMax3d.cc` (physics `cpp/3d/shear1h_3d_t.hh`, `cpp/3d/shear1h2h_max_3d_t.hh`) | `shear1h3d/…`, `shear1h2hmax3d/…` in `des_y3_shear1h_3d_cpp/` |
+| `3d` | CUDA | `cuda/3d/Shear1h3dGpu.cu` (physics `cuda/3d/shear1h_3d_gpu_t.cuh`) | `shear1h3dgpu/…` in `des_y3_shear1h_3d_cuda/` |
 
 The `0d` C++ modules build into one binary dir,
 `release-build/src/modules/des_y3_shear1h_0d_cpp/` (three `.so`). No
 CUDA backend exists for the 1h z-contracted path or the radial series
 (a 1-D contraction / a few table lookups are not useful GPU targets).
-Module labels, class names, file names, and output sections keep their
-historical strings — only the folders carry the dims tags.
+Module labels are the ini `[section]` names (`[Shear1hGl]`,
+`[Shear1h2hMax]`, `[Shear1hRadialSeries]`, ...), so pipelines drive
+these backends by pointing those sections at the `.so` paths above.

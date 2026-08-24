@@ -150,9 +150,11 @@ structure at the exclusion boundary is resolved
 (`sigma_prj_t.hh`, ring + fg/bg log-$|\Delta\chi|$ grid). Mass uses a
 plain fixed GL grid of `n_lnm` nodes. All node/weight sets come from
 the same Gauss–Legendre constructor as the other observables
-(`shared/datablock_models.py::gl_nodes` /
-`y3_cluster::p_op_detail::gl_nodes`), affine-mapped per segment or
-region. The composed weights are exactly the $C_j(z)$-weighted
+(`shared/datablock_models.py::gl_nodes` on the Python side;
+`y3_pipelines::gl_nodes` in the pipeline-owned
+`shared/sel_gl_weights.hh` for the pipeline drivers, with the
+projection core in `sigma_prj_t.hh` applying the identical rule),
+affine-mapped per segment or region. The composed weights are exactly the $C_j(z)$-weighted
 contractions defined above, with the quadrature weights folded in at
 evaluation.
 
@@ -231,11 +233,12 @@ not certify the full-domain integral.
 
 | Dims | Language | Sources | Module / output |
 | --- | --- | --- | --- |
-| `0d` | Python | `python/0d/shear_prj_fast_mass.py` (+ `validate_vs_production.py`) | `dsigma_prj_fast_mass/{vals,rnd,cl}`, `shear_prj_fast_mass/{vals,rnd,cl}` |
-| `0d` | C++ | `cpp/0d/ShearPrjFastMass.cc` (physics `cpp/0d/shear_prj_fast_mass_t.hh`, over `sp_detail::ShearPrjCore`) | `ShearPrjFastMass.so` in `release-build/src/modules/des_y3_shear_prj_0d_cpp/` |
+| `0d` | Python | `python/0d/shear_prj_gl.py` (+ `validate_vs_production.py`) | `dsigma_prj_gl/{vals,rnd,cl}`, `shear_prj_gl/{vals,rnd,cl}` |
+| `0d` | C++ | `cpp/0d/ShearPrjGl.cc` (physics `cpp/0d/shear_prj_gl_t.hh`, over `sp_detail::ShearPrjCore`) | `ShearPrjGl.so` in `release-build/src/modules/des_y3_shear_prj_0d_cpp/` |
 | `0d` | CUDA | `cuda/0d/ShearPrjFrozenGpu.cu` (physics `cuda/0d/shear_prj_frozen_gpu_t.cuh`) | `ShearPrjFrozenGpu.so` in `des_y3_shear_prj_0d_cuda/`, sections `dsigma_prj_frozen_gpu` / `shear_prj_frozen_gpu` |
 | `2d` | C++ | `cpp/2d/ShearPrjCuhre.cc` (over immutable `models/sigma_prj_t.hh`) | `ShearPrjCuhre.so` in `des_y3_shear_prj_2d_cpp/`, sections `sigma_prj_cuhre` / `dsigma_prj_cuhre` / `shear_prj_cuhre` (unchanged by the move) |
-| `3d` | CUDA | `cuda/3d/DSigmaPrjFullLtmzGpu.cu` (physics `cuda/3d/dsigma_prj_full_ltmz_gpu_t.cuh`) | `DSigmaPrjFullLtmzGpu.so` in `des_y3_shear_prj_3d_cuda/`, section `dsigmaprjfullltmzgpu` |
+| `3d` | CUDA | `cuda/3d/DSigmaPrj3dGpu.cu` (physics `cuda/3d/dsigma_prj_3d_gpu_t.cuh`) | `DSigmaPrj3dGpu.so` in `des_y3_shear_prj_3d_cuda/`, section `dsigmaprj3dgpu` |
 
-Module labels, class names, file names, and output sections keep their
-historical strings — only the folders carry the dims tags.
+Module labels are the ini `[section]` names (`[ShearPrjGl]`,
+`[ShearPrjFrozenGpu]`, `[ShearPrjCuhre]`, ...), so pipelines drive
+these backends by pointing those sections at the `.so` paths above.
