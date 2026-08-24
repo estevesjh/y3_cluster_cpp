@@ -22,7 +22,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
-DUMP = os.path.join(REPO, "docs", "figs", "real_pipeline_extract_prj2h_output")
+DUMP = os.path.join(REPO, "cosmosis-models", "real_pipeline_extract_prj2h_output")
 sys.path.insert(0, os.path.join(REPO, "y3_buzzard"))
 
 OMEGA_M = 0.311049

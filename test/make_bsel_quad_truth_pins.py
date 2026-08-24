@@ -53,9 +53,9 @@ from shared import datablock_models as dm          # noqa: E402
 from shared import z_kernel                        # noqa: E402
 from shared.lensing_profiles import r_lambda       # noqa: E402
 
-DUMP = REPO / "docs" / "figs" / "real_pipeline_extract_prj2h_output"
+DUMP = REPO / "cosmosis-models" / "real_pipeline_extract_prj2h_output"
 
-# Production wall config (docs/figs/real_pipeline_extract_prj2h.ini
+# Production wall config (cosmosis-models/real_pipeline_extract_prj2h.ini
 # [b_sel_marg]): lnm bounds; refined inner-grid node counts below.
 LNM_LO, LNM_HI = 29.9336, 35.6814
 N_TH, N_LT, N_M = 40, 120, 64      # production: 10, 60, 24

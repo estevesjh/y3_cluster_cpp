@@ -24,7 +24,7 @@ the two documented CUDA backends was not resolved in this pass; follow
 up before adding it here.
 
 This observable has no portable, checked-in fiducial dump with the
-projection-shear datablock sections (docs/figs/real_pipeline_extract.ini
+projection-shear datablock sections (cosmosis-models/real_pipeline_extract.ini
 does not include b_sel_marg/bsel/dsigma_prj/shear_prj*), unlike number
 counts and one-halo shear -- so every value here is hard-coded from a
 real pipeline run rather than computed live. Provenance: `prj_full_backends.ini`

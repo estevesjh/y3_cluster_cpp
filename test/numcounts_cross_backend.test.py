@@ -25,7 +25,7 @@ this repo's tests.
 
 The Python `full_ltmz` and `fast_mass` backends, and production's own
 saved output, are all computed/read LIVE from this repo's checked-in
-fiducial dump (docs/figs/real_pipeline_extract_output) -- verified
+fiducial dump (cosmosis-models/real_pipeline_extract_output) -- verified
 (2026-08-13) to reproduce the external pipeline run's Python full_ltmz
 numbers to ~1e-7 relative, confirming the checked-in dump alone is a
 sufficient, portable substitute for the full external run. Only the
@@ -35,7 +35,7 @@ are pinned as literals.
 
 To regenerate CPP_FULL_LTMZ / CUDA_FULL_LTMZ after a real change to
 either backend: run a pipeline with `NumCounts3d`/
-`NumCounts3dGpu` appended to `docs/figs/real_pipeline_extract.ini`
+`NumCounts3dGpu` appended to `cosmosis-models/real_pipeline_extract.ini`
 (same bin wall, `zt_low=0.05, zt_high=0.80, lnm_low=29.9336,
 lnm_high=36.7300`, `lt_low`/`lt_high` per bin =
 {0.1, 4*lam_max}) and read back `numcounts3d(gpu)/vals`.
@@ -57,10 +57,10 @@ from shared import datablock_models as dm  # noqa: E402
 from systematics.selection_richness.python import sel_kernels  # noqa: E402
 from numcounts_explicit_gl import compute_counts  # noqa: E402
 
-DUMP_DIR = REPO / "docs" / "figs" / "real_pipeline_extract_output"
+DUMP_DIR = REPO / "cosmosis-models" / "real_pipeline_extract_output"
 HAS_DUMP = (DUMP_DIR / "matter_power_lin" / "p_k.txt").is_file()
 _SKIP_MSG = (f"requires a real-pipeline dump at {DUMP_DIR} -- run "
-            "`cosmosis docs/figs/real_pipeline_extract.ini` first")
+            "`cosmosis cosmosis-models/real_pipeline_extract.ini` first")
 
 # The pinned 12-bin wall (mock_mcmc_buzzard.ini sel_function section),
 # identical to validate_against_fiducial.py / validate_vs_production.py.

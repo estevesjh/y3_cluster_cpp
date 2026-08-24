@@ -8,7 +8,7 @@ internal quadrature convergence; production agreement is an
 algorithm-identity check, not an accuracy statement.
 
 Usage: python validate_against_fiducial.py [dump_dir]
-dump_dir defaults to docs/figs/real_pipeline_extract_output.
+dump_dir defaults to cosmosis-models/real_pipeline_extract_output.
 """
 from __future__ import annotations
 

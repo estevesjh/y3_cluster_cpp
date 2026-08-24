@@ -59,9 +59,9 @@ from shared import z_kernel                          # noqa: E402
 from shear_prj_gl import (                    # noqa: E402
     build_theta_grid, theta_excl_at_z)
 
-DUMP = REPO / "docs" / "figs" / "real_pipeline_extract_prj2h_output"
+DUMP = REPO / "cosmosis-models" / "real_pipeline_extract_prj2h_output"
 
-# Production knobs (docs/figs/real_pipeline_extract_prj2h.ini [dsigma_prj])
+# Production knobs (cosmosis-models/real_pipeline_extract_prj2h.ini [dsigma_prj])
 ZT_LO, ZT_HI = 0.10, 0.75
 LNM_LO, LNM_HI = 29.9336, 35.6814
 R_MAX_CMPCH = 35.0
@@ -71,7 +71,7 @@ EPSREL = 1.0e-8
 
 # Wall subset to pin: (lambda_bin, zob, [radii]) -- one low-z low-richness,
 # one high-z high-richness slice; small / 2h-transition / large R from the
-# extract wall's 15-radius grid (docs/figs/real_pipeline_extract_prj2h.ini).
+# extract wall's 15-radius grid (cosmosis-models/real_pipeline_extract_prj2h.ini).
 SUBSET = [(0, 0.275, [0.2607, 1.6181, 10.0107]),
           (3, 0.575, [0.2607, 1.6181, 10.0107])]
 

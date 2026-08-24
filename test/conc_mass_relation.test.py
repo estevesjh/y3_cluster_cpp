@@ -40,7 +40,7 @@ from haloModel import (child18_mass_concentration,          # noqa: E402
                        duffy_concentration_relation,
                        peakHeight_nonLinearMass)
 
-DUMP_DIR = REPO / "docs" / "figs" / "real_pipeline_extract_prj2h_output"
+DUMP_DIR = REPO / "cosmosis-models" / "real_pipeline_extract_prj2h_output"
 HAS_DUMP = (DUMP_DIR / "halomodel").is_dir()
 
 # Child+18 Table 2 (M200c), re-typed from the paper:

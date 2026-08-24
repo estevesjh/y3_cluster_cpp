@@ -25,7 +25,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
-DUMP = os.path.join(REPO, "docs", "figs", "real_pipeline_extract_prj2h_output")
+DUMP = os.path.join(REPO, "cosmosis-models", "real_pipeline_extract_prj2h_output")
 OUT = os.path.join(HERE, "outputs", "pk_camb.npz")
 
 # fiducial (dump cosmological_parameters/values.txt)

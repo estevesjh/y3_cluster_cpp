@@ -86,7 +86,7 @@ def main():
     print("#             log-log resampled onto R_PIN (CLensPy FFTLog pattern)")
 
     # ---- measure current dump agreement so the test gates are informed ----
-    dump = REPO / "docs" / "figs" / "real_pipeline_extract_prj2h_output"
+    dump = REPO / "cosmosis-models" / "real_pipeline_extract_prj2h_output"
     if dump.is_dir():
         kd = np.loadtxt(dump / "matter_power_lin" / "k_h.txt")
         zd = np.loadtxt(dump / "matter_power_lin" / "z.txt")

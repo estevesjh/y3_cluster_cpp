@@ -108,7 +108,7 @@ docstring for the regeneration recipe; the test file itself carries no
 runtime dependency on CLensPy).
 
 **Caveat: this measurement uses linear P(k), because that is all this
-fixture has.** `docs/figs/real_pipeline_extract.ini`'s `[cp_camb]`
+fixture has.** `cosmosis-models/real_pipeline_extract.ini`'s `[cp_camb]`
 section sets no `nonlinear_pk_path`, so `matter_power_nl` is never
 written for this dump, and `halo_model_cosmosis.py::execute()`'s own
 fallback (`if block.has_section("matter_power_nl"): ... else: P_k_nl,

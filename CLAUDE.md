@@ -32,11 +32,16 @@ of cluster abundance, lensing, and selection-bias integrals, packaged as shared-
 **CosmoSIS modules** (`.so` files). Integration backends: CUBA/Cuhre + cubacpp (CPU)
 and PAGANI (GPU) — see `externals/`, `CUBACPP_DIR`, `PAGANI_DIR`.
 
-CosmoSIS `.ini` pipelines that drive these modules live in sibling repos
-(`$PSCRATCH/github/des-cluster-nersc`, `$PSCRATCH/github/RichnessSelection`,
-`$PSCRATCH/github/camb-emulator`), not in this tree. Anything still present
-under `cosmosis-models/` or `y3_buzzard/` here is local/scratch and not
-canonical — don't treat it as authoritative.
+Production MCMC/run-management CosmoSIS `.ini` pipelines live in sibling
+repos (`$PSCRATCH/github/des-cluster-nersc`, `$PSCRATCH/github/RichnessSelection`,
+`$PSCRATCH/github/camb-emulator`). **This repo's own driving `.ini` files
+live in `cosmosis-models/`** — that is the canonical home for the
+fixture/extract pipelines the tests and validators consume
+(`real_pipeline_extract.ini`, `real_pipeline_extract_prj2h.ini`,
+`real_pipeline_extract_max2h.ini`, `mock_mcmc_widePlanck_values_mis.ini`,
+plus the smoke/mock inis); their `<ini_basename>_output/` dumps land next
+to them and are gitignored. Anything under `y3_buzzard/` is still
+local/scratch and not canonical — don't treat it as authoritative.
 
 ## Code history
 
@@ -355,10 +360,10 @@ export PYTHONPATH=$Y3_CLUSTER_CPP_DIR:$PYTHONPATH
 export DES_CLUSTER_NERSC_DIR=$PSCRATCH/github/des-cluster-nersc
 
 # 1. produce a dump (real HMF/distances/selection at the fiducial point).
-#    docs/figs/real_pipeline_extract.ini is the base; add prj_params for
+#    cosmosis-models/real_pipeline_extract.ini is the base; add prj_params for
 #    modules needing plob_ltr_params, and compute_lensing_2h = T for any
 #    2-halo consumer.
-cosmosis docs/figs/real_pipeline_extract.ini
+cosmosis cosmosis-models/real_pipeline_extract.ini
 
 # 2. per-implementation validators (offline, read the dump, immune to
 #    the put_val gotcha):

@@ -29,7 +29,7 @@ def main():
     out = subprocess.run(
         [PY, os.path.join(REPO, "src/pipelines/des_y3/shear_1h2h",
                           "python/0d/validate_shear1h2h_max.py"),
-         os.path.join(REPO, "docs/figs/real_pipeline_extract_prj2h_output")],
+         os.path.join(REPO, "cosmosis-models/real_pipeline_extract_prj2h_output")],
         capture_output=True, text=True, env=ENV).stdout
     for key, pat in (("validatorGL", r"explicit-3d GL vs adaptive reference: ([\d.e+-]+)"),
                      ("validatorFast", r"fast path\s+vs adaptive reference: ([\d.e+-]+)"),

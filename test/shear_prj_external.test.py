@@ -42,10 +42,10 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
-DUMP_DIR = REPO / "docs" / "figs" / "real_pipeline_extract_prj2h_output"
+DUMP_DIR = REPO / "cosmosis-models" / "real_pipeline_extract_prj2h_output"
 HAS_DUMP = (DUMP_DIR / "dsigma_prj").is_dir()
 _SKIP_MSG = (f"requires a real-pipeline dump at {DUMP_DIR} -- run "
-             "cosmosis docs/figs/real_pipeline_extract_prj2h.ini")
+             "cosmosis cosmosis-models/real_pipeline_extract_prj2h.ini")
 
 REL_TOL = 1.0e-3   # project default; inner-R rows deliberately red
 

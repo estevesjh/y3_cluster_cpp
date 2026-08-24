@@ -27,14 +27,14 @@ fast_mass/radial_series/max-model C++/CUDA backends), same
 `mock_mcmc_widePlanck_values.ini` fiducial point and pinned 12-bin x
 10-radius wall used everywhere else in this repo's tests. To
 regenerate: append the relevant module(s) to
-docs/figs/real_pipeline_extract.ini (same bin wall; for the max model,
+cosmosis-models/real_pipeline_extract.ini (same bin wall; for the max model,
 also set halo_model's `compute_lensing_2h = T`) and read back
 `shear1h3d(gpu)/vals`, `shear1h_radial_series/vals`,
 `shear1h2h_max(_gpu)/vals`.
 
 The Python full_ltmz, fast_mass, and radial_series backends, and
 production's own saved output, are all computed/read LIVE from this
-repo's checked-in fiducial dump (docs/figs/real_pipeline_extract_output).
+repo's checked-in fiducial dump (cosmosis-models/real_pipeline_extract_output).
 
 Note on radial_series vs full_ltmz (FINDING, real -- see
 docs/known_issues/radial_series_vs_full_ltmz_defect.md): `nfw_profile_family.py`
@@ -80,10 +80,10 @@ from shear1h_gl import compute_shear as compute_shear_fast_mass  # noqa: E402
 import nfw_profile_family as pf  # noqa: E402
 from shear1h_radial_series import RadialSeriesTable, evaluate_series  # noqa: E402
 
-DUMP_DIR = REPO / "docs" / "figs" / "real_pipeline_extract_output"
+DUMP_DIR = REPO / "cosmosis-models" / "real_pipeline_extract_output"
 HAS_DUMP = (DUMP_DIR / "matter_power_lin" / "p_k.txt").is_file()
 _SKIP_MSG = (f"requires a real-pipeline dump at {DUMP_DIR} -- run "
-            "`cosmosis docs/figs/real_pipeline_extract.ini` first")
+            "`cosmosis cosmosis-models/real_pipeline_extract.ini` first")
 
 R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
                   1.19581, 1.70998, 2.44521, 3.49658, 5.00000])
@@ -387,7 +387,7 @@ class TestShear1hCrossBackend(unittest.TestCase):
         # flips sign on reproducibility, not physics. 1e-6 still catches
         # any real sign/weighting bug (those show up at percent level;
         # the 2h term moves values at 1e-3+ where it wins). Same-run
-        # regeneration: docs/figs/real_pipeline_extract_max2h.ini.
+        # regeneration: cosmosis-models/real_pipeline_extract_max2h.ini.
         fast_cpp_proxy = self.source.array("shear1hmissel", "vals")
         self.assertTrue(np.all(CPP_MAX_MODEL >= fast_cpp_proxy * (1.0 - 1e-6)))
 

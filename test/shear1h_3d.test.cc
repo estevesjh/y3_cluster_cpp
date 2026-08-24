@@ -6,7 +6,7 @@
 //
 // Shear1h3d has no committed numeric fiducial corpus to pin
 // against: its own validate_vs_production.py compares against a
-// real-pipeline dump (docs/figs/real_pipeline_extract_output) that is
+// real-pipeline dump (cosmosis-models/real_pipeline_extract_output) that is
 // gitignored and not present in this tree, and CLAUDE.md's fiducial
 // accuracy policy quotes accuracy only against the adaptive full_ltmz
 // Python reference (also driven from that same dump) -- neither is

@@ -115,11 +115,12 @@ def main():
     have = os.path.isdir(off) and os.path.isdir(on)
     if have:
         radii = sorted(set(np.loadtxt(
-            os.path.join(HERE, "real_pipeline_extract_prj2h_output",
+            os.path.join(HERE, "..", "..", "cosmosis-models",
+                         "real_pipeline_extract_prj2h_output",
                          "shear_prj", "vals.txt")) * 0 + 1))  # placeholder
         # wall radii: 15 log radii repeated 12x -- reconstruct from ini order
         import re
-        text = open(os.path.join(HERE,
+        text = open(os.path.join(HERE, "..", "..", "cosmosis-models",
                                  "real_pipeline_extract_prj2h.ini")).read()
         sec = re.search(r"^\[dsigma_prj\]\s*$(.*?)(?:^\[|\Z)", text,
                         re.S | re.M).group(1)

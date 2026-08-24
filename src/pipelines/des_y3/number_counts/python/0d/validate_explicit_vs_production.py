@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Validate 3d counts against the production fixed-GL pipeline.
 
-Replays a real test-sampler dump (docs/figs/real_pipeline_extract.ini —
+Replays a real test-sampler dump (cosmosis-models/real_pipeline_extract.ini —
 real HMF, distances, HOD parameters) and compares the explicit
 (lambda_true, lnM, z) triple integral against the production
 NumCountsSel.so output for all 12 pinned wall-grid bins.
@@ -16,8 +16,8 @@ criterion: |N_full / N_production - 1| <= 5e-3 per bin.
 Usage:
     python validate_vs_production.py [dump_dir]
 
-dump_dir defaults to docs/figs/real_pipeline_extract_output; run
-`cosmosis docs/figs/real_pipeline_extract.ini` first if it is missing.
+dump_dir defaults to cosmosis-models/real_pipeline_extract_output; run
+`cosmosis cosmosis-models/real_pipeline_extract.ini` first if it is missing.
 """
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def main():
                 / "real_pipeline_extract_output")
     if not dump.is_dir():
         sys.exit(f"dump directory not found: {dump}\n"
-                 "run `cosmosis docs/figs/real_pipeline_extract.ini` first")
+                 "run `cosmosis cosmosis-models/real_pipeline_extract.ini` first")
 
     source = dm.DumpSource(str(dump))
     mor = sel_kernels.mor_from_source(source)

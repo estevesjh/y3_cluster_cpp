@@ -14,7 +14,7 @@
 // ShearPrjCore::set_sample() (and therefore evaluate()/dsigma_prj()/
 // shear_prj()) needs a full real-pipeline sample: HMF, halo bias,
 // xi_nl, distances, average_sigma_crit_inv, and the b_sel_marginalised
-// tensor -- i.e. essentially all of docs/figs/real_pipeline_extract.ini
+// tensor -- i.e. essentially all of cosmosis-models/real_pipeline_extract.ini
 // (see validate_vs_production.py, which replays a dump of exactly that
 // rather than faking one).  Reproducing that by hand in a unit test
 // would mostly test whether this test got the DataBlock keys right, not

@@ -6,8 +6,8 @@
 // only exposed via the CosmoSIS C-ABI (setup/execute/cleanup) that
 // DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE emits. So this test drives the
 // actual built .so through that C-ABI with a real cosmosis::DataBlock,
-// built from docs/figs/real_pipeline_extract_prj2h_output -- regenerable
-// via `cosmosis docs/figs/real_pipeline_extract_prj2h.ini` (see
+// built from cosmosis-models/real_pipeline_extract_prj2h_output -- regenerable
+// via `cosmosis cosmosis-models/real_pipeline_extract_prj2h.ini` (see
 // Y3_CLUSTER_CPP_DIR/CLAUDE.md), unlike a personal scratch dump. That
 // same dump's [shear_prj_frozen_physics] section ran with this test's
 // exact module config (n_lnm 16, same 180-point wall), through
@@ -37,7 +37,7 @@ namespace {
   {
     char const* repo = std::getenv("Y3_CLUSTER_CPP_DIR");
     REQUIRE(repo != nullptr);
-    return std::string(repo) + "/docs/figs/real_pipeline_extract_prj2h_output";
+    return std::string(repo) + "/cosmosis-models/real_pipeline_extract_prj2h_output";
   }
 
   // One value per (non-comment) line.
@@ -115,7 +115,7 @@ TEST_CASE("ShearPrjFrozenGpu.so matches its CPU counterpart "
     std::ifstream probe(D + "/mass_function/m_h.txt");
     if (!probe.good()) {
       WARN("skipping: reference dump not present at " << D
-           << " -- run `cosmosis docs/figs/real_pipeline_extract_prj2h.ini`");
+           << " -- run `cosmosis cosmosis-models/real_pipeline_extract_prj2h.ini`");
       return;
     }
   }

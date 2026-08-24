@@ -26,7 +26,7 @@ Four checks, in the order the approved plan requires them
    §"two independently-sourced tables").
 
 Usage:  python validate_radial_series.py [dump_dir]
-dump_dir defaults to docs/figs/real_pipeline_extract_output.
+dump_dir defaults to cosmosis-models/real_pipeline_extract_output.
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ from shear1h_radial_series import (RadialSeriesTable,  # noqa: E402
 
 TRUNC_TOL_ELL2 = 7.5e-3
 TRUNC_TOL_ELL3 = 1.0e-2
-# The pinned extraction grids (docs/figs/real_pipeline_extract.ini).
+# The pinned extraction grids (cosmosis-models/real_pipeline_extract.ini).
 R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
                    1.19581, 1.70998, 2.44521, 3.49658, 5.00000])
 ZT_LO, ZT_HI = 0.05, 0.80
@@ -151,7 +151,7 @@ def main():
                 / "real_pipeline_extract_output")
     if not dump.is_dir():
         sys.exit(f"dump directory not found: {dump}\n"
-                 "run `cosmosis docs/figs/real_pipeline_extract.ini` first")
+                 "run `cosmosis cosmosis-models/real_pipeline_extract.ini` first")
 
     table = RadialSeriesTable()
     src_tab = pf.MisTable()

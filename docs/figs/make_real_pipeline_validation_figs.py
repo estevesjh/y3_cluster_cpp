@@ -24,7 +24,8 @@ Two ground-truth cross-checks run first:
   (ii) this script's own "exact" mixture quadrature vs the real
        Shear1hMisSel.so output.
 
-Run from docs/figs/; runs `cosmosis real_pipeline_extract.ini` automatically
+Run from docs/figs/; runs `cosmosis cosmosis-models/real_pipeline_extract.ini`
+automatically
 if its output directory is missing (see that file's header for required
 env vars). Produces:
   - real_validation_profiles.png
@@ -41,7 +42,8 @@ import matplotlib as mpl
 import seaborn as sns
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-D = os.path.join(HERE, "real_pipeline_extract_output")
+MODELS_DIR = os.path.join(HERE, "..", "..", "cosmosis-models")
+D = os.path.join(MODELS_DIR, "real_pipeline_extract_output")
 DATA_DIR = os.path.join(HERE, "..", "..", "data", "nfw_off_center")
 
 INK, SECONDARY, MUTED, GRID = "#0b0b0b", "#52514e", "#898781", "#e1e0d9"
@@ -165,7 +167,8 @@ def ensure_pipeline_ran():
     env.setdefault("DES_CLUSTER_NERSC_DIR", "/pscratch/sd/j/jesteves/github/des-cluster-nersc")
     env["PYTHONPATH"] = os.path.join(HERE, "..", "..") + ":" + env.get("PYTHONPATH", "")
     print("real_pipeline_extract_output/ missing -- running cosmosis...")
-    subprocess.run(["cosmosis", "real_pipeline_extract.ini"], cwd=HERE, env=env, check=True)
+    subprocess.run(["cosmosis", "real_pipeline_extract.ini"], cwd=MODELS_DIR, env=env,
+                   check=True)
 
 
 class RealPipeline:

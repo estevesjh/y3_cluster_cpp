@@ -31,7 +31,7 @@
 
 ## Measured impact (fiducial extract pipeline, nz=50 → nz=400)
 
-Rerunning `docs/figs/real_pipeline_extract_prj2h.ini` with
+Rerunning `cosmosis-models/real_pipeline_extract_prj2h.ini` with
 `cp_camb.nz=400` moves the production outputs by:
 
 | Output | max shift | structure |

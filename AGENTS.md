@@ -370,10 +370,10 @@ export PYTHONPATH=$Y3_CLUSTER_CPP_DIR:$PYTHONPATH
 export DES_CLUSTER_NERSC_DIR=$PSCRATCH/github/des-cluster-nersc
 
 # 1. produce a dump (real HMF/distances/selection at the fiducial point).
-#    docs/figs/real_pipeline_extract.ini is the base; add prj_params for
+#    cosmosis-models/real_pipeline_extract.ini is the base; add prj_params for
 #    modules needing plob_ltr_params, and compute_lensing_2h = T for any
 #    2-halo consumer.
-cosmosis docs/figs/real_pipeline_extract.ini
+cosmosis cosmosis-models/real_pipeline_extract.ini
 
 # 2. per-implementation validators (offline, read the dump, immune to
 #    the put_val gotcha):

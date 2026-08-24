@@ -67,10 +67,10 @@ REL_TOL = 1.0e-3
 # requires a cosmology to be set globally before any halo-module call.
 colossus_cosmology.setCosmology("planck18")
 
-DUMP_DIR = REPO / "docs" / "figs" / "real_pipeline_extract_output"
+DUMP_DIR = REPO / "cosmosis-models" / "real_pipeline_extract_output"
 HAS_DUMP = (DUMP_DIR / "matter_power_lin" / "p_k.txt").is_file()
 _SKIP_MSG = (f"requires a real-pipeline dump at {DUMP_DIR} -- run "
-            "`cosmosis docs/figs/real_pipeline_extract.ini` first")
+            "`cosmosis cosmosis-models/real_pipeline_extract.ini` first")
 
 
 def _load_matter_power_lin():

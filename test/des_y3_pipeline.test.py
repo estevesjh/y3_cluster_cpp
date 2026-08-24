@@ -51,23 +51,23 @@ REL_TOL = 1.0e-3
 
 # The 12-bin/10-radius production wall (mock_mcmc_buzzard.ini sel_function
 # section) and a real test-sampler dump replayed through it. The dump is
-# produced by `cosmosis docs/figs/real_pipeline_extract.ini` (CLAUDE.md,
+# produced by `cosmosis cosmosis-models/real_pipeline_extract.ini` (CLAUDE.md,
 # "Testing precision and cost") and is gitignored, so the backend-vs-
 # -production tests below skip gracefully when it hasn't been generated.
-DUMP_DIR = REPO / "docs" / "figs" / "real_pipeline_extract_output"
+DUMP_DIR = REPO / "cosmosis-models" / "real_pipeline_extract_output"
 HAS_DUMP = DUMP_DIR.is_dir()
 _SKIP_MSG = (f"requires a real-pipeline dump at {DUMP_DIR} -- run "
-            "`cosmosis docs/figs/real_pipeline_extract.ini` first")
+            "`cosmosis cosmosis-models/real_pipeline_extract.ini` first")
 
 # Sibling dump with the projection chain (b_sel_marg/bsel/dsigma_prj/
 # shear_prj_frozen_physics) and halo_model run with compute_lensing_2h = T,
 # so haloModel/dSigma_hh is populated. real_pipeline_extract_output has
-# neither. Produced by `cosmosis docs/figs/real_pipeline_extract_prj2h.ini`.
-DUMP_PRJ2H_DIR = REPO / "docs" / "figs" / "real_pipeline_extract_prj2h_output"
+# neither. Produced by `cosmosis cosmosis-models/real_pipeline_extract_prj2h.ini`.
+DUMP_PRJ2H_DIR = REPO / "cosmosis-models" / "real_pipeline_extract_prj2h_output"
 HAS_DUMP_PRJ2H = DUMP_PRJ2H_DIR.is_dir()
 _SKIP_MSG_PRJ2H = (
     f"requires a real-pipeline dump at {DUMP_PRJ2H_DIR} -- run "
-    "`cosmosis docs/figs/real_pipeline_extract_prj2h.ini` first")
+    "`cosmosis cosmosis-models/real_pipeline_extract_prj2h.ini` first")
 
 # The 180-point zipped wall (mock_mcmc_buzzard.ini shear_prj_frozen_physics
 # section): 4 lambda bins x 3 zob bins x 15 radii.
@@ -506,11 +506,11 @@ class TestShearPrjGl(unittest.TestCase):
     def test_matches_exact_evaluator_and_frozen_physics(self):
         # Full end-to-end ShearPrjGl.set_sample()/wall_outputs()
         # against a real sample with the projection chain populated
-        # (docs/figs/real_pipeline_extract_prj2h.ini): machine precision
+        # (cosmosis-models/real_pipeline_extract_prj2h.ini): machine precision
         # vs the exact DSigmaPrjEvaluator.so (same core), and within the
         # documented frozen-physics approximation vs production.
         source = dm.DumpSource(str(DUMP_PRJ2H_DIR))
-        # n_lnm=24 matches docs/figs/real_pipeline_extract_prj2h.ini's
+        # n_lnm=24 matches cosmosis-models/real_pipeline_extract_prj2h.ini's
         # [dsigma_prj] section (the class default of 16 is a different,
         # coarser resolution and would only agree at the ~0.2% level).
         core = ShearPrjGl(_pinned_prj_wall(), n_lnm=24,

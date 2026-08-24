@@ -31,9 +31,9 @@ sys.path.insert(0, str(REPO / "src" / "pipelines"))
 from shared import datablock_models as dm       # noqa: E402
 from shared import sel_function as sf           # noqa: E402
 
-DUMP = REPO / "docs" / "figs" / "real_pipeline_extract_prj2h_output"
+DUMP = REPO / "cosmosis-models" / "real_pipeline_extract_prj2h_output"
 
-# production sel_function config (docs/figs/real_pipeline_extract_prj2h.ini)
+# production sel_function config (cosmosis-models/real_pipeline_extract_prj2h.ini)
 LAM_MIN = np.array([20., 30., 45., 60.] * 3)
 LAM_MAX = np.array([30., 45., 60., 200.] * 3)
 ZOB_MIN = np.repeat([0.20, 0.35, 0.50], 4)
