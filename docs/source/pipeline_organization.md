@@ -35,15 +35,17 @@ src/pipelines/
 │   └── shear_prj/cpp/
 └── des_y3/                         # survey observable compositions
     ├── number_counts/
-    │   ├── 0d/{python,cpp}/
-    │   └── 3d/{cpp,cuda}/
+    │   ├── cpp/{0d,3d}/
+    │   ├── cuda/3d/
+    │   └── python/0d/
     ├── shear_1h2h/
-    │   ├── 0d/{python,cpp,cuda}/
-    │   └── 3d/{cpp,cuda}/
+    │   ├── cpp/{0d,3d}/
+    │   ├── cuda/{0d,3d}/
+    │   └── python/0d/
     └── shear_projection/
-        ├── 0d/{python,cpp,cuda}/
-        ├── 2d/cpp/
-        └── 3d/cuda/
+        ├── cpp/{0d,2d}/
+        ├── cuda/{0d,3d}/
+        └── python/0d/
 ```
 
 Directories are created only for runnable implementations or substantive

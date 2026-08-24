@@ -22,37 +22,47 @@ strings (for example `NumCountsFullLtmz`, `shear1h_fast_mass/vals`,
 `numcounts_full_ltmz.py`), so inis and validators reference them
 unchanged.
 
-The observable and strategy READMEs are the detailed documentation. This file
+The observable READMEs are the detailed documentation — each leads with
+the physics (the integral being computed and what each dims tag
+approximates), then the per-dims backend sections including the
+Gauss--Legendre node placement, with the run mechanics last. This file
 is the map of the directory and the short decision guide for choosing a
 numerical method.
 
 ## Folder structure
+
+The layout is `<observable>/<language>/<dims>/`, with one README per
+observable carrying the physics, the per-dims sections, and the run
+mechanics:
 
 ```text
 src/pipelines/des_y3/
 ├── README.md
 ├── number_counts/
 │   ├── README.md
-│   ├── 0d/   fixed-GL: S_ij-tab fast path (formerly fast_mass) +
-│   │         explicit fixed-GL Python (formerly full_ltmz Python)
-│   └── 3d/   adaptive explicit C++/CUDA references (formerly full_ltmz)
+│   ├── cpp/{0d, 3d}/     0d: S_ij-tab fast path (formerly fast_mass);
+│   │                     3d: adaptive explicit Cuhre reference
+│   ├── cuda/3d/          adaptive explicit PAGANI reference
+│   └── python/0d/        fast path + explicit fixed-GL reference
+│                         (formerly full_ltmz Python) + validators
 ├── shear_1h2h/
 │   ├── README.md
-│   ├── 0d/   fixed-GL/tables: 1h z-contracted + max-model z-resolved
-│   │         (both formerly fast_mass), explicit fixed-GL Python
-│   │         (formerly full_ltmz Python), radial series
-│   │         (formerly radial_series)
-│   └── 3d/   adaptive explicit C++/CUDA references (formerly full_ltmz)
+│   ├── cpp/{0d, 3d}/     0d: 1h z-contracted + max z-resolved +
+│   │                     radial series; 3d: adaptive explicit (1h, max)
+│   ├── cuda/{0d, 3d}/    0d: max model GPU; 3d: adaptive explicit GPU
+│   └── python/0d/        all fixed-GL replicas, explicit fixed-GL
+│                         references, radial series + validators
 └── shear_projection/
     ├── README.md
-    ├── 0d/   region-split fixed GL (formerly fast_mass)
-    ├── 2d/   ShearPrjCuhre: fixed log-GL angle, adaptive (z, lnM)
-    └── 3d/   fully-coupled adaptive PAGANI diagnostic
-              (formerly full_ltmz)
+    ├── cpp/{0d, 2d}/     0d: region-split GL exact-z; 2d: ShearPrjCuhre
+    │                     (fixed log-GL angle, adaptive (z, lnM))
+    ├── cuda/{0d, 3d}/    0d: frozen-physics GPU; 3d: fully-coupled
+    │                     adaptive PAGANI diagnostic
+    └── python/0d/        exact-z reference + validator
 ```
 
-`python/`, `cpp/`, and `cuda/` directories under a strategy contain
-implementations of that strategy. A missing language directory means that the
+`<dims>` counts the adaptive integration dimensions of the backends in
+that directory. A missing `<language>/<dims>/` directory means that the
 backend is not implemented.
 
 The observable implementations use the sibling layers
@@ -107,25 +117,26 @@ evaluator), the baseline is stated in the cell:
 
 | Dims | Observable | Method and backend | Cost | Precision vs 3d |
 | --- | --- | --- | ---: | --- |
-| `3d` | Counts | [`3d`](number_counts/3d/README.md), adaptive Python | 25 s | Reference (3d); reported integration error at or below 1e-6 |
-| `0d` | Counts | [`0d`](number_counts/0d/README.md), explicit Python (3-dim GL) | 83 ms | 3.5e-5 |
-| `0d` | Counts | [`0d`](number_counts/0d/README.md), fast path C++ (2-dim GL, S_ij tab) | 6 ms | 7.6e-4; also identity with production (separate baseline) |
-| `3d` | One-halo shear | [`3d`](shear_1h2h/3d/README.md), adaptive Python | 35 s | Reference (3d); reported integration error at or below 1e-6 |
-| `0d` | One-halo shear | [`0d`](shear_1h2h/0d/README.md), explicit Python (3-dim GL) | 149 ms | 4.9e-5 |
-| `0d` | One-halo shear | [`0d`](shear_1h2h/0d/README.md), 1h C++ (1-dim GL, z contracted) | 9 ms | 8.4e-4; also identity with production (separate baseline) |
-| `0d` | One-halo shear | [`0d`](shear_1h2h/0d/README.md), radial series (tables + moments) | 6--7 ms | 56--86% (known fixed-c=4 defect); 3.7e-3 internal fixed-profile consistency (separate baseline) |
-| `0d` | Max model | [`0d`](shear_1h2h/0d/README.md), max C++/CUDA (2-dim GL, z-resolved) | 11 / 8 ms | 8.3e-4; CUDA vs C++ twin 6.4e-15 (separate baseline) |
-| `3d` | Projection shear | [`3d`](shear_projection/3d/README.md), PAGANI on A100 | 95 s | Reference-class diagnostic (3d); convergence open — median 9.5e-4, maximum 2.2% vs region-split GL (separate baseline) |
-| `2d` | Projection shear | [`2d`](shear_projection/2d/README.md), `ShearPrjCuhre` C++ | minutes | pending (Perlmutter re-run, issue #23 task) |
-| `0d` | Projection shear | [`0d`](shear_projection/0d/README.md), exact-z C++ (3-dim region-split GL) | 154 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open); 1e-11 vs exact evaluator (separate baseline) |
-| `0d` | Projection shear | [`0d`](shear_projection/0d/README.md), frozen GPU path | 8.3 ms | pending (Perlmutter re-run, issue #23 task); faithful acceleration of frozen production (separate baseline) |
+| `3d` | Counts | [`3d`](number_counts/README.md#the-3d-backends), adaptive Python | 25 s | Reference (3d); reported integration error at or below 1e-6 |
+| `0d` | Counts | [`0d`](number_counts/README.md#the-0d-backends), explicit Python (3-dim GL) | 83 ms | 3.5e-5 |
+| `0d` | Counts | [`0d`](number_counts/README.md#the-0d-backends), fast path C++ (2-dim GL, S_ij tab) | 6 ms | 7.6e-4; also identity with production (separate baseline) |
+| `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), adaptive Python | 35 s | Reference (3d); reported integration error at or below 1e-6 |
+| `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), explicit Python (3-dim GL) | 149 ms | 4.9e-5 |
+| `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), 1h C++ (1-dim GL, z contracted) | 9 ms | 8.4e-4; also identity with production (separate baseline) |
+| `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), radial series (tables + moments) | 6--7 ms | 56--86% (known fixed-c=4 defect); 3.7e-3 internal fixed-profile consistency (separate baseline) |
+| `0d` | Max model | [`0d`](shear_1h2h/README.md#the-0d-backends), max C++/CUDA (2-dim GL, z-resolved) | 11 / 8 ms | 8.3e-4; CUDA vs C++ twin 6.4e-15 (separate baseline) |
+| `3d` | Projection shear | [`3d`](shear_projection/README.md#the-3d-backend), PAGANI on A100 | 95 s | Reference-class diagnostic (3d); convergence open — median 9.5e-4, maximum 2.2% vs region-split GL (separate baseline) |
+| `2d` | Projection shear | [`2d`](shear_projection/README.md#the-2d-backend), `ShearPrjCuhre` C++ | minutes | pending (Perlmutter re-run, issue #23 task) |
+| `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), exact-z C++ (3-dim region-split GL) | 154 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open); 1e-11 vs exact evaluator (separate baseline) |
+| `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), frozen GPU path | 8.3 ms | pending (Perlmutter re-run, issue #23 task); faithful acceleration of frozen production (separate baseline) |
 
-The detailed strategy READMEs contain the complete backend tables, grid
-settings, tolerances, and comparison definitions:
+The observable READMEs contain the complete backend tables, grid
+settings (including the "GL nodes and weights" quadrature sections),
+tolerances, and comparison definitions:
 
-- [Number-count strategies](number_counts/README.md)
-- [One-halo and traditional one-plus-two-halo strategies](shear_1h2h/README.md)
-- [Projection-shear strategies](shear_projection/README.md)
+- [Number counts](number_counts/README.md)
+- [One-halo and traditional one-plus-two-halo shear](shear_1h2h/README.md)
+- [Projection shear](shear_projection/README.md)
 
 ## Recommended methods
 

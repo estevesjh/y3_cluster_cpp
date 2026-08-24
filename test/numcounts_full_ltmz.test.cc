@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include "pipelines/des_y3/number_counts/3d/cpp/num_counts_full_ltmz_t.hh"
+#include "pipelines/des_y3/number_counts/cpp/3d/num_counts_full_ltmz_t.hh"
 
 #include "models/dv_do_dz_t.hh"
 #include "models/ez.hh"

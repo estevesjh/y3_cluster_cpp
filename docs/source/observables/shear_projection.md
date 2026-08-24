@@ -16,7 +16,7 @@ $\gamma_t^{\rm theory} = \langle\gamma_t^{1h}\rangle + \gamma_t^{\rm prj}$.
   (`sp_detail::ShearPrjCore` — the shared $\theta$-grid/$z$-grid core
   also used by DES Y1's `ShearPrjEvaluator`/`ShearPrjFrozenPhysics`,
   {doc}`../variants`).
-- Module driver: [`src/pipelines/des_y3/shear_projection/0d/cpp/ShearPrjFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_projection/0d/cpp/ShearPrjFastMass.cc)
+- Module driver: [`src/pipelines/des_y3/shear_projection/cpp/0d/ShearPrjFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_projection/cpp/0d/ShearPrjFastMass.cc)
   — des_y3-namespaced wrapper over the same `ShearPrjCore`, own module
   label and output section.
 - Compiled library loaded by CosmoSIS:

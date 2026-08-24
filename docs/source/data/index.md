@@ -62,7 +62,7 @@ dumps to `validation-data/`, leaving stale `.out` copies here.
 
 | Path | Quantity | Class | Used by | Notes |
 |---|---|---|---|---|
-| `data/radial_series/radial_series_nfw_mis_gamma_v1.{json,npz}` | packaged $U_\ell$ unit-profile tables (metadata + arrays) | pipeline input (`0d` series strategy only, not the default `des_y3.ini`) | `Shear1hRadialSeries.so`, `shear1h_radial_series.py` | Generated once offline by `src/pipelines/des_y3/shear_1h2h/0d/python/generate_radial_series_tables.py`; never regenerated during sampling |
+| `data/radial_series/radial_series_nfw_mis_gamma_v1.{json,npz}` | packaged $U_\ell$ unit-profile tables (metadata + arrays) | pipeline input (`0d` series strategy only, not the default `des_y3.ini`) | `Shear1hRadialSeries.so`, `shear1h_radial_series.py` | Generated once offline by `src/pipelines/des_y3/shear_1h2h/python/0d/generate_radial_series_tables.py`; never regenerated during sampling |
 | `data/radial_series/radial_series_nfw_mis_gamma_v1_{lnx,lnxm}.txt` | log-radius / log-miscentering-radius axis grids | pipeline input | same | Raw-text twins of the `.npz` axes, for non-numpy consumers |
 | `data/radial_series/radial_series_nfw_mis_gamma_v1_u{0,1,2,3}_{cen,mis}.txt` | $U_\ell$ moments ($\ell=0..3$), centred and miscentred | pipeline input | same | The offline moment expansion this strategy factors the mass integral through — see {doc}`../numerics/index` |
 

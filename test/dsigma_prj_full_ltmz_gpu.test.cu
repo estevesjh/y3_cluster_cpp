@@ -3,7 +3,7 @@
 #include "cosmosis/datablock/ndarray.hh"
 
 // This is the code we're actually testing.
-#include "pipelines/des_y3/shear_projection/3d/cuda/dsigma_prj_full_ltmz_gpu_t.cuh"
+#include "pipelines/des_y3/shear_projection/cuda/3d/dsigma_prj_full_ltmz_gpu_t.cuh"
 
 #include "models/nfw_dsigma_mis.cuh"
 

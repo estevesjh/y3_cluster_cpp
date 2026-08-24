@@ -51,7 +51,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "pipelines"))
 sys.path.insert(0, str(REPO / "src" / "pipelines" / "des_y3"
-                       / "number_counts" / "0d" / "python"))
+                       / "number_counts" / "python" / "0d"))
 
 from shared import datablock_models as dm  # noqa: E402
 from systematics.selection_richness.python import sel_kernels  # noqa: E402

@@ -128,7 +128,7 @@ b(\ln M, z)\,\Delta\Sigma_{\rm hh}(R, z)\big), \qquad
 N_i[\Phi_{\max}](R)\,\langle\Sigma_{\rm crit}^{-1}\rangle / N_i[1].$$
 
 Implemented by
-[`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/0d/python/shear1h2h_max.py)
+[`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py)
 (`shear1h2h_max.py`, C++ `Shear1h2hMax.cc`, CUDA
 `Shear1h2hMaxGpu.cu`) — a **model option**, not part of the reference
 pipeline ({doc}`../running`, {doc}`observables/second_halo_term`).

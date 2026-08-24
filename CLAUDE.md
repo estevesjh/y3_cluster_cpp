@@ -285,26 +285,29 @@ Rules that bite if ignored:
 
 ### Strategy names (adaptive-dimension tags)
 
-Strategy folders are named by the number of **adaptive** integration
-dimensions (Cuhre/PAGANI — the cost driver). Fixed-GL sums and offline
-tables count zero: everything all-GL/tabulated is `0d` (fast,
-MCMC-viable). The maximum-dimension folder of each observable is
-always the adaptive reference; every lower folder is a documented
-dimension reduction from it.
+Layout is `<observable>/<language>/<dims>/`, where the dims tag counts
+the number of **adaptive** integration dimensions (Cuhre/PAGANI — the
+cost driver). Fixed-GL sums and offline tables count zero: everything
+all-GL/tabulated is `0d` (fast, MCMC-viable). The maximum-dimension
+tag of each observable is always the adaptive reference; every lower
+tag is a documented dimension reduction from it. Each observable has
+ONE physicist-first README.md (integral up front, per-dims sections,
+GL nodes/weights explained, software mechanics last).
 
-- `number_counts/{0d, 3d}` — 0d holds the S_ij-tabulated fast path
-  (was `fast_mass`) AND the explicit fixed-GL Python reference (was
-  `full_ltmz` Python); 3d = the adaptive explicit C++/CUDA references
-  (was `full_ltmz`).
-- `shear_1h2h/{0d, 3d}` — 0d holds four GL/table algorithms: the U_ℓ
-  radial series (was `radial_series`), the 1h z-contracted mass sum
-  (was `fast_mass`), the max model's z-resolved (lnM, z) sum, and the
-  explicit fixed-GL Python references; 3d = adaptive explicit C++/CUDA
-  (1-halo and max).
-- `shear_projection/{0d, 2d, 3d}` — 0d = region-split fixed-GL
-  (exact-z core + frozen-physics CUDA; was `fast_mass`); 2d =
-  ShearPrjCuhre (θ split-GL outer, two adaptive inner dims); 3d =
-  fully-coupled 3-D PAGANI diagnostic (was `full_ltmz` CUDA).
+- `number_counts/{cpp/{0d,3d}, cuda/3d, python/0d}` — 0d holds the
+  S_ij-tabulated fast path (was `fast_mass`) and the explicit fixed-GL
+  Python reference (was `full_ltmz` Python); 3d = adaptive explicit
+  references (was `full_ltmz`).
+- `shear_1h2h/{cpp/{0d,3d}, cuda/{0d,3d}, python/0d}` — 0d holds four
+  GL/table algorithms: the U_ℓ radial series (was `radial_series`),
+  the 1h z-contracted mass sum (was `fast_mass`), the max model's
+  z-resolved (lnM, z) sum, and the explicit fixed-GL Python
+  references; 3d = adaptive explicit (1-halo and max).
+- `shear_projection/{cpp/{0d,2d}, cuda/{0d,3d}, python/0d}` — 0d =
+  region-split fixed-GL (exact-z core + frozen-physics CUDA; was
+  `fast_mass`); cpp/2d = ShearPrjCuhre (θ split-GL outer, two adaptive
+  inner dims); cuda/3d = fully-coupled 3-D PAGANI diagnostic (was
+  `full_ltmz` CUDA).
 
 Only the FOLDERS carry the new names: module labels, class names,
 file names, and output sections keep their historical strings

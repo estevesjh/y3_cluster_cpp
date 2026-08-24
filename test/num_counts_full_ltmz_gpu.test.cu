@@ -11,7 +11,7 @@
 // construct, so this test isolates the genuinely new pieces instead.
 #include "models/emg_des_t.cuh"
 #include "models/mor_shifted_poisson_t.cuh"
-#include "pipelines/des_y3/number_counts/3d/cuda/num_counts_full_ltmz_gpu_t.cuh"
+#include "pipelines/des_y3/number_counts/cuda/3d/num_counts_full_ltmz_gpu_t.cuh"
 
 // Host twins: rk_detail's phi/erfcx closed forms (richness_kernel_t.hh)
 // for the EMG primitives and richness_zkernel for S_j; MOR_HOD_t for

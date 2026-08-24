@@ -149,6 +149,56 @@ $[\theta_{\rm lo}, 2\theta_\lambda]$ under-resolves all three; the
 breakpoint split reduces the residual by $\gtrsim 10\times$ at
 `n_per_seg` $= 30$ compared to a single-panel 120-node grid.
 
+### Gauss–Legendre setup of the des_y3 `0d` backends
+
+The nodes and weights themselves are standard: the Python layer calls
+`numpy.polynomial.legendre.leggauss(N)` once per $N$ (cached) and
+applies the affine map above; the C++ twin computes the Legendre roots
+by Newton iteration and applies the same map, so the two produce the
+same grid to machine precision. The mass and redshift axes use fixed
+brackets — $N_{\ln M} = 96$ nodes on
+$[\texttt{lnm\_low}, \texttt{lnm\_high}]$ and $N_z = 64$ nodes on
+$[\texttt{zt\_low}, \texttt{zt\_high}]$ — and the integrand is assembled
+as a weight chain evaluated once per MCMC sample,
+
+$$
+\zeta_q = w^z_q\,\frac{dV}{d\Omega\,dz}(z_q)\,\Omega(z_q)
+\,\bigl[\Sigma_{\rm crit}^{-1}(z_q)\bigr],\qquad
+W_{b,kq} = \zeta_q\, n(\ln M_k, z_q)\, S_b(\ln M_k, z_q),
+$$
+
+with the $\Sigma_{\rm crit}^{-1}$ factor present only for shear. A
+$z$-independent radial profile (the one-halo case) lets the $q$ sum
+contract first, leaving one $N_{\ln M}$-term sum per $(b, R)$; the max
+model's $z$-dependent two-halo term forces the full
+$\sum_{kq} w^{\ln M}_k W_{b,kq}\,\Delta\Sigma(R, \ln M_k, z_q)$.
+
+The true-richness dimension is where node placement matters: for each
+$(\ln M, z)$ cell, $N_q = 32$ nodes are mapped onto the HOD support
+$[\max(0, \mu_{\rm eff} - L\sigma_{\rm eff}),\ \mu_{\rm eff} +
+L\sigma_{\rm eff}]$ with $\mu_{\rm eff} = \lambda_{\rm cen} +
+\mu_{\rm sat}$, $\sigma_{\rm eff} = \sqrt{\mu_{\rm sat} +
+(\sigma_\lambda \mu_{\rm sat})^2}$ and $L = 6$, so the quadrature tracks
+the shifted-Poisson peak across five decades of mass instead of wasting
+nodes on a global $[0, \lambda_{\max}]$ bracket. This feature placement
+is why the fixed grids reach $10^{-4}$-class accuracy at millisecond
+cost. The certification is empirical: on the checked-in fiducial dump,
+doubling every node count ($96 \to 192$, $64 \to 128$, $32 \to 64$)
+moves the fiducial by $3.8\times10^{-4}$ (counts) and
+$3.1\times10^{-4}$ (shear), and widening the envelope $L: 6 \to 8$ by
+$1.4\times10^{-4}$.
+
+Code pointers: `shared/datablock_models.py::gl_nodes` and
+`src/models/p_operator_cuhre_t.hh::p_op_detail::gl_nodes` (node
+construction); `systematics/selection_richness/python/sel_function.py::`
+`_compute_lam_nodes_and_P_HOD` (richness envelope);
+`shared/full_ltmz_core.py::full_ltmz_mass_z_weights` and
+`shear_1h2h/cpp/0d/shear1h2h_max_t.hh` (weight chain);
+`systematics/shear_prj/cpp/sigma_prj_t.hh::sp_detail::build_theta_grid`
+($\theta$ breakpoints, ring + fg/bg $z$ split, `n_per_seg`/`n_zring`/
+`n_zouter`); `src/pipelines/des_y3/validate_against_fiducial.py`
+(self-convergence certificates quoted above).
+
 **The $n_{\ln M}$ convergence study.** The `sel_function` mass grid was
 swept as a *whole-pipeline* study, because the `S_stack` grid resolution
 feeds directly into how hard the downstream Cuhre-based `NumCountsSel`

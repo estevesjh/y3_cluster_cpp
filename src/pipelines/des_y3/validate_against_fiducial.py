@@ -83,7 +83,7 @@ def main():
 
     # 3. radial_series total error vs a same-profile doubled-node fiducial
     rs_dir = (Path(__file__).resolve().parent / "shear_1h2h"
-              / "0d" / "python")
+              / "python" / "0d")
     sys.path.insert(0, str(rs_dir))
     import nfw_profile_family as pf
     from shear1h_radial_series import RadialSeriesTable, evaluate_series

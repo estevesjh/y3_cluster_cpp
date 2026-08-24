@@ -14,7 +14,7 @@ profile and adds the projection term.
   (`nosel_gl_detail::SelGLCore`, shared with {doc}`number_counts`) +
   [`src/modules/num_counts_sel/lensing_weights.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/modules/num_counts_sel/lensing_weights.hh)
   (unchanged production model, immutable dependency).
-- Module driver: [`src/pipelines/des_y3/shear_1h2h/0d/cpp/Shear1hFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/0d/cpp/Shear1hFastMass.cc)
+- Module driver: [`src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hFastMass.cc)
   (`DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE`) — bitwise-equivalent to
   DES Y1's `Shear1hMisSel.so` ({doc}`../variants`), own module label
   and output section.

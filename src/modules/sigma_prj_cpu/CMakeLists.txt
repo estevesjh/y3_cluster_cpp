@@ -22,7 +22,7 @@ foreach(mod SigmaPrjEvaluator DSigmaPrjEvaluator ShearPrjEvaluator)
 endforeach()
 
 # The adaptive reference path (ShearPrjCuhre) moved to
-# src/pipelines/des_y3/shear_projection/2d/cpp/ — it is the C++
+# src/pipelines/des_y3/shear_projection/cpp/2d/ — it is the C++
 # backend of the des_y3 full_ltmz projection strategy.
 
 # GSL-driven variant: QAGP over z (explicit breakpoint at z=zob),

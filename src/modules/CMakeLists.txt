@@ -56,37 +56,37 @@ add_subdirectory(num_counts_full)
 # lower folder is a documented dimension reduction from it. Binary
 # dirs mirror the folder names.
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/0d/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/cpp/0d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_0d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/3d/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/cpp/3d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_3d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/3d/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/cuda/3d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_3d_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/0d/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/cpp/0d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear1h_0d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/0d/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/cuda/0d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear1h_0d_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/3d/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/cpp/3d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear1h_3d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/3d/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/cuda/3d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear1h_3d_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/0d/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/cpp/0d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_0d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/0d/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/cuda/0d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_0d_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/2d/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/cpp/2d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_2d_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/3d/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/cuda/3d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_3d_cuda)
 
 # Many of these are historical

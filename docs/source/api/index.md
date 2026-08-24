@@ -37,7 +37,7 @@ own accuracy/timing matrix (also surfaced in {doc}`../numerics/index`).
 | `shear_1h2h/0d` (GL paths) | Python references, `Shear1hFastMass.so`, `Shear1h2hMax.so`, `Shear1h2hMaxGpu.so` | `Shear1hFastMass` Python 74 ms / C++ 9 ms; `Shear1h2hMax` C++ 11 ms / CUDA 8 ms |
 | `shear_1h2h/0d` | Python offline generator/evaluator and `Shear1hRadialSeries.so` | Python 6 ms; C++ 7 ms |
 | `shear_projection/2d` + `shear_projection/3d` | `ShearPrjCuhre.so` (2d), `DSigmaPrjFullLtmzGpu.so` (3d) | CUDA 95 s |
-| `shear_projection/3d` | Python exact-$z$ reference, `ShearPrjFastMass.so`, `ShearPrjFrozenGpu.so` | Python 270 ms; C++ 154 ms; CUDA (frozen) 8.3 ms |
+| `shear_projection/0d` | Python exact-$z$ reference, `ShearPrjFastMass.so`, `ShearPrjFrozenGpu.so` | Python 270 ms; C++ 154 ms; CUDA (frozen) 8.3 ms |
 
 
 (src-models)=

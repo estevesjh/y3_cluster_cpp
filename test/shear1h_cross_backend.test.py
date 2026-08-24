@@ -67,10 +67,10 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "pipelines"))
 _SHEAR1H2H = REPO / "src" / "pipelines" / "des_y3" / "shear_1h2h"
-sys.path.insert(0, str(_SHEAR1H2H / "0d" / "python"))
-sys.path.insert(0, str(_SHEAR1H2H / "0d" / "python"))
-sys.path.insert(0, str(_SHEAR1H2H / "0d" / "python"))
-sys.path.insert(0, str(_SHEAR1H2H / "0d" / "python"))
+sys.path.insert(0, str(_SHEAR1H2H / "python" / "0d"))
+sys.path.insert(0, str(_SHEAR1H2H / "python" / "0d"))
+sys.path.insert(0, str(_SHEAR1H2H / "python" / "0d"))
+sys.path.insert(0, str(_SHEAR1H2H / "python" / "0d"))
 
 from shared import datablock_models as dm  # noqa: E402
 from shared import lensing_profiles as lp  # noqa: E402

@@ -1,7 +1,7 @@
 # ⚠ ΔΣ_hh (two-halo lensing term) needs debugging
 
 **Raised 2026-08-12** while implementing the traditional 1h+2h max
-model (`src/pipelines/des_y3/shear_1h2h/0d/python/shear1h2h_max.py`).
+model (`src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py`).
 The `max(ΔΣ_1h, b·ΔΣ_2h)` observable is the first consumer to exercise
 `haloModel/dSigma_hh` on the modern pipeline, and it exposed three
 independent problems. **The traditional-shear arm cannot be trusted for

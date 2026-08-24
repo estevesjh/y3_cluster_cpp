@@ -20,7 +20,7 @@
 #include "models/omega_z_des.cuh"
 
 // zkernel_sj (observed-redshift kernel S_j).
-#include "pipelines/des_y3/number_counts/3d/cuda/num_counts_full_ltmz_gpu_t.cuh"
+#include "pipelines/des_y3/number_counts/cuda/3d/num_counts_full_ltmz_gpu_t.cuh"
 
 #include <cmath>
 #include <optional>

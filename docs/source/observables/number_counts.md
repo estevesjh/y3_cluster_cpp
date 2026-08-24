@@ -12,7 +12,7 @@ of the theory vector and the denominator of the stacked one-halo shear.
 - Model: [`src/models/n_operator_sel_gl_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/models/n_operator_sel_gl_t.hh)
   (`nosel_gl_detail::SelGLCore` — the fixed Gauss-Legendre mass-weight
   builder shared with {doc}`shear_halo`).
-- Module driver: [`src/pipelines/des_y3/number_counts/0d/cpp/NumCountsFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/number_counts/0d/cpp/NumCountsFastMass.cc)
+- Module driver: [`src/pipelines/des_y3/number_counts/cpp/0d/NumCountsFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/number_counts/cpp/0d/NumCountsFastMass.cc)
   (`DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE`) — the des_y3-namespaced
   wrapper, algorithmically identical to `NumCountsSelGL` ("by identity",
   {doc}`../variants`), with its own module label and output section so
