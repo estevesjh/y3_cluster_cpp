@@ -372,6 +372,13 @@ add_test(
   NAME conc_mass_relation_test
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/conc_mass_relation.test.py
   )
+# Signed miscentered-ΔΣ "single" table contract: negative-lobe location,
+# linear (no-exp) reading, rho_mult scaling, clamping, uniform-sheet
+# cancellation, Wright&Brainerd centered limit. Dump-free.
+add_test(
+  NAME signed_mis_table_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/signed_mis_table.test.py
+  )
 
 add_executable(numcounts_3d_test numcounts_3d.test.cc)
 target_link_libraries(
