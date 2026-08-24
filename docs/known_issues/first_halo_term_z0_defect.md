@@ -1,4 +1,17 @@
-# ⚠ The 1-halo lensing term is always evaluated at z=0, not the cluster's z
+# ✅ RESOLVED (as a ratified convention) — 1-halo term redshift
+
+**Resolved 2026-08-20 / merged 2026-08-24** (issue #3, closed): the 1-halo
+term is now evaluated at an explicit ini parameter `z_halo` (default 0.4;
+deprecated alias `one_halo_z`) instead of a hardcoded literal, and the
+comoving-`rhom0` NFW normalisation was owner-ratified as the convention —
+redshift enters only through concentration, bias, ξ, and the kernels
+(review 97bd293). The extract fixture inis pin `z_halo = 0.0` so legacy
+pinned values stay comparable. The original write-up below is kept as
+history.
+
+---
+
+# ⚠ (historical) The 1-halo lensing term is always evaluated at z=0, not the cluster's z
 
 **Raised 2026-08-13** while writing the first dedicated, genuinely
 independent unit tests for `y3_buzzard/haloModel.py` /

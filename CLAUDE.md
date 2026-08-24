@@ -142,8 +142,9 @@ ctest -j 10
   executable — see `test/README.md` for how to add one.
 - The Python `halo_model_test` target (`test/halo_model.test.py`) validates the
   halo-model bias, concentration, one-halo NFW lensing, and cosmology-shift
-  helpers. It also pins the known two-halo NaN behavior and the
-  `halo_model_cosmosis.py` hardcoded-`z=0` one-halo wiring defect described below.
+  helpers. It pins the FIXED two-halo behavior (the 60%-NaN dSigma_hh defect
+  was resolved on the issue-4 branch; tables must now be finite) and the
+  `z_halo` one-halo convention handling described below.
 - Non-test diagnostic executables in `test/` (e.g. `integrate_lc_lt`,
   `integrate_mor`, `n_operator_sel_t_profile`) probe individual kernels and
   accept `-h/--help`.
@@ -379,13 +380,24 @@ the GPU-node rule — no `-DUSE_CUDA`); CUDA backends need the pinned
 toolchain (`BUILDING.md`) in a **separate** build dir — do not
 reconfigure `release-build`, which is the CPU-only fast tree.
 
-### Known data defect
+### Resolved data defect: dSigma_hh (two-halo lensing table)
 
-`haloModel/dSigma_hh` (the two-halo lensing table) has three open bugs —
-60% NaN by construction, a degenerate z axis, dummy exclusion halo
-parameters. See `docs/known_issues/dsigma_hh_debug_flag.md`. Any traditional-shear
-(1h+2h) result is provisional until they are fixed; a *sum*-based 1h+2h
-model would propagate the NaNs through the whole mass integral.
+`haloModel/dSigma_hh`'s three historical bugs — 60% NaN by construction, a
+degenerate z axis, dummy exclusion halo parameters — are **RESOLVED** (issue
+#4: per-z P(k), direct interior-mean ΔΣ, no NaN clip in `ct_2hTerm`; see the
+RESOLVED header in `docs/known_issues/dsigma_hh_debug_flag.md` for the fix
+summary and validation numbers). Both tables must now be finite;
+`test/halo_model.test.py` re-pins the fixed behavior and
+`validations/second_halo_term/` holds the reproducible validation report.
+
+Newer open findings from that work are tracked in their own docs:
+`docs/known_issues/distances_grid_resolution_defect.md` (coarse distances
+grid → bsel/shear_prj external-test deviations),
+`docs/known_issues/wp_hh_rp_axis_mismatch.md` (Wp_hh interpolated on the
+wrong radial axis in `wp_cluster.cuh`; fix deferred pending a
+legacy-consumer audit), and
+`docs/known_issues/xi_nl_linear_fallback.md` (ξ_NL is linear until cp_camb
+provides nonlinear P(k) — issue #9).
 
 ### Known model defect: HOD normalization at low occupation
 
@@ -398,18 +410,21 @@ tests in `test/sel_function.test.py` (kept at the project's default
 1e-3 tolerance) until the model is corrected or the deviation is
 explicitly accepted.
 
-### Known model defect: 1-halo lensing term always evaluated at z=0
+### Ratified convention: 1-halo term at a fixed `z_halo` (was the z=0 defect)
 
-`halo_model_cosmosis.py::execute()` calls `lensModel.first_halo_term(M,
-z=0, ...)` with a hardcoded `z=0`, even though it builds and uses a real
-per-z grid for every other quantity (bias, `xi_NL`, `second_halo_term`,
-`scaleShiftCosmo`). `haloModel/Sigma_nfw`, `haloModel/dSigma_nfw`, and
-`haloModel/concentration` are therefore the z=0 1-halo term at every
-actual cluster redshift — concentration is measurably lower (5–15% at
-z~0.3–0.65) than the z=0 value used, which shifts the NFW profile shape,
-not just its normalization. `first_halo_term`/`child18_mass_concentration`
-themselves are correctly z-dependent; this is a CosmoSIS wiring gap, not
-a model bug. See `docs/known_issues/first_halo_term_z0_defect.md`. Pinned by
+The historical "hardcoded z=0 1-halo term" wiring gap (issue #3, closed) is
+resolved by an explicit, owner-ratified convention rather than a per-z 1-halo
+grid: `halo_model_cosmosis.py` evaluates `first_halo_term(M, z_halo, ...)`
+where **`z_halo` is an ini parameter** (default 0.4; deprecated alias
+`one_halo_z`), and the 1-halo NFW normalisation stays on the **comoving
+ρ_m0** (`rhom0`) convention ratified in the 2026-08-20 review — redshift
+enters only through concentration, bias, ξ, and the kernels. The extract
+fixture inis pin `z_halo = 0.0` explicitly so legacy pinned test values stay
+comparable. Physical `(1+z)^3` density evolution is applied downstream (the
+likelihood's `shear_1pz_power` knob and `one_halo_z_density`, issue #22 —
+projected-ΔΣ correction still open). See
+`docs/known_issues/first_halo_term_z0_defect.md` for history; the `z_halo`
+handling is exercised by
 `test/halo_model.test.py::TestFirstHaloTermRedshiftHandling`.
 
 ### Known model defect: radial_series raw ΔΣ disagrees with full_ltmz by 56-86%
