@@ -70,6 +70,10 @@ namespace y3_cluster {
       // DeltaSigma-only scope (no Sigma_prj counterpart -- FrozenDeltaSigmaPrj
       // has no Sigma analogue in the Python reference either).
       dsigma_mis_.emplace(4.0, 2.77533742639e+11, SINGLE);
+      // issue #14: honor use_halo_model_conc (was silently ignored here).
+      use_halo_model_conc_ =
+          cfg.has_val(module_label(), "use_halo_model_conc") &&
+          cfg.view<bool>(module_label(), "use_halo_model_conc");
 
       auto const lamb = get_vector_double(cfg, module_label(), "lambda_bin");
       auto const zlo  = get_vector_double(cfg, module_label(), "zo_low");
@@ -135,6 +139,9 @@ namespace y3_cluster {
       double const omm = sample.view<double>("cosmological_parameters", "omega_M");
       h0_ = sample.view<double>("cosmological_parameters", "h0");
       dsigma_mis_->set_rho_mult(omm);
+      if (use_halo_model_conc_)
+        dsigma_mis_->set_concentration_table(
+            make_Interp1D(sample, "haloModel", "lnM", "concentration"));
 
       bsel_.emplace(sample);
 
@@ -513,6 +520,7 @@ namespace y3_cluster {
     std::optional<y3_cluster::OMEGA_Z_DES> omega_z_;
     std::optional<Interp2D>                xi_nl_;
     std::optional<NFW_DSIGMA_MIS>          dsigma_mis_;
+    bool use_halo_model_conc_ = false;   // issue #14: feed haloModel/concentration
     std::optional<Interp1D>                chi_;
     std::optional<Interp1D>                sci_;
     std::optional<Interp1D>                sigma_z_;

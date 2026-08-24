@@ -99,10 +99,64 @@ def setup(options):
     compute_lensing_1h = _bool("compute_lensing_1h", compute_lensing)
     compute_lensing_2h = _bool("compute_lensing_2h", compute_lensing)
 
+    # z_halo: the FIXED redshift at which the 1h concentration is
+    # evaluated -- the owner-ratified convention (issue #3, review
+    # 2026-08-20): the 1h term uses c(M, z_halo) with z_halo an ini
+    # parameter, default 0.4 (~the survey mean); per-z tables are
+    # deliberately NOT the model. Density normalisation stays the
+    # comoving rho_m0 regardless (see execute()).
+    #
+    # Legacy runs (widePlanck self-closure DVs, the frozen fiducial
+    # dumps behind the hard-coded cross-backend pins) were generated at
+    # z=0: those inis now pin `z_halo = 0.0` explicitly. `one_halo_z`
+    # is honored as a deprecated alias when `z_halo` is absent.
+    try:
+        one_halo_z = float(options.get_double(section, "z_halo",
+                                              default=np.nan))
+    except Exception:
+        one_halo_z = np.nan
+    if not np.isfinite(one_halo_z):
+        try:
+            one_halo_z = float(options.get_double(section, "one_halo_z",
+                                                  default=0.4))
+        except Exception:
+            one_halo_z = 0.4
+
+    # concentration_amplitude: multiply the Child18 c(M, z_halo) by this
+    # factor.  Buzzard clusters are ~1.25x more concentrated than Child18
+    # (measured c = R_200m/r_s vs the Child18 relation, median ratio ~1.25),
+    # which is the small-R 1-halo DeltaSigma deficit.  Applied consistently to
+    # BOTH the 1-halo term (via lensModel.c, reused by first_halo_term) and the
+    # published concentration (consumed by the miscentered NFW through
+    # set_concentration_table).  Default 1.0 (Child18 unchanged).
+    try:
+        c_amp = float(options.get_double(section, "concentration_amplitude",
+                                         default=1.0))
+    except Exception:
+        c_amp = 1.0
+
+    # one_halo_z_density: redshift at which the 1-halo DENSITY normalisation is
+    # evaluated. Default 0.0 = the frozen COMOVING rho_m0 (the pipeline default;
+    # first_halo_term(z=0)). Set >0 to use the PHYSICAL mean density
+    # rho_m(z)=rho_m0(1+z)^3 in the 1-halo (issue #22). The CONCENTRATION stays
+    # fixed (pre-set from one_halo_z + concentration_amplitude), so this isolates
+    # the (1+z)^3 density factor. Evaluate one z-bin per run and stitch.
+    # *** APPROXIMATION (issue #22, J.Esteves): this puts (1+z)^3 into the analytic
+    # NFW that fills the z-FREE (R,M) dSigma_nfw table, so per stitched z-bin the
+    # (1+z)^3 lands OUTSIDE the C++ z-integral (Wb weights), at the bin centre --
+    # NOT inside the integrand as it should be. Rigorous fix = 3-D (R,M,z) NFW table
+    # + phi(R,M,z) evaluated inside the SelGLCore z-integral. Use for ~5-15% checks.
+    try:
+        z_density = float(options.get_double(section, "one_halo_z_density",
+                                             default=0.0))
+    except Exception:
+        z_density = 0.0
+
     params_out = (R_perp_min, R_perp_max, R_perp_bins,
                   Radii_min, Radii_max, Radii_bins,
                   M_min, M_max, M_bins,
-                  compute_lensing_1h, compute_lensing_2h)
+                  compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
+                  z_density)
     return params_out
     
 
@@ -112,7 +166,8 @@ def execute(block, config):
     (R_perp_min, R_perp_max, R_perp_bins,
      Radii_min, Radii_max, Radii_bins,
      M_min, M_max, M_bins,
-     compute_lensing_1h, compute_lensing_2h) = config
+     compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
+     z_density) = config
 
     # cosmo parameters
     omega_m = block[cosmo_names, "omega_m"]
@@ -208,15 +263,34 @@ def execute(block, config):
         block[section_name, "k"] = k_h
 
     if compute_lensing_1h:
-        lensModel.first_halo_term(M, z=0, conc_model_name="Child18")
+        # one_halo_z enters ONLY the Child18 concentration (the issue-#3
+        # defect). The density normalisation must stay the COMOVING
+        # rho_m0: first_halo_term scales rho by (1+z)^3 (physical), and
+        # the published tables are consumed as comoving -- evaluating the
+        # whole term at z>0 would inflate DSigma by up to (1+z)^2
+        # (measured +65% at the innermost radius for z=0.46). Setting
+        # self.c first makes first_halo_term skip its own z=0 recompute.
+        lensModel.concentration_at_M(M, z=one_halo_z,
+                                     model_name="Child18")
+        # Buzzard concentration boost: scale c BEFORE first_halo_term (which
+        # reuses the pre-set lensModel.c) so the factor lands on the 1-halo
+        # term and the published concentration alike.  c_amp=1.0 => Child18.
+        if c_amp != 1.0:
+            lensModel.c = lensModel.c * c_amp
+        # z_density=0 -> comoving rho_m0 (default); z_density>0 -> physical
+        # rho_m(z)=rho_m0(1+z)^3 (concentration stays fixed, pre-set above).
+        lensModel.first_halo_term(M, z=z_density, conc_model_name="Child18")
         block[section_name, "Sigma_nfw"]  = lensModel.Sigma['1h']
         block[section_name, "dSigma_nfw"] = lensModel.dSigma['1h']
         block[section_name, "concentration"] = lensModel.c
 
     if compute_lensing_2h:
         lensModel.second_halo_term(z, k_nl, P_k_nl)
-        block[section_name, "Rp"]        = Radii
-        block[section_name, "Wp_hh"]     = lensModel.Wp
+        # Wp_hh (xi_2halo on the R_perp grid, despite the Wp name) and its
+        # mislabeled "Rp" axis are no longer published: unsupported, and
+        # their only reader was the broken legacy wp_cluster.cuh
+        # interpolation (wrong radial axis). The internal xi stays on
+        # lensModel.Wp for validation; consumers needing xi read xi_nl.
         block[section_name, "Sigma_hh"]  = lensModel.Sigma['2h']
         block[section_name, "dSigma_hh"] = lensModel.dSigma['2h']
 

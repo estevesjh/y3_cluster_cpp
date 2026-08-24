@@ -22,6 +22,17 @@ if _PIPELINES_DIR not in sys.path:
 
 from cosmology.prj_params import PrjParams
 from shared import datablock_models as dm
+from shared.sel_function import _read_array as _read_ini_array
+
+# The C++ BSelMargIntegrand publishes only 'vals'; the wall geometry
+# (lambda_bin, zo_low, zo_high) lives in its [b_sel_marg] ini section and
+# never enters the datablock (issue #10). This module reads that section
+# at setup -- single source of truth, no duplicated ini vectors -- and
+# republishes the geometry into the three operator sections at execute,
+# so its own BSelWallVector reader and every offline dump consumer see
+# the full contract without any extra pipeline module.
+_WALL_INI_SECTION = "b_sel_marg"
+_WALL_OUTPUT_SECTIONS = ("b_sel_marg_P1", "b_sel_marg_I1", "b_sel_marg_J")
 
 
 @dataclass
@@ -391,12 +402,37 @@ class IntegratorGLBSel:
 
 
 def setup(options):
-    return IntegratorGLBSel.from_options(options)
+    config = IntegratorGLBSel.from_options(options)
+    try:
+        wall_metadata = {
+            "lambda_bin": _read_ini_array(
+                options, _WALL_INI_SECTION, "lambda_bin", dtype=np.int32),
+            "zo_low": _read_ini_array(options, _WALL_INI_SECTION, "zo_low"),
+            "zo_high": _read_ini_array(options, _WALL_INI_SECTION, "zo_high"),
+        }
+        shapes = {v.shape for v in wall_metadata.values()}
+        if len(shapes) != 1:
+            raise ValueError(f"[{_WALL_INI_SECTION}] wall vectors have "
+                             f"inconsistent lengths: {shapes}")
+    except Exception:
+        # No [b_sel_marg] ini section in reach (offline replay): the wall
+        # metadata must then already be present in the datablock/dump.
+        wall_metadata = None
+    config.wall_metadata = wall_metadata
+    return config
 
 
 def execute(block, config):
     started = time.perf_counter()
     source = dm.DataBlockSource(block)
+
+    # Publish the wall geometry next to the C++ 'vals' before reading the
+    # wall back (put_val never overwrites, so guard on presence).
+    if config.wall_metadata is not None:
+        for section in _WALL_OUTPUT_SECTIONS:
+            for key, value in config.wall_metadata.items():
+                if not block.has_value(section, key):
+                    block[section, key] = value
 
     # Lambda-bin edges are produced by sel_function. Reading them here keeps
     # the Python wall geometry identical to the C++ selection geometry.

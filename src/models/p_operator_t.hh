@@ -293,7 +293,16 @@ namespace y3_cluster {
       std::vector<double> chi_zt(Nz), dv_zt(Nz), sig_zt(Nz);
       for (std::size_t iz = 0; iz != Nz; ++iz) {
         auto const i = iz_lo[iz]; auto const f = fz[iz];
-        chi_zt[iz] = chi_ref_[i] + f * (chi_ref_[i+1] - chi_ref_[i]);
+        // chi: evaluate the distances table DIRECTLY at the z node
+        // (issue #12): resampling the (piecewise-linear, possibly
+        // coarse) chi table through the linear zt_ref grid distorted
+        // the exclusion-ring |Delta chi| by up to 0.21 cMpc/h (17% of
+        // R_excl) where a table kink lands inside a zt_ref segment
+        // near zob, while chi_o was table-direct -- an inconsistent
+        // mix that hit only the xi-carrying operators. dV and sigma_z
+        // are smooth and enter multiplicatively, so their zt_ref
+        // interpolation stays.
+        chi_zt[iz] = (*chi_).clamp(zs[iz]) * h0_;
         dv_zt [iz] = dv_ref_ [i] + f * (dv_ref_ [i+1] - dv_ref_ [i]);
         sig_zt[iz] = sig_ref_[i] + f * (sig_ref_[i+1] - sig_ref_[i]);
       }

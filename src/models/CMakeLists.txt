@@ -2,7 +2,7 @@ link_directories(${COSMOSIS_BASE_DIR}/cosmosis/datablock)
 
 # C++ on CPU
 add_library(
-  models SHARED sample_variance.cc lc_lt_t.cc lc_lt_y1_t.cc
+  models SHARED sample_variance.cc lc_lt_t.cc lc_lt_y1_t.cc int_lc_lt_des_t.cc
   )
 
 target_link_libraries(

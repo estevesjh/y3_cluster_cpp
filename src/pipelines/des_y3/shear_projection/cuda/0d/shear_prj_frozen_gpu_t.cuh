@@ -126,6 +126,7 @@ private:
   std::optional<y3_cluster::OMEGA_Z_DES> omega_z_;
   std::optional<y3_cluster::Interp1D> chi_, sci_, sigma_z_;
   std::optional<y3_cuda::NFW_DSIGMA_MIS> dsigma_mis_dev_;
+  bool use_halo_model_conc_ = false;   // issue #14
   double h0_{0.7};
 
   // Per-sample cached wall results.
@@ -274,6 +275,11 @@ public:
       lzob_Rs_[gp_lzob_idx_[i]].push_back(rad[i]);
 
     dsigma_mis_dev_.emplace(4.0, 2.77533742639e+11, "single");
+    // issue #14: honor use_halo_model_conc (per-mass c(lnM) into the
+    // miscentered NFW); default keeps fixed c=4.
+    use_halo_model_conc_ =
+        cfg.has_val(module_label(), "use_halo_model_conc") &&
+        cfg.view<bool>(module_label(), "use_halo_model_conc");
   }
 
   void
@@ -282,6 +288,8 @@ public:
     hmf_.emplace(sample);
     hmb_.emplace(y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z",
                                            "bias"));
+    if (use_halo_model_conc_)
+      dsigma_mis_dev_->set_concentration_table(sample);
     dv_do_dz_.emplace(sample);
     omega_z_.emplace(sample);
     xi_nl_.emplace(y3_cluster::make_Interp2D(sample, "xi_nl", "r", "z",

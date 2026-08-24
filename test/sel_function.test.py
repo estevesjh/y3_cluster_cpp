@@ -433,5 +433,93 @@ class TestSelectionTensorFactorization(unittest.TestCase):
                     S_ij_direct[k, zi], S_i[k, zi] * S_j_vec[zi], places=12)
 
 
+class _FakeOptions:
+    """Minimal cosmosis-options stand-in for sel_function.setup()."""
+
+    def __init__(self, values):
+        self._v = values
+
+    def get_double_array_1d(self, section, name):
+        v = self._v[name]
+        if np.isscalar(v):
+            raise KeyError(name)
+        return np.asarray(v, dtype=float)
+
+    def get_int_array_1d(self, section, name):
+        raise KeyError(name)
+
+    def get_double(self, section, name):
+        v = self._v[name]
+        if not np.isscalar(v):
+            raise KeyError(name)
+        return float(v)
+
+    def get_int(self, section, name):
+        return int(self._v[name])
+
+    def get_bool(self, section, name):
+        return bool(self._v[name])
+
+
+class TestTrueRedshiftSeamExcision(unittest.TestCase):
+    """The optional true-z exclusion (issue #8): mocks drop every halo
+    with z_true inside the simulation-box seam, so the model's true-z
+    integration must skip that interval. Checked against the exact
+    excised measure, not against sel_function's own helper."""
+
+    def test_seam_weight_nodes_and_excised_measure(self):
+        z = np.linspace(0.05, 0.80, 64)
+        dz = z[1] - z[0]
+        lo, hi = 0.33, 0.37
+        w = sf._seam_weight(z, lo, hi)
+
+        eps = 1e-9   # float slack on the cell-edge comparisons
+        fully_inside = (z - 0.5 * dz >= lo - eps) & (z + 0.5 * dz <= hi + eps)
+        fully_outside = (z + 0.5 * dz <= lo + eps) | (z - 0.5 * dz >= hi - eps)
+        np.testing.assert_allclose(w[fully_inside], 0.0, atol=1e-12)
+        np.testing.assert_allclose(w[fully_outside], 1.0, atol=1e-12)
+        straddle = ~fully_inside & ~fully_outside
+        self.assertTrue(np.all((w[straddle] > 1e-12)
+                               & (w[straddle] < 1.0 - 1e-12)))
+
+        # Riemann integral of (1 - w) over the node cells must equal the
+        # exact seam width -- the O(dz^2) property the fractional
+        # weighting exists for (hard-zeroing whole nodes misses by
+        # up to dz/2 per edge).
+        self.assertAlmostEqual(float(np.sum(1.0 - w) * dz), hi - lo,
+                               places=12)
+
+    def test_seam_weight_inactive_and_degenerate_ranges(self):
+        z = np.linspace(0.05, 0.80, 64)
+        np.testing.assert_array_equal(sf._seam_weight(z, 0.0, -1.0),
+                                      np.ones_like(z))
+        np.testing.assert_array_equal(sf._seam_weight(z, 0.37, 0.37),
+                                      np.ones_like(z))
+
+    def _options(self, extra):
+        base = dict(
+            lam_min=[20.0, 30.0], lam_max=[30.0, 45.0],
+            zob_min=[0.20, 0.20], zob_max=[0.35, 0.35],
+            sigma_z=[0.03, 0.03],
+            zt_low=0.05, zt_high=0.80, lnm_low=np.log(1e13),
+            lnm_high=np.log(9e15), n_lnm=8, n_z=16, n_z_shared=16,
+        )
+        base.update(extra)
+        return _FakeOptions(base)
+
+    def test_setup_default_is_a_no_op(self):
+        cfg = sf.setup(self._options({}))
+        self.assertIsNone(cfg['seam_weight'])
+
+    def test_setup_activates_and_matches_helper(self):
+        cfg = sf.setup(self._options({'zt_excl_low': 0.33,
+                                      'zt_excl_high': 0.37}))
+        self.assertIsNotNone(cfg['seam_weight'])
+        np.testing.assert_array_equal(
+            cfg['seam_weight'],
+            sf._seam_weight(cfg['z_grid'], 0.33, 0.37))
+        self.assertTrue(np.any(cfg['seam_weight'] < 1.0))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

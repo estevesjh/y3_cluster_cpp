@@ -47,12 +47,12 @@ private:
   std::optional<y3_cuda::OMEGA_Z_DES> omega_z_;
   std::optional<quad::Interp2D> dsigma_nfw_;
   std::optional<quad::Interp1D> sci_;
-  // TODO(#14): drop the hardcoded c=4 — once the concentration-table
-  // mirror lands in nfw_dsigma_mis.cuh (CPU half is
-  // claude/issue-4-dsigma-hh-2h-term; the CUDA half needs a Perlmutter
-  // build), read haloModel/concentration so the miscentred term uses
-  // the same per-mass Child18 concentration as the centred table.
+  // Issue #14 (CUDA half): the concentration-table mirror in
+  // nfw_dsigma_mis.cuh is wired below as an OPT-IN path
+  // (use_halo_model_conc); the production default stays the fixed-c
+  // kernel (DSIGMA_MIS_CONC) so cross-backend identity pins stay valid.
   std::optional<y3_cuda::NFW_DSIGMA_MIS> dsigma_mis_;
+  bool use_halo_model_conc_ = false;   // issue #14, opt-in diagnostic leg
   std::optional<y3_cuda::MOR_SHIFTED_POISSON_t> mor_;
   std::optional<y3_cuda::EMG_DES_t> emg_;
   double f_mis_{0.0}, tau_mis_{0.0};
@@ -87,6 +87,11 @@ public:
       throw std::runtime_error("Shear1h3dGpu: bad lob_centers");
     n_lob_ = static_cast<int>(lob.size());
     for (int i = 0; i != n_lob_; ++i) lob_centers_[i] = lob[i];
+    // issue #14: honor use_halo_model_conc (per-mass c(lnM) into the
+    // miscentered NFW); default keeps fixed c=4.
+    use_halo_model_conc_ =
+        cfg.has_val(module_label(), "use_halo_model_conc") &&
+        cfg.view<bool>(module_label(), "use_halo_model_conc");
   }
 
   void
@@ -103,6 +108,10 @@ public:
                         y3_cuda::DSIGMA_MIS_GAMMA);
     dsigma_mis_->set_rho_mult(
       s.view<double>("cosmological_parameters", "omega_M"));
+    // issue #14 (opt-in): per-mass c(lnM) from haloModel/concentration;
+    // default (flag off) keeps the fixed-c production path.
+    if (use_halo_model_conc_)
+      dsigma_mis_->set_concentration_table(s);
     mor_.emplace(s);
     emg_.emplace(s);
     // Required: no fallback to the fiducial defaults — a pipeline that

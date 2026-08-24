@@ -281,6 +281,14 @@ namespace y3_cluster {
                                                w::mis_detail::TAU_MIS_DEFAULT);
       double const omm = s.view<double>("cosmological_parameters", "omega_M");
       dsigma_mis_.set_rho_mult(omm);
+      // Feed haloModel/concentration (Child18 x concentration_amplitude) into
+      // the miscentered NFW, so the 1h miscentered part uses the SAME c(M) as
+      // the centered 1h (dSigma_nfw table) and the 2-halo (ShearPrjCore),
+      // instead of the fixed c=4 it was built with. Without this the
+      // miscentered fraction f_mis of the 1-halo ignores the concentration.
+      if (s.has_val("haloModel", "concentration"))
+        dsigma_mis_.set_concentration_table(
+            make_Interp1D(s, "haloModel", "lnM", "concentration"));
 
       // Richness bin = bin_index % 4 (richness-fast bin layout); see the
       // header comment on the bins-4-11 fix.

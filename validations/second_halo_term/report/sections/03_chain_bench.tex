@@ -1,0 +1,166 @@
+\section{First-principles chain bench (closed-form profiles)}
+\label{sec:chain}
+
+\subsection{The bench}
+
+Three density profiles have fully closed-form chains --- $\rho(r)$, its
+3-D Fourier transform $\tilde\rho(k)$, the Abel projection $\Sigma(R)$,
+and $\Delta\Sigma(R) = \Sbar - \Sigma(R)$: the NFW profile
+($\mathrm{Si}/\mathrm{Ci}$ transform; Wright \& Brainerd 2000
+projections), the Gaussian (Einasto $n{=}1/2$) and the exponential
+(Einasto $n{=}1$; $K_1/K_2$ Bessel projections). Because the
+$\xi \leftrightarrow P$ convention is the same integral as
+$\rho \leftrightarrow \tilde\rho$, feeding $\tilde\rho(k)$ into any
+$P\!\to\!\xi$ transform must return $\rho(r)$ exactly: every stage of
+the two-halo chain gets an independent truth with zero reference
+uncertainty, and a failure localizes to one transform. All closed
+forms are quadrature-self-checked in
+\pyfile{common/analytic\_profiles.py}.
+
+\subsection{cluster\_toolkit vs CLensPy vs CLMM against the analytics}
+\label{sec:chain-codes}
+
+Figure~\ref{fig:chainres} and Table~\ref{tab:chainres} compare the
+three codes stage by stage on the NFW halo
+($M_{200m} = 10^{14}\,\hMsun$, $c = 5$, comoving
+$\Omega_{m,0}\rho_{c,0}$ background):
+
+\begin{itemize}
+\item \textbf{$\rho/\xi$ stage} --- cluster\_toolkit
+  (\texttt{xi\_mm\_at\_r}, fixed-cycle Hankel quadrature) and CLensPy
+  (mcfit FFTLog + the log-log interpolation wrapper) are fed the
+  closed-form $\tilde\rho(k)$ and must return $\rho(r)$. CLMM enters
+  twice: its \emph{native} parametric NFW functions (a check of its
+  conventions and of our closed forms), and its \emph{backend} --- the
+  public clmm API is parametric-only, but pyccl accepts an arbitrary
+  Fourier profile (\texttt{HaloProfile.\_fourier} $\to$
+  \texttt{real}/\texttt{projected}/\texttt{cumul2d} via FFTLog), i.e.\
+  a genuine $P$-input $\to \rho/\Sigma/\Delta\Sigma$ path through the
+  CLMM stack.
+\item \textbf{$\Sigma$ stage} --- cluster\_toolkit
+  \texttt{Sigma\_at\_R} (fed $\rho/\bar\rho_m$ as $\xi$), CLensPy
+  \texttt{compute\_sigma\_grid} (Abel quadrature, \texttt{trapz}
+  backend), CLMM \texttt{compute\_surface\_density}.
+\item \textbf{$\Delta\Sigma$ stage} --- cluster\_toolkit
+  \texttt{DeltaSigma\_at\_R} (its native path), CLensPy's cumulative
+  interior mean (\texttt{sigma\_to\_delta\-sigma\_cumtrapz}) on an
+  extended grid, and CLMM's excess surface density.
+\end{itemize}
+
+All four legs agree with the analytics to a few $\times 0.1\%$ or
+better: worst-case \resWorstCT{} (cluster\_toolkit),
+\resWorstCLensPy{} (CLensPy), \resWorstCLMM{} (CLMM native; a small
+coherent offset visible in all three panels), and \resWorstCLMMFT{}
+(the CLMM-backend $P$-input path over the lensing range $r \leq 5$
+cMpc$/h$; its FFTLog carries a mild $\sim$0.1--0.2\% ripple from the
+$k \to 0$ log-divergence of the NFW transform, with precision knobs
+tuned per transform in \pyfile{10\_chain\_residuals.py}). The
+transforms themselves are healthy --- every large discrepancy found in
+this exercise lives in the \emph{composition} layers, not here.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figs/chain_residuals_codes.pdf}
+\caption{Per-code residuals against the closed-form NFW chain
+($M_{200m} = 10^{14}\,\hMsun$, $c = 5$): the $\rho/\xi$ stage (left),
+$\Sigma(R)$ (centre) and $\Delta\Sigma(R)$ (right), in percent;
+each panel's inset zooms on the core
+($0.1 \leq r/R \leq 1$ cMpc$/h$, linear axis) at a fixed
+$\pm 0.01\%$ scale, with connector lines marking the zoomed region ---
+CLMM's $\sim$0.3\% offset (and cluster\_toolkit's $-0.03\%$
+$\Sigma$-stage dip) are deliberately off the inset scale; the inset
+resolves the sub-$0.01\%$ structure.
+CLensPy's FFTLog is evaluated on its own internal $k$-window
+($k \le 10^{5}$); the CLMM curves are its native NFW functions
+(\texttt{massdef='mean'}, $z \to 0$).}
+\label{fig:chainres}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\input{tables/chain_residuals_codes.tex}
+\caption{Absolute fractional residuals against the analytic NFW chain
+(max / median over the plotted ranges: $r \in [0.05, 30]$,
+$R \in [0.1, 20]$ cMpc$/h$).}
+\label{tab:chainres}
+\end{table}
+
+\subsection{The $\Delta\Sigma$-from-$\Sigma$ candidates}
+\label{sec:chain-methods}
+
+Production must build $\Delta\Sigma(R) = \Sbar - \Sigma(R)$ from a
+$\Sigma$ table that starts at $R_{\min} = 0.1$ cMpc$/h$ --- the
+interior mass $\int_0^{R_{\min}}\Sigma R'\,dR'$ is not in the table.
+Two candidates:
+
+\begin{itemize}
+\item \textbf{The NFW ``sandwich''} (the historical production recipe):
+  \emph{add} an analytic $\Sigma_{\rm NFW}(M_d, c_d)$ to the table,
+  call \texttt{DeltaSigma\_at\_R} --- whose interior extrapolation
+  below $R_{\min}$ \emph{assumes} an NFW$(M_d, c_d)$, now valid because
+  the sum is NFW-dominated there --- then \emph{subtract} the same
+  halo's analytic $\Delta\Sigma_{\rm NFW}$:
+  \[ \Delta\Sigma \simeq
+     \mathcal{D}\big[\Sigma + \Sigma_{\rm NFW}(M_d)\big]
+     - \Delta\Sigma_{\rm NFW}(M_d). \]
+  A pure numerical stabilizer, not physics: with a \emph{consistent}
+  $M_d$ the dummy halo cancels exactly (verified: the $M_d = 10^{14}$
+  and $10^{13}$ variants agree to $\sim$1\% of the $\Delta\Sigma$
+  peak; the pre-fix code broke exactly this with its $M_d/10$
+  inconsistency). What it cannot do is recover the \emph{table
+  profile's own} interior mass below $R_{\min}$ --- that information
+  simply is not in a truncated table.
+\item \textbf{Direct interior-mean integration}: evaluate $\Sigma$ from
+  the per-$z$ $\xi$ on a grid extended to $10^{-3}$ cMpc$/h$ (the 2h
+  chain \emph{has} $\xi$, so the interior is computable, not modeled)
+  and integrate $\Sbar$ by cumulative trapezoid.
+\end{itemize}
+
+On the closed-form profiles, tabulated \emph{only} on the production
+128-point grid (Table~\ref{tab:methods},
+Fig.~\ref{fig:chainbench}): the direct method achieves
+$\leq$\,\chainDirectWorst{} everywhere, while the (repaired,
+consistent-$M_d$) sandwich --- dummy-independent but interior-blind ---
+reaches \chainSandwichWorst{} at radii where $\Delta\Sigma$ is small.
+This measurement, repeated at the fiducial $P(k)$ in
+Section~\ref{sec:fix}, is what selects \texttt{direct} as the
+production default.
+
+\begin{table}[H]
+\centering\small
+\input{tables/chain_bench.tex}
+\caption{$\Sigma\!\to\!\Delta\Sigma$ method errors vs the closed
+forms, fractional over $R \geq 0.5$ cMpc$/h$ (max / median), input
+tabulated only on the production grid $R \in [0.1, 20]$ cMpc$/h$.}
+\label{tab:methods}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figs/chain_bench_methods.pdf}
+\caption{Fractional $\Delta\Sigma$ error of the two candidate methods
+against the closed forms (Gaussian $s{=}1$; NFW $10^{14}\,\hMsun$,
+$c{=}5$).}
+\label{fig:chainbench}
+\end{figure}
+
+\subsection{Transform caveats found (and pinned)}
+
+(i) cluster\_toolkit caches its internal GSL spline workspace by array
+size: calling \texttt{xi\_mm\_at\_r} with a different $k$-length in the
+same process aborts (or returns NaN under the GSL abort-handler
+workaround \pyfile{halo\_model\_cosmosis.py} installs). Production is
+safe (one grid per process); tests must reuse grid lengths.
+(ii) Its fixed-cycle Hankel quadrature degrades at $r \ll s$ for
+flat-cored transforms (85\% at $r = 0.01s$, $k_{\max}$-independent),
+while mcfit's FFTLog handles the same input at $10^{-8}$ --- irrelevant
+for cosmological (power-law-tailed) $P(k)$, but worth knowing.
+(iii) A Gaussian transform underflows to exactly zero at
+$k \gtrsim 60/s$ and NaNs cluster\_toolkit's internal log-spline;
+inputs must be floored.
+(iv) CLensPy's \texttt{TwoHaloTerm} full chain overflows
+catastrophically for steep-tailed profiles (its positive-masked
+log-log $\xi$ interpolator power-law-extrapolates beyond
+$r_{\max} = 120$); NFW/power-law tails are immune. Its FFTLog also
+rings below $r \sim 0.3$ cMpc$/h$ when fed a $k$-window narrower than
+its internal $k \le 10^{5}$ grid.

@@ -1036,3 +1036,6 @@ review/
 # Sphinx documentation
 docs/build/
 !docs/Makefile
+
+# owner review notes -- LOCAL ONLY, never commit
+review/

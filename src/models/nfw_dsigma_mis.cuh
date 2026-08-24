@@ -14,6 +14,7 @@
 
 #include "cosmosis/datablock/datablock.hh"
 
+#include "utils/cuda_interp_1d.cuh"
 #include "utils/cuda_interp_2d.cuh"
 #include "utils/make_interp_1d.hh"
 #include "utils/read_vector.hh"
@@ -56,7 +57,8 @@ namespace y3_cuda {
         _rho_mult(1.0),
         _nfwProfile(read_vector(logx_file(kernel)),
                     read_vector(logxmis_file(kernel)),
-                    read_vector(log_dsigma_file(kernel)))
+                    read_vector(log_dsigma_file(kernel))),
+        _c_tab(std::vector<double>{0.0, 100.0}, std::vector<double>{c, c})
     { }
 
 
@@ -66,15 +68,55 @@ namespace y3_cuda {
       _rho_mult(1.0),
       _nfwProfile(read_vector(logx_file(DSIGMA_MIS_GAMMA)),
                   read_vector(logxmis_file(DSIGMA_MIS_GAMMA)),
-                  read_vector(log_dsigma_file(DSIGMA_MIS_GAMMA)))
-
+                  read_vector(log_dsigma_file(DSIGMA_MIS_GAMMA))),
+      _c_tab(std::vector<double>{0.0, 100.0},
+             std::vector<double>{DSIGMA_MIS_CONC, DSIGMA_MIS_CONC})
     { }
 
-    // In case, we envolve the NFW profile with redshift
-    // TODO: Implement Mass-Concentration Relation
+    // issue #13/#14: per-mass concentration c(lnM) = haloModel/concentration
+    // (Child18 x concentration_amplitude), mirroring the CPU
+    // y3_cluster::NFW_DSIGMA_MIS::set_concentration_table. The lookup table is
+    // universal in x = r/r_s, so this only changes the analytic r_s = r_200/c
+    // and delta_c(c) per call. Host-only (builds the device table); after this,
+    // conc_at(lnM) uses the table on both host and device. Without it, the
+    // legacy fixed c=4 default is used (cross-backend identity pins stay valid).
+    void
+    set_concentration_table(std::vector<double> const& lnM,
+                            std::vector<double> const& conc)
+    {
+      gpu_support::Interp1D t(lnM, conc);
+      _c_tab.swap(t);
+      _use_ctab = true;
+    }
+
+    // Datablock convenience overload (host-only): reads the c(lnM) columns
+    // from `section`, like make_Interp1D. Call in set_sample when
+    // use_halo_model_conc is on.
+    void
+    set_concentration_table(cosmosis::DataBlock& sample,
+                            char const* section = "haloModel",
+                            char const* lnM_name = "lnM",
+                            char const* conc_name = "concentration")
+    {
+      set_concentration_table(
+        sample.view<std::vector<double>>(section, lnM_name),
+        sample.view<std::vector<double>>(section, conc_name));
+    }
+
+    __host__ __device__ double
+    conc_at(double lnM) const
+    {
+      return _use_ctab ? _c_tab.clamp(lnM) : _c;
+    }
+
+    // DONE (issue #13/#14): set_concentration_table / conc_at above mirror the
+    // CPU nfw_dsigma_mis.hh. Default (no table set) keeps the fixed c=4 that the
+    // cross-backend identity pins test, so they stay valid; the GPU projection
+    // sites now honor use_halo_model_conc like the CPU ones. NOTE: needs a
+    // Perlmutter GPU build (nvcc compile on login node; ctest on a GPU node).
     // TODO: Implement different operator in case of rhocz(zt)
     // Ask Marc How to make _c and _rhoc be functional forms in any case
-    
+
     NFW_DSIGMA_MIS(cosmosis::DataBlock& sample)
         : _c(y3_cluster::make_Interp1D(sample,
                                         "haloModel",
@@ -89,7 +131,9 @@ namespace y3_cuda {
             _rho_mult(1.0),
             _nfwProfile(read_vector(logx_file(DSIGMA_MIS_GAMMA)),
                         read_vector(logxmis_file(DSIGMA_MIS_GAMMA)),
-                        read_vector(log_dsigma_file(DSIGMA_MIS_GAMMA)))
+                        read_vector(log_dsigma_file(DSIGMA_MIS_GAMMA))),
+            _c_tab(std::vector<double>{0.0, 100.0},
+                   std::vector<double>{_c, _c})
         { }
 
     // Multiplier applied to rho_s (= rho_crit * delta_c).  Set to
@@ -105,9 +149,10 @@ namespace y3_cuda {
     operator()(double r, double rmis, double lnM) const
     {
       double const rho_crit = _rhoc;
-      double const delta_c = (200.0 * _c * _c * _c / 3.0) / (std::log(1.0 + _c) - _c / (1.0 + _c));
+      double const c = conc_at(lnM);
+      double const delta_c = (200.0 * c * c * c / 3.0) / (std::log(1.0 + c) - c / (1.0 + c));
       double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * rho_crit));
-      double const r_s = r_200 / _c;
+      double const r_s = r_200 / c;
 
       double const x = r / r_s;
       double const xmis = rmis / r_s;
@@ -127,6 +172,8 @@ namespace y3_cuda {
     double const _rhoc;
     double       _rho_mult;
     gpu_support::Interp2D _nfwProfile;
+    gpu_support::Interp1D _c_tab;        // per-mass c(lnM); device-safe (by-value)
+    bool _use_ctab = false;             // false -> use fixed _c (default c=4)
   };
 }
 #endif

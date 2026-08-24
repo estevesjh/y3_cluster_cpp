@@ -108,6 +108,63 @@ def setup(options):
               "shear_n_r": data_shear.size // _NC_N_BINS,
               "verbose": bool(options.get_bool(option_section, "verbose",
                                                 default=False))}
+
+    # Optional shear scale cut (the Buzzard scale-split runs): keep only
+    # radii with shear_r_min <= r_perp <= shear_r_max [cMpc/h]. The full
+    # shear vector is loaded and validated first, then cut; the dense
+    # inverse covariance is cut by COV-slicing (invert -> slice ->
+    # invert), i.e. the removed radii are marginalized, not conditioned.
+    # Defaults keep everything. NOTE: this option previously existed
+    # only as an uncommitted NERSC working-tree patch -- the committed
+    # scale-split run scripts silently ignored it on a fresh checkout
+    # (des-nersc-cluster-scripts#3); this is the reproducible version.
+    shear_r_min = float(options.get_double(option_section, "shear_r_min",
+                                           default=0.0))
+    shear_r_max = float(options.get_double(option_section, "shear_r_max",
+                                           default=np.inf))
+    r_grid = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
+                       1.19581, 1.70998, 2.44521, 3.49658, 5.00000])
+    keep_r = (r_grid >= shear_r_min) & (r_grid <= shear_r_max)
+    config["shear_cut_active"] = not keep_r.all()
+    if config["shear_cut_active"] and config["shear_n_r"] != r_grid.size:
+        raise ValueError(
+            "likelihood_cp: shear scale cut assumes the "
+            f"{r_grid.size}-point r_perp grid, but data_Shear implies "
+            f"{config['shear_n_r']} radii per bin")
+    config["shear_mask"] = np.tile(keep_r, _NC_N_BINS)
+    if config["shear_cut_active"] and not keep_r.any():
+        raise ValueError("likelihood_cp: shear scale cut removes every "
+                         f"radius ({shear_r_min}, {shear_r_max})")
+
+    # rho_m(z) density-evolution factor on the shear theory: multiply the
+    # per-bin DeltaSigma by (1+z_bin)^shear_1pz_power. The 1-halo term is
+    # built with the COMOVING rho_m0 (frozen z=0, halo_model_cosmosis.py),
+    # so a comoving-vs-physical surface-density mismatch with the Buzzard DV
+    # shows up as a coherent z-tilt (data/theory grows with z); a single
+    # power of (1+z) absorbs it (chi2 121080->30862 on the Buzzard DV).
+    # This lives here, not in halo_model, because halo_model publishes one
+    # z-agnostic 1-halo table consumed by all z-bins -- only the likelihood
+    # sees the per-bin redshift. Default power 0.0 => factor 1 (no change).
+    # Bins are z-major: index = z*4 + lambda; shear index = bin*shear_n_r+r.
+    z_power = float(options.get_double(option_section, "shear_1pz_power",
+                                      default=0.0))
+    try:
+        zreps_str = options.get_string(option_section, "shear_zbin_reps",
+                                       default="0.275 0.435 0.575")
+    except Exception:
+        zreps_str = "0.275 0.435 0.575"
+    if z_power != 0.0:
+        zreps = np.array([float(x) for x in zreps_str.split()])
+        if zreps.size != _NC_N_BINS // 4:
+            raise ValueError("likelihood_cp: shear_zbin_reps needs "
+                             f"{_NC_N_BINS // 4} redshifts, got {zreps.size}")
+        fac_bin = (1.0 + np.repeat(zreps, 4)) ** z_power      # (12,)
+        config["shear_1pz_factor"] = np.repeat(
+            fac_bin, config["shear_n_r"])                     # (shear,)
+        print(f"[likelihood_cp] shear rho_m(z) factor (1+z)^{z_power} "
+              f"with z_bins={zreps.tolist()}")
+    else:
+        config["shear_1pz_factor"] = np.ones(data_shear.size)
     expected = [("NC", _NC_N_BINS), ("Shear", data_shear.size)]
     for name, expected_n in expected:
         d = np.asarray(vec[f"data_{name}"]).ravel()
@@ -124,6 +181,14 @@ def setup(options):
             raise ValueError(
                 f"likelihood_cp: invcov_{name} dense has shape {ic.shape}, "
                 f"expected ({expected_n},{expected_n})")
+        if name == "Shear" and config["shear_cut_active"]:
+            m = config["shear_mask"]
+            d = d[m]
+            if ic.ndim == 1:
+                ic = ic[m]
+            else:
+                cov = np.linalg.inv(ic)
+                ic = np.linalg.inv(cov[np.ix_(m, m)])
         if log_space:
             # store ln(data) and the delta-method invcov; both fixed
             # across the chain (linearized about the data, not theory).
@@ -150,7 +215,16 @@ def _shear_theory(block, config) -> np.ndarray:
     """
     NC = np.asarray(block[config["num_counts_section"], "vals"]).ravel()
     S1h_Ni = np.asarray(block[config["shear_1h_section"], "vals"]).ravel()
-    Sprj = np.asarray(block[config["shear_prj_section"], "vals"]).ravel()
+    # DeltaSigma_prj: use the CLUSTERED component only. shear_prj/vals = rnd + cl,
+    # but for a *differential* DeltaSigma the mean-field (rnd) term must cancel to
+    # zero -- verified: cl converges to b_large*rho_m*xi (=shear1h2hMax) at large R
+    # while total (rnd+cl) diverges (RichnessSelection#1). Fall back to vals if the
+    # module doesn't publish the rnd/cl split.
+    prj_sec = config["shear_prj_section"]
+    if block.has_value(prj_sec, "cl"):
+        Sprj = np.asarray(block[prj_sec, "cl"]).ravel()
+    else:
+        Sprj = np.asarray(block[prj_sec, "vals"]).ravel()
     if NC.size != _NC_N_BINS:
         raise ValueError(
             f"likelihood_cp: numcountssel/vals size {NC.size} != "
@@ -200,8 +274,12 @@ def execute(block, config):
     parts["NC"] = -0.5 * _chi2(delta_NC, config["invcov_NC"])
     logL += parts["NC"]
 
-    # Shear — theory = <gamma_t^1h> + gamma_t^prj.
+    # Shear — theory = <gamma_t^1h> + gamma_t^prj,
+    # scale-cut to match the data when shear_r_min/max is set.
     Shear_theory = _shear_theory(block, config)
+    Shear_theory = Shear_theory * config["shear_1pz_factor"]   # rho_m(z) (1+z)^p
+    if config["shear_cut_active"]:
+        Shear_theory = Shear_theory[config["shear_mask"]]
     delta_Shear = _residual(config["data_Shear"], Shear_theory, log_space)
     parts["Shear"] = -0.5 * _chi2(delta_Shear, config["invcov_Shear"])
     logL += parts["Shear"]

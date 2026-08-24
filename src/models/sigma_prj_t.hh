@@ -307,6 +307,14 @@ namespace y3_cluster {
       sigma_mis_.emplace(4.0, 2.77533742639e+11, NFW_SIG_SINGLE);
       dsigma_mis_.emplace(4.0, 2.77533742639e+11, SINGLE);
 
+      // use_halo_model_conc = T (issue #13): per-mass concentration for
+      // the NFW lookups from haloModel/{lnM, concentration} (Child18 at
+      // one_halo_z), wired in set_sample(). Default F = legacy fixed
+      // c=4 (bit-identical outputs).
+      use_halo_model_conc_ =
+          cfg.has_val(section, "use_halo_model_conc") &&
+          cfg.view<bool>(section, "use_halo_model_conc");
+
       // Parse the wall-grid axes so we can pre-plan sample-level caches
       // keyed on unique (lam_bin, zob, R) tuples.  get_vector_double
       // coerces int-arrays (lambda_bin) to double on the fly.
@@ -405,6 +413,17 @@ namespace y3_cluster {
       // call from here on for this sample.
       sigma_mis_ ->set_rho_mult(omm);
       dsigma_mis_->set_rho_mult(omm);
+
+      // Per-mass concentration (issue #13): the x = r/r_s lookup tables
+      // are c-universal, so feeding c(lnM) here changes only the
+      // analytic r_s / delta_c pieces. Requires compute_lensing_1h = T
+      // in [halo_model] (publisher of haloModel/concentration).
+      if (use_halo_model_conc_) {
+        sigma_mis_ ->set_concentration_table(
+            make_Interp1D(sample, "haloModel", "lnM", "concentration"));
+        dsigma_mis_->set_concentration_table(
+            make_Interp1D(sample, "haloModel", "lnM", "concentration"));
+      }
 
       // Sample-level zt-reference tables.
       // No zt_ref intermediate table: chi / dV / om / sigma_z / HMF /
@@ -819,6 +838,7 @@ namespace y3_cluster {
     std::optional<Interp2D>                xi_nl_;
     std::optional<NFW_SIGMA_MIS>           sigma_mis_;
     std::optional<NFW_DSIGMA_MIS>          dsigma_mis_;
+    bool use_halo_model_conc_ = false;                 // issue #13
     std::optional<Interp1D>                chi_;
     std::optional<Interp1D>                sci_;
     std::optional<Interp1D>                sigma_z_;   // photo-z kernel sigma(z)

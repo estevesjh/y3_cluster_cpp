@@ -122,10 +122,12 @@ class ShearPrjGl:
 
     def __init__(self, wall, *, lob_centers, n_lnm=16, n_per_seg=10,
                  n_zring=20, n_zouter=20, zt_low=0.10, zt_high=0.75,
-                 lnm_low=29.9336, lnm_high=35.6814, r_max_cmpch=35.0):
+                 lnm_low=29.9336, lnm_high=35.6814, r_max_cmpch=35.0,
+                 use_halo_model_conc=False):
         self.cfg = dict(n_lnm=n_lnm, n_per_seg=n_per_seg, n_zring=n_zring,
                         n_zouter=n_zouter, zt_low=zt_low, zt_high=zt_high,
-                        r_max_cmpch=r_max_cmpch)
+                        r_max_cmpch=r_max_cmpch,
+                        use_halo_model_conc=bool(use_halo_model_conc))
         self.lob_centers = np.asarray(lob_centers, dtype=float)
         self.lnm_x, self.lnm_w = dm.gl_nodes(lnm_low, lnm_high, n_lnm)
 
@@ -202,6 +204,16 @@ class ShearPrjGl:
         bs_zob = np.unique(bs_zob)
         bs_lob = np.unique(bs_lob)
 
+        # Per-mass concentration (issue #13; mirrors ShearPrjCore's
+        # use_halo_model_conc): clamped linear interp of the published
+        # haloModel/{lnM, concentration} table onto the mass GL nodes.
+        conc_lnm = None
+        if self.cfg.get("use_halo_model_conc"):
+            lnm_tab = source.array("halomodel", "lnm")
+            c_tab = source.array("halomodel", "concentration")
+            conc_lnm = np.interp(np.clip(self.lnm_x, lnm_tab[0],
+                                         lnm_tab[-1]), lnm_tab, c_tab)
+
         chi = lambda z: np.interp(np.clip(z, self._dist_z[0],
                                           self._dist_z[-1]),
                                   self._dist_z, self._d_c) * self._h0
@@ -235,7 +247,8 @@ class ShearPrjGl:
             bl = (1 - f) * b_large[j0, s["lb"]] + f * b_large[j1, s["lb"]]
             theta_lam = float(lp.r_lambda(lobc)) * (1.0 + zob) / chi_o
             k_sig, theta0 = 2.5 / theta_lam, 0.5 * theta_lam
-            bsel = bs + (bl - bs) / (1.0 + np.exp(-k_sig * (theta - theta0)))
+            bsel_theta = (bs + (bl - bs)
+                          / (1.0 + np.exp(-k_sig * (theta - theta0))))
 
             zs, wzs = self._build_z_grid(zob, chi, r_excl)
 
@@ -263,9 +276,11 @@ class ShearPrjGl:
             rnd_R, cl_R = [], []
             for r_perp in s["Rs"]:
                 ds = dsmis(r_perp, theta[:, None] * d_a_o,
-                           self.lnm_x[None, :], rho_mult=omega_m)
+                           self.lnm_x[None, :], rho_mult=omega_m,
+                           conc=(None if conc_lnm is None
+                                 else conc_lnm[None, :]))
                 rnd_R.append(geom @ (ds @ wrnd))
-                cl_R.append((geom * bsel) @ np.sum(wcl * ds, axis=1))
+                cl_R.append((geom * bsel_theta) @ np.sum(wcl * ds, axis=1))
             self._results[(s["lb"], zob)] = dict(
                 rnd=np.asarray(rnd_R), cl=np.asarray(cl_R), sci=sci_o,
                 wall_idx=s["wall_idx"])
@@ -345,6 +360,11 @@ def setup(options):
             knobs[key] = int(options.get_int(option_section, key))
         except Exception:
             knobs[key] = default
+    try:
+        knobs["use_halo_model_conc"] = bool(options.get_bool(
+            option_section, "use_halo_model_conc"))
+    except Exception:
+        knobs["use_halo_model_conc"] = False
     for key, default in (("zt_low", 0.10), ("zt_high", 0.75),
                          ("lnm_low", 29.9336), ("lnm_high", 35.6814),
                          ("r_max_cmpch", 35.0)):
