@@ -65,7 +65,7 @@ def bsel_row(dump, lam_bin, zob):
 
 def bsel_of_theta(dump, lam_bin, zob, theta):
     """The shared sigmoid reconstruction every consumer applies
-    (shear_prj_fast_mass.py / sigma_prj_t.hh convention)."""
+    (shear_prj_gl.py / sigma_prj_t.hh convention)."""
     lob, bs, bl = bsel_row(dump, lam_bin, zob)
     z = np.loadtxt(os.path.join(dump, "distances", "z.txt"))
     d_c = np.loadtxt(os.path.join(dump, "distances", "d_c.txt"))

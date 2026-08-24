@@ -16,7 +16,7 @@ independent numerical method:
   * lnM: refined GL (16 -> 48).
 
 Integrand definition mirrors sp_detail::ShearPrjCore via its verified
-1e-8 Python port (shear_prj_fast_mass.py):
+1e-8 Python port (shear_prj_gl.py, formerly shear_prj_fast_mass.py):
 
   rnd(R) = int dtheta 2 pi sin(theta) w_th
            int dz w_z(z;zob) dV(z) int dlnM n(M,z)
@@ -50,13 +50,13 @@ from scipy.integrate import quad_vec
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "pipelines"))
-sys.path.insert(0, str(REPO / "src" / "pipelines" / "des_y3" / "observables"
-                       / "shear_projection" / "fast_mass" / "python"))
+sys.path.insert(0, str(REPO / "src" / "pipelines" / "des_y3"
+                       / "shear_projection" / "python" / "0d"))
 
 from shared import datablock_models as dm            # noqa: E402
 from shared import lensing_profiles as lp            # noqa: E402
 from shared import z_kernel                          # noqa: E402
-from shear_prj_fast_mass import (                    # noqa: E402
+from shear_prj_gl import (                    # noqa: E402
     build_theta_grid, theta_excl_at_z)
 
 DUMP = REPO / "docs" / "figs" / "real_pipeline_extract_prj2h_output"

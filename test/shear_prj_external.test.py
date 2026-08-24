@@ -21,7 +21,7 @@ subset (lambda_bin 0 @ zob=0.275 and 3 @ zob=0.575; R = 0.26 / 1.62 /
     vals (rnd+cl): +2.3e-2 .. +2.5e-2 inner, <= 5.9e-3 outer
 
 This quantifies, against an independent adaptive reference, the
-previously acknowledged full_ltmz-CUDA finding ("median 9.5e-4, max
+previously acknowledged 3d-CUDA (formerly full_ltmz) finding ("median 9.5e-4, max
 2.2% at innermost radii" — shear_prj_cross_backend.test.py docstring)
 and adds the distances-grid contribution at larger R
 (docs/known_issues/distances_grid_resolution_defect.md).

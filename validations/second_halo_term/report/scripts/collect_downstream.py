@@ -27,13 +27,13 @@ def main():
 
     # shear1h2h_max validator (adaptive reference + 2h->0 limit)
     out = subprocess.run(
-        [PY, os.path.join(REPO, "src/pipelines/des_y3/observables/shear_1h2h",
-                          "fast_mass/python/validate_shear1h2h_max.py"),
+        [PY, os.path.join(REPO, "src/pipelines/des_y3/shear_1h2h",
+                          "python/0d/validate_shear1h2h_max.py"),
          os.path.join(REPO, "docs/figs/real_pipeline_extract_prj2h_output")],
         capture_output=True, text=True, env=ENV).stdout
-    for key, pat in (("validatorGL", r"full_ltmz GL vs adaptive reference: ([\d.e+-]+)"),
+    for key, pat in (("validatorGL", r"explicit-3d GL vs adaptive reference: ([\d.e+-]+)"),
                      ("validatorFast", r"fast path\s+vs adaptive reference: ([\d.e+-]+)"),
-                     ("validatorLimit", r"2h->0 limit vs validated 1h fast_mass: ([\d.e+-]+)")):
+                     ("validatorLimit", r"2h->0 limit vs validated 1h fixed-GL: ([\d.e+-]+)")):
         m = re.search(pat, out)
         macros[key] = sci(m.group(1)) if m else r"\textbf{??}"
     macros["validatorStatus"] = "PASS" if "PASS" in out else r"\textbf{FAIL}"

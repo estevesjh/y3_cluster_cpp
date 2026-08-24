@@ -116,7 +116,7 @@ otherwise.
 | ΔΣ 1h | exists: `test/nfw_dsigma_mis.test.cu` (cluster_toolkit) + `halo_model.test.py` closed-form NFW | cluster_toolkit + closed-form | 1e-3 (known single-point −0.5% stays pinned red per #6) |
 | ΔΣ 2h (ΔΣ_hh) | extend `test/halo_model.test.py::TestSecondHaloTermVsClenspy` → pinned CLensPy post-fix values | CLensPy FFTLog+Abel | ≤ 1% (measured 0.8–1.0%) |
 | b_sel(θ) / wall P1,I1,J | `test/bsel_external.test.py` (new) | dump-fed scipy quad-truth (adaptive, from RichnessSelection machinery re-pointed at the fiducial dump) | 1e-3 vs quad-truth |
-| shear_prj (Σ_prj, ΔΣ_prj, γ_t) | extend `test/shear_prj_cross_backend.test.py` with an *external* leg | independent adaptive Python reference (full_ltmz-class, built for #11) | 1e-3 vs adaptive; existing cross-backend identity legs kept |
+| shear_prj (Σ_prj, ΔΣ_prj, γ_t) | extend `test/shear_prj_cross_backend.test.py` with an *external* leg | independent adaptive Python reference (explicit-adaptive class, formerly full_ltmz, built for #11) | 1e-3 vs adaptive; existing cross-backend identity legs kept |
 
 Notes:
 - References get checked in as small pinned arrays with provenance comments
