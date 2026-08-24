@@ -184,10 +184,13 @@ TEST_CASE("ShearPrjCore's DSigma_mis convention (c=4, single kernel) matches the
   // NfwDsigmaMisProduction(kernel="single")(R, r_mis, lnM, rho_mult=omega_m)
   // -- the c=4/rho_crit-convention replica of this same class, not the
   // legacy c=5 richness_selection reference (see file header).
+  // Regenerated 2026-08-24 with the SIGNED single-kernel table (the
+  // merge campaign's reader-parity fix); C++ and the Python replica
+  // agree to 6+ digits on these.
   Point const pts[] = {
-    {0.4117, 0.30, 32.0, 9.699110243638033},
-    {1.0257, 0.75, 33.5, 11.003453477283488},
-    {4.0265, 1.50, 34.5, 8.772326127385625},
+    {0.4117, 0.30, 32.0, 9.725459160361723},
+    {1.0257, 0.75, 33.5, 11.013469742434905},
+    {4.0265, 1.50, 34.5, 8.772512689218514},
   };
   for (auto const& p : pts) {
     CHECK(dsigma_mis(p.R, p.r_mis, p.lnM) == Approx(p.expected).epsilon(1e-3));
