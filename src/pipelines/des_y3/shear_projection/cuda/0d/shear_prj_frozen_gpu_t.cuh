@@ -274,7 +274,8 @@ public:
     for (std::size_t i = 0; i != Ng; ++i)
       lzob_Rs_[gp_lzob_idx_[i]].push_back(rad[i]);
 
-    dsigma_mis_dev_.emplace(4.0, 2.77533742639e+11, "single");
+    dsigma_mis_dev_.emplace(y3_cuda::DSIGMA_MIS_CONC, y3_cuda::DSIGMA_MIS_RHOC,
+                            y3_cuda::DSIGMA_MIS_SINGLE);
     // issue #14: honor use_halo_model_conc (per-mass c(lnM) into the
     // miscentered NFW); default keeps fixed c=4.
     use_halo_model_conc_ =

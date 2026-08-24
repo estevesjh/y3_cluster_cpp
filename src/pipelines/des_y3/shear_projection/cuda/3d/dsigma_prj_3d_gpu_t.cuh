@@ -119,7 +119,8 @@ public:
     sigma_z_.emplace(zk_z.data(), zk_s.data(), zk_z.size());
     bias_.emplace(make_Interp2D(s, "haloModel", "lnM", "z", "bias"));
     xi_nl_.emplace(make_Interp2D(s, "xi_nl", "r", "z", "xi_nl"));
-    dsigma_mis_.emplace(4.0, 2.77533742639e+11, "single");
+    dsigma_mis_.emplace(y3_cuda::DSIGMA_MIS_CONC, y3_cuda::DSIGMA_MIS_RHOC,
+                        y3_cuda::DSIGMA_MIS_SINGLE);
     if (use_halo_model_conc_)
       dsigma_mis_->set_concentration_table(s);
     h0_ = s.view<double>("cosmological_parameters", "h0");
