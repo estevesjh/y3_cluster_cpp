@@ -41,6 +41,27 @@ for `rnd`/`vals` in the signed era.
 - Any consumer of frozen `rnd` or frozen `vals` is broken until the
   frozen amplitude algebra is re-derived for the signed kernel.
 
+## Second observation (2026-08-24): the GPU port's cl channel is broken outright
+
+First-ever execution of `ShearPrjFrozenGpu.so` (built on the branch's
+Mac, never runnable before this Perlmutter session), driven in-pipeline
+next to its CPU counterpart on the identical sample:
+
+- `rnd`: matches the CPU frozen module to 2.6e-12 (machine precision) —
+  the device ΔΣ_mis cache and the mean-field sweep are correct.
+- `cl`: 15 NaNs (the entire zob=0.575 wall slice) and denormal garbage
+  (values down to -1e-211) elsewhere; the finite subset deviates from
+  the CPU cl by up to 100%. Signature of an uninitialized / mis-indexed
+  device buffer in the cl cache path (the n_theta_max-flattened scl
+  output), not a physics disagreement.
+
+Also fixed in the merge campaign: `test/shear_prj_frozen_gpu.test.cu`
+used to dlopen a hardcoded STALE tree's module
+(`/pscratch/.../y3_cluster_cpp/gpu-build/...`); it now defaults to the
+path CMake bakes in for THIS build's ShearPrjFrozenGpu target
+(`SHEAR_PRJ_FROZEN_GPU_SO` still overrides). The test is red for the
+real reason above.
+
 ## Pinned by
 
 `test/des_y3_pipeline.test.py::TestShearPrjGl::test_matches_exact_evaluator_and_frozen_physics`:

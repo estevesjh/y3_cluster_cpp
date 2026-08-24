@@ -83,6 +83,10 @@ if (USE_CUDA)
   add_test(shear1h2h_max_gpu_test shear1h2h_max_gpu_test)
 
   add_executable(shear_prj_frozen_gpu_test shear_prj_frozen_gpu.test.cu)
+  # Default .so path = THIS build's ShearPrjFrozenGpu (the old hardcoded
+  # absolute fallback silently dlopen'd a stale tree's module).
+  target_compile_definitions(shear_prj_frozen_gpu_test PRIVATE
+    SHEAR_PRJ_FROZEN_GPU_SO_DEFAULT="$<TARGET_FILE:ShearPrjFrozenGpu>")
   target_link_libraries(shear_prj_frozen_gpu_test PRIVATE cosmosis ${NVTX_LIBRARY} utils models cuda_models cuda_utils ${GSL_LIBRARIES} ${CUBA_LIBRARIES} testmain fmt::fmt)
   target_include_directories(shear_prj_frozen_gpu_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/externals ${CUBACPP_DIR} ${PAGANI_DIR} ${GSL_INCLUDE_DIR})
   set_target_properties(shear_prj_frozen_gpu_test PROPERTIES POSITION_INDEPENDENT_CODE ON CUDA_ARCHITECTURES ${Y3GCC_TARGET_ARCH})

@@ -218,12 +218,17 @@ TEST_CASE("ShearPrjFrozenGpu.so matches its CPU counterpart "
 
   // ---- dlopen the actual built .so and drive it through the real
   // CosmoSIS C-ABI (setup/execute/cleanup), exactly as CosmoSIS would. ----
+  // Resolution order: env override, then the path CMake baked in for
+  // THIS build's ShearPrjFrozenGpu target (the old absolute fallback
+  // dlopen'd a stale tree's module and crashed on its fixed bugs).
   char const* so_path_env = std::getenv("SHEAR_PRJ_FROZEN_GPU_SO");
+#ifdef SHEAR_PRJ_FROZEN_GPU_SO_DEFAULT
   std::string const so_path =
-    so_path_env ? so_path_env
-                : "/pscratch/sd/j/jesteves/github/y3_cluster_cpp/gpu-build/"
-                  "src/modules/des_y3_shear_prj_frozen_cuda/"
-                  "ShearPrjFrozenGpu.so";
+    so_path_env ? so_path_env : SHEAR_PRJ_FROZEN_GPU_SO_DEFAULT;
+#else
+  REQUIRE(so_path_env != nullptr);
+  std::string const so_path = so_path_env;
+#endif
   void* handle = dlopen(so_path.c_str(), RTLD_NOW);
   if (!handle) FAIL("dlopen(" << so_path << ") failed: " << dlerror());
   REQUIRE(handle != nullptr);
