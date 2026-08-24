@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for src/pipelines/shared/sel_function.py.
+"""Unit tests for the canonical systematics selection function.
 
 This module had zero dedicated test coverage before this file: every
 des_y3 backend that reads sel_function/S_stack (numcounts_fast_mass,
@@ -48,10 +48,10 @@ from scipy import integrate, special
 from scipy.stats import norm
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "src" / "pipelines" / "shared"))
+sys.path.insert(0, str(REPO / "src" / "pipelines"))
 sys.path.insert(0, str(REPO))
 
-import sel_kernels  # noqa: E402
+from systematics.selection_richness.python import sel_kernels  # noqa: E402
 
 sf = sel_kernels.load()
 REL_TOL = 1.0e-3

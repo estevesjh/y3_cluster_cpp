@@ -330,7 +330,7 @@ def main():
         "name": TABLE_NAME,
         "format_version": FORMAT_VERSION,
         "generated": datetime.date.today().isoformat(),
-        "generator": "src/pipelines/des_y3/observables/shear_1h2h/"
+        "generator": "src/pipelines/des_y3/shear_1h2h/"
                      "radial_series/python/generate_radial_series_tables.py",
         "profile": {
             "family": "NFW centred (Wright & Brainerd 2000) + gamma-kernel "

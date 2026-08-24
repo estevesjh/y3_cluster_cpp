@@ -1,11 +1,12 @@
 // Unit tests for the des_y3 Phase 2 fast_mass projection-shear C++ driver
-// (src/pipelines/des_y3/observables/shear_projection/fast_mass/cpp/
+// (src/pipelines/des_y3/shear_projection/fast_mass/cpp/
 // ShearPrjFastMass.cc).
 //
 // ShearPrjFastMass.cc has no fast_mass-specific header of its own -- it is
 // a thin CosmoSISScalarEvaluatorModule wrapper that instantiates the
 // shared, immutable production core y3_cluster::sp_detail::ShearPrjCore
-// (src/models/sigma_prj_t.hh) directly and publishes both dsigma_prj and
+// (systematics/shear_prj/cpp/sigma_prj_t.hh) directly and publishes both
+// dsigma_prj and
 // shear_prj from one core pass.  So "the underlying model class" this
 // test exercises is that shared core itself, plus the free geometry
 // functions and the NFW miscentering profile it is built from.
@@ -52,7 +53,7 @@
 
 #include "cosmosis/datablock/datablock.hh"
 #include "models/nfw_dsigma_mis.hh"
-#include "models/sigma_prj_t.hh"
+#include "pipelines/systematics/shear_prj/cpp/sigma_prj_t.hh"
 
 #include <algorithm>
 #include <array>
@@ -168,7 +169,7 @@ TEST_CASE("sigma_prj LoS-slab exclusion angle (theta_excl_at_z) matches the Pyth
 
 TEST_CASE("ShearPrjCore's DSigma_mis convention (c=4, single kernel) matches the shared Python replica")
 {
-  // Exactly ShearPrjCore's ctor line (src/models/sigma_prj_t.hh):
+  // Exactly ShearPrjCore's ctor line (systematics/shear_prj/cpp/sigma_prj_t.hh):
   //   dsigma_mis_.emplace(4.0, 2.77533742639e+11, SINGLE);
   //   dsigma_mis_->set_rho_mult(omega_m);
   y3_cluster::NFW_DSIGMA_MIS dsigma_mis(4.0, 2.77533742639e+11,
@@ -206,7 +207,7 @@ TEST_CASE("ShearPrjCore's DSigma_mis convention (c=4, single kernel) matches the
 TEST_CASE("ShearPrjCore construction parses its own wall grid and (lambda_bin, zob) slicing")
 {
   // The config contract ShearPrjFastMass.cc relies on: ShearPrjCore's
-  // ctor (src/models/sigma_prj_t.hh) reads the zipped wall
+  // ctor (systematics/shear_prj/cpp/sigma_prj_t.hh) reads the zipped wall
   // (lambda_bin/zo_low/zo_high/radii), the zt/lnm integration bounds,
   // and the GL/theta-grid knobs, then groups the wall into
   // (lambda_bin, zob) slices.  This constructs the actual core class

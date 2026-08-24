@@ -4,12 +4,13 @@
 // (richness, photo-z) bin:
 //
 //   N_ij = ∫∫∫ dlt dzt dlnM  n(M,zt) · dV/dΩdz(zt) · Ω(zt)
-//                            · K_j(zt) · K_i(lt, zt) · P_HOD(lt | M, zt)
+//                            · S_j(zt) · S_i(lt, zt) · P_HOD(lt | M, zt)
 //
 // This is the C++ backend of the des_y3 `full_ltmz` strategy
 // (src/pipelines/des_y3/README.md): unlike the older
 // NumCountsFullScalarIntegrand diagnostic it includes the Gaussian
-// photo-z kernel K_j and the Costanzi EMG observed-richness kernel K_i,
+// observed-redshift kernel S_j and the Costanzi EMG observed-richness
+// kernel S_i,
 // so it computes the same quantity as the production fast path
 // (sel_function.py + NumCountsSel.so) with no intermediate S_ij
 // tabulation, no redshift contraction, and no fixed-node quadrature —
@@ -17,9 +18,9 @@
 //
 // Every physics term is an existing immutable model reused as-is:
 // HMF_t, DV_DO_DZ_t, OMEGA_Z_DES, MOR_HOD_t (shifted-Poisson HOD),
-// PlobLtrEMG_t + RichnessKernel_t (EMG K_i), richness_zkernel (K_j).
+// PlobLtrEMG_t + RichnessKernel_t (EMG S_i), richness_zkernel (S_j).
 // PlobLtrEMG_t reads the datablock section `plob_ltr_params`, which the
-// y3_buzzard/prj_params.py shim publishes at pipeline setup (the Python
+// systematics/selection_function/prj_params.py publishes at pipeline setup (the Python
 // backend's in-code default is the same frozen table).
 //
 // Configuration (wall-of-numbers, one entry per bin, zipped with
@@ -71,7 +72,7 @@ private:
   using volume_t = cubacpp::IntegrationVolume<3>;
 
   // Bin definitions from configuration.
-  std::vector<y3_cluster::RichnessKernel_t> k_i_;
+  std::vector<y3_cluster::RichnessKernel_t> s_i_;
   std::vector<double> zob_min_, zob_max_, sigma_z_;
 
   // Per-sample models.
@@ -96,9 +97,9 @@ public:
         zob_max_.size() != n || sigma_z_.size() != n)
       throw std::runtime_error(
         "NumCountsFullLtmz: bin definition arrays have unequal lengths");
-    k_i_.reserve(n);
+    s_i_.reserve(n);
     for (std::size_t i = 0; i != n; ++i)
-      k_i_.emplace_back(lam_min[i], lam_max[i]);
+      s_i_.emplace_back(lam_min[i], lam_max[i]);
   }
 
   void
@@ -116,7 +117,7 @@ public:
   {
     current_bin_ = static_cast<int>(pt[0]);
     if (current_bin_ < 0 ||
-        static_cast<std::size_t>(current_bin_) >= k_i_.size())
+        static_cast<std::size_t>(current_bin_) >= s_i_.size())
       throw std::out_of_range(
         "NumCountsFullLtmz: bin_index outside the configured bin set");
   }
@@ -124,11 +125,11 @@ public:
   double
   operator()(double lt, double zt, double lnM) const
   {
-    double const k_j = y3_cluster::richness_zkernel(
+    double const s_j = y3_cluster::richness_zkernel(
       zt, zob_min_[current_bin_], zob_max_[current_bin_],
       sigma_z_[current_bin_]);
-    return (*hmf_)(lnM, zt) * (*dv_do_dz_)(zt) * (*omega_z_)(zt) * k_j *
-           k_i_[current_bin_](lt, zt, *plob_) * (*mor_)(lt, lnM, zt);
+    return (*hmf_)(lnM, zt) * (*dv_do_dz_)(zt) * (*omega_z_)(zt) * s_j *
+           s_i_[current_bin_](lt, zt, *plob_) * (*mor_)(lt, lnM, zt);
   }
 
   static char const*

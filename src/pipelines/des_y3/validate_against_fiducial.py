@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from shared import datablock_models as dm            # noqa: E402
 from shared import full_ltmz_core                    # noqa: E402
 from shared import lensing_profiles as lp            # noqa: E402
-from shared import sel_kernels                       # noqa: E402
+from systematics.selection_richness.python import sel_kernels  # noqa: E402
 
 R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
                    1.19581, 1.70998, 2.44521, 3.49658, 5.00000])

@@ -137,3 +137,7 @@ Pinned 180-point wall at the fiducial point:
 The frozen production CPU path is about 82 ms/sample. The CUDA result is
 therefore a faithful acceleration of that frozen definition, not a validation
 of the exact-\(z\) definition.
+
+For the distinction between fixed Gauss--Legendre quadrature, adaptive GSL
+`QAGP`, and adaptive Cuhre/Vegas, see the
+[projection numerical-method map](../README.md#what-the-numerical-methods-actually-integrate).

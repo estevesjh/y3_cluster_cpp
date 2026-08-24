@@ -27,6 +27,29 @@
 
 namespace y3_cluster {
 
+  namespace cscm_detail {
+    // Some ini scalars (e.g. "1.0e5") can land in the DataBlock as an
+    // int rather than a double depending on how the value was parsed --
+    // the same ambiguity get_vector_double() (datablock_reader.cc)
+    // already works around for arrays.  cfg.view<double>() has no such
+    // fallback and throws cosmosis::Entry::BadEntry on a stored int, so
+    // eps_rel/eps_abs/max_eval go through this helper instead.
+    inline double
+    view_as_double(cosmosis::DataBlock& cfg,
+                   std::string const& section,
+                   std::string const& name)
+    {
+      double x;
+      if (cfg.get_val<double>(section, name, x) == DBS_SUCCESS) return x;
+      int i;
+      if (cfg.get_val<int>(section, name, i) == DBS_SUCCESS)
+        return static_cast<double>(i);
+      throw std::runtime_error("CosmoSISSICUDAModule: parameter " + section +
+                               "/" + name +
+                               " could not be read as double or int");
+    }
+  }
+
   // DeviceInitializer initializes a CUDA device upon construction.
   // Specifically, it initializes the device with a number matching
   // the local MPI rank of the process, so that each device on a
@@ -159,8 +182,8 @@ try : device_(get_mpi_info()), integrand_(cfg),
   algorithm_(cfg.view<std::string>(IntegrandType::module_label(), "algorithm")),
   volumes_(IntegrandType::make_integration_volumes(cfg)),
   grid_points_(IntegrandType::make_grid_points(cfg)),
-  eps_rel_(cfg.view<double>(IntegrandType::module_label(), "eps_rel")),
-  eps_abs_(cfg.view<double>(IntegrandType::module_label(), "eps_abs")),
+  eps_rel_(cscm_detail::view_as_double(cfg, IntegrandType::module_label(), "eps_rel")),
+  eps_abs_(cscm_detail::view_as_double(cfg, IntegrandType::module_label(), "eps_abs")),
   use_cartesian_product_of_volumes_and_gridpoints_(
     cfg.view<bool>(IntegrandType::module_label(), "use_cartesian_product")) {
   // Check validity of configuration of volumes and gridpoints.
@@ -201,7 +224,7 @@ try : device_(get_mpi_info()), integrand_(cfg),
   }
 
   algorithm_.set_maxeval(
-    cfg.view<double>(IntegrandType::module_label(), "max_eval"));
+    cscm_detail::view_as_double(cfg, IntegrandType::module_label(), "max_eval"));
 }
 catch (cosmosis::Exception const& e) {
   std::cerr << "\nDuring construction of a CosmoSISSICUDAModule with label:  "

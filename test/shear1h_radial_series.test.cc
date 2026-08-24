@@ -1,5 +1,5 @@
 // Unit tests for the radial_series C++ backend table + series core
-// (src/pipelines/des_y3/observables/shear_1h2h/radial_series/cpp).
+// (src/pipelines/des_y3/shear_1h2h/radial_series/cpp).
 //
 // Golden values were computed 2026-08-12 from the committed
 // data/radial_series text tables with an independent Python bilinear /
@@ -12,7 +12,7 @@
 // Requires Y3_CLUSTER_CPP_DIR to point at the source tree (data/).
 #include "catch2/catch.hpp"
 
-#include "pipelines/des_y3/observables/shear_1h2h/radial_series/cpp/shear1h_radial_series_t.hh"
+#include "pipelines/des_y3/shear_1h2h/radial_series/cpp/shear1h_radial_series_t.hh"
 
 #include <array>
 #include <cmath>

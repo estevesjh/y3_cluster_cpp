@@ -59,13 +59,6 @@ import numpy as np
 from cosmosis.datablock import option_section
 
 _NC_N_BINS = 12
-_SHEAR_N_R = 10         # radii per bin (0.2-5 Mpc/h, matches JK sampling)
-_SHEAR_N = _NC_N_BINS * _SHEAR_N_R   # 120
-
-OBS = [
-    ("NC",    _NC_N_BINS),
-    ("Shear", _SHEAR_N),
-]
 
 
 def _chi2(delta: np.ndarray, invcov: np.ndarray) -> float:
@@ -96,11 +89,27 @@ def setup(options):
     vec = np.load(fname, allow_pickle=False)
     log_space = bool(options.get_bool(option_section, "log_space",
                                       default=False))
+    data_shear = np.asarray(vec["data_Shear"]).ravel()
+    if data_shear.size % _NC_N_BINS:
+        raise ValueError(
+            "likelihood_cp: data_Shear size must be a multiple of "
+            f"{_NC_N_BINS}, got {data_shear.size}")
     config = {"filename": fname,
               "log_space": log_space,
+              "num_counts_section": options.get_string(
+                  option_section, "num_counts_section",
+                  default="numcountssel"),
+              "shear_1h_section": options.get_string(
+                  option_section, "shear_1h_section",
+                  default="shear1hmissel"),
+              "shear_prj_section": options.get_string(
+                  option_section, "shear_prj_section",
+                  default="shear_prj"),
+              "shear_n_r": data_shear.size // _NC_N_BINS,
               "verbose": bool(options.get_bool(option_section, "verbose",
                                                 default=False))}
-    for name, expected_n in OBS:
+    expected = [("NC", _NC_N_BINS), ("Shear", data_shear.size)]
+    for name, expected_n in expected:
         d = np.asarray(vec[f"data_{name}"]).ravel()
         ic = np.asarray(vec[f"invcov_{name}"])
         if d.size != expected_n:
@@ -129,36 +138,37 @@ def setup(options):
     return config
 
 
-def _shear_theory(block) -> np.ndarray:
-    """Build the summed tangential-shear theory vector (length 120).
+def _shear_theory(block, config) -> np.ndarray:
+    """Build the summed tangential-shear theory vector.
 
     gamma_t^theory(R | i,j) = <gamma_t^1h>_i(R) + gamma_t^prj(R | i,j)
 
-    shear1hsel/vals is N_i-weighted (shape 180); divide entry-wise by
-    the NumCountsSel integral (shape 12, broadcast across the 10 R
+    shear1hsel/vals is N_i-weighted; divide entry-wise by the
+    number-count integral (shape 12, broadcast across the R
     points per bin) to get the per-cluster average, then add the
     projection piece.
     """
-    NC = np.asarray(block["numcountssel", "vals"]).ravel()
-    S1h_Ni = np.asarray(block["shear1hmissel", "vals"]).ravel()
-    Sprj = np.asarray(block["shear_prj", "vals"]).ravel()
+    NC = np.asarray(block[config["num_counts_section"], "vals"]).ravel()
+    S1h_Ni = np.asarray(block[config["shear_1h_section"], "vals"]).ravel()
+    Sprj = np.asarray(block[config["shear_prj_section"], "vals"]).ravel()
     if NC.size != _NC_N_BINS:
         raise ValueError(
             f"likelihood_cp: numcountssel/vals size {NC.size} != "
             f"{_NC_N_BINS}")
-    if S1h_Ni.size != _SHEAR_N:
+    shear_n = _NC_N_BINS * config["shear_n_r"]
+    if S1h_Ni.size != shear_n:
         raise ValueError(
-            f"likelihood_cp: shear1hmissel/vals size {S1h_Ni.size} != "
-            f"{_SHEAR_N}")
-    if Sprj.size != _SHEAR_N:
+            f"likelihood_cp: shear1h/vals size {S1h_Ni.size} != "
+            f"{shear_n}")
+    if Sprj.size != shear_n:
         raise ValueError(
             f"likelihood_cp: shear_prj/vals size {Sprj.size} != "
-            f"{_SHEAR_N}")
+            f"{shear_n}")
     # shear1hsel wall = (bin_index fast, r_perp slow) for Cartesian
     # product; NumCountsSel wall is just bin_index.  The two module
     # outputs share the same 12-bin ordering, so we can tile NC across
-    # the 10 R-per-bin axis.
-    NC_tile = np.repeat(NC, _SHEAR_N_R)
+    # the configured R-per-bin axis.
+    NC_tile = np.repeat(NC, config["shear_n_r"])
     bad = NC_tile <= 0.0
     with np.errstate(divide="ignore", invalid="ignore"):
         S1h_avg = np.where(bad, 0.0, S1h_Ni / NC_tile)
@@ -184,13 +194,14 @@ def execute(block, config):
     log_space = config["log_space"]
 
     # NumCounts — direct Gaussian on the 12-bin vector.
-    NC_theory = np.asarray(block["numcountssel", "vals"]).ravel()
+    NC_theory = np.asarray(
+        block[config["num_counts_section"], "vals"]).ravel()
     delta_NC = _residual(config["data_NC"], NC_theory, log_space)
     parts["NC"] = -0.5 * _chi2(delta_NC, config["invcov_NC"])
     logL += parts["NC"]
 
-    # Shear — theory = <gamma_t^1h> + gamma_t^prj (length 120).
-    Shear_theory = _shear_theory(block)
+    # Shear — theory = <gamma_t^1h> + gamma_t^prj.
+    Shear_theory = _shear_theory(block, config)
     delta_Shear = _residual(config["data_Shear"], Shear_theory, log_space)
     parts["Shear"] = -0.5 * _chi2(delta_Shear, config["invcov_Shear"])
     logL += parts["Shear"]

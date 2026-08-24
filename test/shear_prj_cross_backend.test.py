@@ -42,7 +42,8 @@ pipeline -- see docs/source/pipeline_organization.md's "put_val
 gotcha".
 
 To regenerate: append the relevant module(s) to a pipeline like
-prj_frozen_gpu.ini's (see y3_buzzard/prj_params.py for `plob_ltr_params`,
+prj_frozen_gpu.ini's (see systematics/selection_function/prj_params.py for
+`plob_ltr_params`,
 b_sel_marg + bsel for the upstream marginalized-bias chain) and read
 back `shear_prj_fast_mass/vals`, `shear_prj_frozen_physics/vals`,
 `shear_prj_frozen_gpu/vals`.
@@ -253,7 +254,8 @@ CUDA_FROZEN = np.array([
 
 class TestShearPrjCrossBackend(unittest.TestCase):
     def test_cpp_fast_mass_matches_python_fast_mass(self):
-        # Same exact-z core (src/models/sigma_prj_t.hh's ShearPrjCore),
+        # Same exact-z core (systematics/shear_prj/cpp/sigma_prj_t.hh's
+        # ShearPrjCore),
         # two independent language implementations -- measured bit-
         # identical in the source run; allow a little headroom for
         # environment/BLAS differences across machines.

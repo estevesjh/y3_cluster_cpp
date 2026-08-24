@@ -41,8 +41,8 @@ TIMING_SLOWDOWN_LIMIT = 1.50
 if str(PIPELINES) not in sys.path:
     sys.path.insert(0, str(PIPELINES))
 
-from cosmology.prj_params import PrjParams  # noqa: E402
-from shared import sel_kernels  # noqa: E402
+from systematics.selection_function.prj_params import PrjParams  # noqa: E402
+from systematics.selection_richness.python import sel_kernels  # noqa: E402
 
 current_sel_function = sel_kernels.load()
 

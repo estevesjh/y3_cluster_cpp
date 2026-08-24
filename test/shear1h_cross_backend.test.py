@@ -66,14 +66,14 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "pipelines"))
-_SHEAR1H2H = REPO / "src" / "pipelines" / "des_y3" / "observables" / "shear_1h2h"
+_SHEAR1H2H = REPO / "src" / "pipelines" / "des_y3" / "shear_1h2h"
 sys.path.insert(0, str(_SHEAR1H2H / "full_ltmz" / "python"))
 sys.path.insert(0, str(_SHEAR1H2H / "fast_mass" / "python"))
 sys.path.insert(0, str(_SHEAR1H2H / "radial_series" / "python"))
 
 from shared import datablock_models as dm  # noqa: E402
 from shared import lensing_profiles as lp  # noqa: E402
-from shared import sel_kernels  # noqa: E402
+from systematics.selection_richness.python import sel_kernels  # noqa: E402
 from shear1h_full_ltmz import compute_shear as compute_shear_full_ltmz  # noqa: E402
 from shear1h_fast_mass import compute_shear as compute_shear_fast_mass  # noqa: E402
 import nfw_profile_family as pf  # noqa: E402

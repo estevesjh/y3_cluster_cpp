@@ -1,5 +1,5 @@
 // Unit tests for the full_ltmz shear C++ reference backend
-// (src/pipelines/des_y3/observables/shear_1h2h/full_ltmz/cpp,
+// (src/pipelines/des_y3/shear_1h2h/full_ltmz/cpp,
 // des_y3 Phase 2): one adaptive-Cuhre triple integral per (bin, R) over
 // the explicit (lambda_true, lnM, z) integrand, production miscentred
 // mixture profile.
@@ -31,7 +31,7 @@
 // at construction, same as shear1h_radial_series.test.cc.
 #include "catch2/catch.hpp"
 
-#include "pipelines/des_y3/observables/shear_1h2h/full_ltmz/cpp/Shear1hFullLtmz.cc"
+#include "pipelines/des_y3/shear_1h2h/full_ltmz/cpp/Shear1hFullLtmz.cc"
 
 #include "models/dv_do_dz_t.hh"
 #include "models/hmf_t.hh"

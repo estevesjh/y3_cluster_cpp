@@ -22,7 +22,7 @@ from __future__ import annotations
 import numpy as np
 
 from . import datablock_models as dm
-from . import sel_kernels
+from systematics.selection_richness.python import sel_kernels
 
 
 def full_ltmz_mass_integral_adaptive(bins, mor, plob_splines, hmf, dv, *,

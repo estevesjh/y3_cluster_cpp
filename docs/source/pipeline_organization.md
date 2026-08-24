@@ -16,7 +16,7 @@ after a separate, explicit cutover.
 
 ## Directory rule
 
-The maintained namespace is organized as
+The maintained namespaces are organized as
 
 ```text
 observable -> integration strategy -> language/backend
@@ -25,15 +25,15 @@ observable -> integration strategy -> language/backend
 The implemented tree is:
 
 ```text
-src/pipelines/des_y3/
-├── shared/
-│   ├── datablock_models.py
-│   ├── full_ltmz_core.py
-│   ├── lensing_profiles.py
-│   ├── sel_function.py
-│   ├── sel_kernels.py
-│   └── z_kernel.py
-└── observables/
+src/pipelines/
+├── shared/                         # reusable numerical/datablock layer
+├── cosmology/                      # halo-model physics
+├── systematics/                    # canonical selection-systematics layer
+│   ├── selection_richness/python/
+│   ├── selection_bias/{python,cpp}/
+│   ├── selection_function/python/
+│   └── shear_prj/cpp/
+└── des_y3/                         # survey observable compositions
     ├── number_counts/
     │   ├── fast_mass/python/
     │   └── full_ltmz/{python,cpp,cuda}/
@@ -50,13 +50,12 @@ Directories are created only for runnable implementations or substantive
 design material. The absence of a backend directory means that backend is not
 currently implemented; it is not an empty placeholder.
 
-The `shared` package is the Python model layer used by the namespace
-implementations and validators. It reproduces the maintained HOD, HMF,
-volume, selection, redshift-kernel, and lensing conventions rather than
-letting each observable carry its own copy. As of 2026-08-12,
-`shared/sel_function.py` and `src/modules/sel_function/sel_function.py` are
-identical staged copies. The production ini still loads the latter, while
-namespace code imports the former through `shared/sel_kernels.py`.
+The `shared` package is the lower-level Python model layer used by the
+implementations and validators. It provides the HOD, HMF, volume,
+redshift-kernel, and lensing utilities. Selection-systematics entry points
+are now owned by `systematics/`; the older files under `shared/`,
+`cosmology/`, and `src/models/` remain compatibility references and are not
+deleted by this migration.
 
 ## Integration strategies
 

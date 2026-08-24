@@ -40,17 +40,19 @@ likelihoods = likelihoods
 | 4 | {doc}`MfTinker <cosmology/mf_tinker>` | Tinker halo mass function | Fortran · CosmoSIS Standard Library |
 | 5 | {doc}`halo_model <cosmology/halo_model>` | Tinker bias $b(M,z)$, $\xi_{\rm NL}$, NFW lensing tables | Python · `y3_cluster_cpp` |
 | 6 | {doc}`average_sigma_crit_inv <cosmology/sigma_crit_inv>` | $\langle\Sigma_{\rm crit}^{-1}\rangle(z_l)$ | Python · `y3_cluster_cpp` |
-| 7 | {doc}`sel_function <selection/sel_function>` | selection tensor $S_{ij}(\ln M, z)$ | Python · `y3_cluster_cpp` |
+| 7 | {doc}`sel_function <selection/sel_function>` | selection tensor $S_{ij}(\ln M, z)$ | Python · `systematics/selection_richness` |
 | 8 | {doc}`NumCountsFastMass <observables/number_counts>` | cluster counts $N_i[1]$ (fast_mass, des_y3) | C++ · `y3_cluster_cpp` |
 | 9 | {doc}`Shear1hFastMass <observables/shear_halo>` | one-halo shear with miscentering (fast_mass, des_y3) | C++ · `y3_cluster_cpp` |
 | 10 | {doc}`b_sel_marg <selection/bsel>` | selection-bias operators $(P_1, I_1, J)$ | C++ · `y3_cluster_cpp` |
-| 11 | {doc}`bsel <selection/bsel>` | bias plateaus $(B_{\rm small}, B_{\rm large})$ | Python · `y3_cluster_cpp` |
+| 11 | {doc}`bsel <selection/bsel>` | bias plateaus $(B_{\rm small}, B_{\rm large})$ | Python · `systematics/selection_bias` |
 | 12 | {doc}`ShearPrjFastMass <observables/shear_projection>` | projection shear $\gamma_t^{\rm prj}(R)$ (fast_mass, des_y3) | C++ · `y3_cluster_cpp` |
 | 13 | {doc}`likelihoods <observables/likelihood>` | Gaussian $\log L$ | Python · `y3_cluster_cpp` |
 
 ```{note}
-Stages 1–7 and 10–11 are byte-for-byte the same modules as the DES Y1
-pipeline ({doc}`variants`). Only 8, 9, and 12 differ, and each is
+Stages 1–7 and 10–11 keep the same physics and DataBlock contract as the DES
+Y1 pipeline ({doc}`variants`). Their maintained DES Y3 Python entry points now
+live under `src/pipelines/systematics/`; the legacy copies remain available.
+Only 8, 9, and 12 differ, and each is
 algorithmically identical to its DES Y1 counterpart — `NumCountsFastMass`
 "by identity" with `NumCountsSel`, `Shear1hFastMass` bitwise-equal to
 `Shear1hMisSel`, `ShearPrjFastMass` sharing the same `ShearPrjCore` as
@@ -142,18 +144,8 @@ $N_i[1]$, $N_i[\gamma_t^{1h}]$, and $\gamma_t^{\rm prj}$ differ. Details:
 (`Shear1h2hMax`) is available as a model option, not part of this
 reference pipeline — see {doc}`variants`.
 
-```{warning}
-`y3_buzzard/likelihood_cp.py` hardcodes the DES Y1 output section names
-(`numcountssel`, `shear1hmissel`, `shear_prj`). The `des_y3` fast_mass
-modules deliberately publish under their own sections
-(`numcounts_fast_mass`, `shear1h_fast_mass`, `shear_prj_fast_mass`/
-`dsigma_prj_fast_mass`) instead of aliasing to the DES Y1 names — by
-design, so both generations can co-run in one pipeline for comparison
-(a DataBlock `put_val` does not overwrite an existing key). Running
-`des_y3.ini` as checked in demonstrates the swapped modules and their
-DataBlock contract, but does **not** yet produce a likelihood value
-end-to-end: that needs either a small alias step (matching what
-`shear_prj_frozen_physics` already does for its own section) or an
-updated `likelihood_cp.py` that reads the `des_y3` section names. Not
-addressed in this pass — see the open review discussion.
-```
+`y3_buzzard/likelihood_cp.py` accepts explicit DataBlock section names for
+the number counts, one-halo shear, and projected shear. `des_y3.ini` points
+those options at `numcounts_fast_mass`, `shear1h_fast_mass`, and
+`shear_prj_fast_mass`, so the fast-mass modules can coexist with the legacy
+DES-Y1 modules without relying on DataBlock overwrites.

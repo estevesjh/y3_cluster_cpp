@@ -872,6 +872,10 @@ def execute(block, config):
     edges = _unique_edges(config['lam_min'], config['lam_max'])
     block['sel_function', 'lambda_edges'] = np.asarray(edges, dtype=float)
     block['sel_function', 'lambda_centres'] = 0.5 * (edges[:-1] + edges[1:])
+    block['sel_function', 'zob_min'] = np.asarray(
+        config['zob_min'], dtype=float)
+    block['sel_function', 'zob_max'] = np.asarray(
+        config['zob_max'], dtype=float)
     cdfs_at_edge = _cdf_lob_stacked(edges, mu_p, sig_p, tau_p, fprj_p)
 
     # First contract the PHOD × PLOB_LTR integrand over true richness for

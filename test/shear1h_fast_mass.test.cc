@@ -1,5 +1,5 @@
 // Unit tests for the fast_mass shear C++ backend (des_y3 Phase 2):
-// src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc
+// src/pipelines/des_y3/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc
 //
 // Shear1hFastMassCpp composes two immutable production pieces under a new
 // module label / output section (shear1h_fast_mass/vals): the header-only
@@ -76,7 +76,7 @@
 #include "models/n_operator_sel_gl_t.hh"
 
 // The system under test itself -- see the ASSUMPTION note above.
-#include "pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc"
+#include "pipelines/des_y3/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc"
 
 #include <array>
 #include <stdexcept>

@@ -19,7 +19,8 @@ with the exact per-slice redshift weights
     common(z)     = dV/dOmega/dz(z) w_phot(z; z_ob) w_z^GL
 
 This is a convention-exact Python port of the *exact* C++ core
-(sp_detail::ShearPrjCore in src/models/sigma_prj_t.hh): identical theta
+(sp_detail::ShearPrjCore in src/pipelines/systematics/shear_prj/cpp/
+sigma_prj_t.hh): identical theta
 grid (per-slice breakpoints + log-GL segments), identical z grid
 (exclusion ring + foreground/background log-|dchi| wings via the same
 40-iteration chi inversion), the parabolic photo-z weight with the
@@ -69,7 +70,8 @@ for _p in Path(__file__).resolve().parents:
 
 from shared import datablock_models as dm
 from shared import lensing_profiles as lp
-from shared import sel_kernels, z_kernel
+from systematics.selection_richness.python import sel_kernels
+from shared import z_kernel
 
 DSIGMA_SECTION = "dsigma_prj_fast_mass"
 SHEAR_SECTION = "shear_prj_fast_mass"
@@ -162,12 +164,43 @@ class ShearPrjFastMass:
         sci = dm.SigmaCritInv(source)
         dsmis = lp.NfwDsigmaMisProduction(kernel="single")
 
-        bs_lob = source.array("b_sel_marginalised", "lob")
-        bs_zob = source.array("b_sel_marginalised", "zob")
-        b_small = np.asarray(source.array("b_sel_marginalised", "b_small"),
-                             dtype=float).reshape(bs_zob.size, bs_lob.size)
-        b_large = np.asarray(source.array("b_sel_marginalised", "b_large"),
-                             dtype=float).reshape(bs_zob.size, bs_lob.size)
+        bs_lob = np.asarray(source.array("b_sel_marginalised", "lob"),
+                            dtype=float)
+        bs_zob = np.asarray(source.array("b_sel_marginalised", "zob"),
+                            dtype=float)
+
+        # The CosmoSIS datablock stores one row per (zob, lob) wall point,
+        # while a few offline sources store separate zob/lob axes.  Convert
+        # either representation to the table consumed below:
+        # b_sel[zob_index, lob_index].
+        zob_nodes = np.unique(bs_zob)
+        lob_nodes = np.unique(bs_lob)
+
+        def bsel_table(name):
+            values = np.asarray(source.array("b_sel_marginalised", name),
+                                dtype=float).ravel()
+            if values.size == zob_nodes.size * lob_nodes.size \
+                    and values.size != bs_zob.size:
+                return values.reshape(zob_nodes.size, lob_nodes.size)
+            if values.size != bs_zob.size:
+                raise ValueError(
+                    f"b_sel_marginalised/{name} has {values.size} values "
+                    f"for {bs_zob.size} wall rows")
+            table = np.full((zob_nodes.size, lob_nodes.size), np.nan)
+            for row, (zob_row, lob_row) in enumerate(zip(bs_zob, bs_lob)):
+                iz = np.flatnonzero(np.isclose(zob_nodes, zob_row))[0]
+                il = np.flatnonzero(np.isclose(lob_nodes, lob_row))[0]
+                table[iz, il] = values[row]
+            if not np.all(np.isfinite(table)):
+                raise ValueError(
+                    f"b_sel_marginalised/{name} does not cover every "
+                    "(zob, lob) combination")
+            return table
+
+        b_small = bsel_table("b_small")
+        b_large = bsel_table("b_large")
+        bs_zob = np.unique(bs_zob)
+        bs_lob = np.unique(bs_lob)
 
         chi = lambda z: np.interp(np.clip(z, self._dist_z[0],
                                           self._dist_z[-1]),

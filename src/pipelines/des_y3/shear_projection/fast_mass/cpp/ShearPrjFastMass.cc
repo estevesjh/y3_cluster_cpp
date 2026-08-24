@@ -1,7 +1,7 @@
 // Projection shear via the fast_mass strategy — C++ backend.
 //
 // Thin des_y3 driver over the immutable exact core
-// (sp_detail::ShearPrjCore, src/models/sigma_prj_t.hh): the exact
+// (sp_detail::ShearPrjCore, systematics/shear_prj/cpp/sigma_prj_t.hh): the exact
 // redshift contraction with no frozen-physics approximation — the same
 // computation as the Python backend (../python/shear_prj_fast_mass.py,
 // which was validated against this core's evaluators to 1.6e-11) and
@@ -13,7 +13,7 @@
 //   shear_prj_fast_mass/{vals,rnd,cl}    dimensionless
 // Ini section: ShearPrjFastMass (ShearPrjCore wall + knobs).
 // Status: reference backend; production remains ShearPrjFrozenPhysics.
-#include "models/sigma_prj_t.hh"
+#include "pipelines/systematics/shear_prj/cpp/sigma_prj_t.hh"
 #include "utils/module_macros.hh"
 
 #include <array>

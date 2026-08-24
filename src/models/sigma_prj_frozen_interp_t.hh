@@ -1,25 +1,20 @@
-// Option E (frozen-physics DeltaSigma_prj benchmark backend) -- see
-// RichnessSelection/docs/richness_selection_frozen.tex section "Extension:
-// frozen physics for <DeltaSigma_prj>" and richness_selection.FrozenDeltaSigmaPrj
-// for the Python reference this ports, and the plan doc "Port frozen-physics
-// b_sel/DeltaSigma_prj recipe into the cosmosis pipeline" (Part III, Option E)
-// for the design rationale.
+// Projected shear from correlated line-of-sight structure in the Costanzi et al.
+// (2026) model.
 //
-// Keeps the same frozen-physics algebraic reduction as Option C
-// (ShearPrjFrozenPhysics): the z-dependent work (exact rnd-channel hoist,
-// cl-channel r_s(M)-anchored amplitude drift a_b(z)) is done once per
-// (lob, zob) slice on a fixed ring+outer z-grid (build_z_grid_, copied
-// verbatim from sp_detail::ShearPrjCore). What differs from Option C: the
-// remaining (lnM, theta) assembly is NOT an explicit N_theta x N_M grid +
-// dot product -- w_rnd(lnM), w_cl(lnM), and Psi(theta) are tabulated as
-// continuous Interp1D functions, and the final integral is evaluated by a
-// genuine 2-D adaptive Cuhre integral over (theta, lnM) (cubacpp, same
-// integration backend already used by ShearPrjCuhre in sigma_prj_t.hh),
-// instead of building and summing a fixed grid.
+// Approximation:
+//   - freeze the one-halo profile at the observed cluster redshift z_ob;
+//   - integrate the redshift-dependent two-halo contribution over the
+//     foreground, exclusion, and background regions around z_ob.
 //
-// No adaptive integration over z: that axis is still eliminated by the
-// frozen reduction, same as Option C. Only (theta, lnM) are Cuhre
-// integration variables.
+// Numerical method:
+//   1. The redshift integral is reduced on fixed Gauss--Legendre nodes.  The
+//      nodes are split at z = z_ob, where the line-of-sight kernel changes
+//      branch; this is a non-smooth point, not a pole.
+//   2. For each (lambda_bin, z_ob, R) sample point, Cuba Cuhre (or Vegas, if
+//      selected) performs the remaining two-dimensional integral over
+//      u = ln(theta) and ln(M).  The redshift weights and angular factors are
+//      tabulated/interpolated before this integral is evaluated.
+
 #ifndef Y3_CLUSTER_CPP_SIGMA_PRJ_FROZEN_INTERP_T_HH
 #define Y3_CLUSTER_CPP_SIGMA_PRJ_FROZEN_INTERP_T_HH
 

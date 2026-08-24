@@ -9,14 +9,14 @@ tensor and interpolate it inside their population integrals.
 
 ## Script
 
-- Source: [`src/pipelines/shared/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/main/src/pipelines/shared/sel_function.py).
+- Source: [`src/pipelines/systematics/selection_richness/python/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/main/src/pipelines/systematics/selection_richness/python/sel_function.py).
 - Loaded by CosmoSIS as a Python module.
 
-`src/modules/sel_function/sel_function.py` remains a thin compatibility shim
-that imports this shared implementation. The CosmoSIS configurations load
-the shared file directly, and `shared/sel_kernels.py` uses the same module.
-The HOD and lambda quadrature are also shared with `cosmology/bsel.py` via
-`shared/datablock_models.py`.
+`src/modules/sel_function/sel_function.py` remains a thin compatibility shim.
+The DES Y3 configurations load the systematics file directly, and
+`systematics/selection_richness/python/sel_kernels.py` uses the same module.
+The HOD and lambda quadrature remain shared with the selection-bias module
+through `shared/datablock_models.py`.
 
 ## Numerical framework
 
@@ -120,7 +120,7 @@ the two bin edges. This avoids materializing a redundant
 
 ```ini
 [sel_function]
-file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/shared/sel_function.py
+file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/systematics/selection_richness/python/sel_function.py
 lam_min = 20.0  30.0  45.0  60.0   20.0  30.0  45.0  60.0   20.0  30.0  45.0  60.0
 lam_max = 30.0  45.0  60.0  200.0  30.0  45.0  60.0  200.0  30.0  45.0  60.0  200.0
 zob_min = 0.20  0.20  0.20  0.20   0.35  0.35  0.35  0.35   0.50  0.50  0.50  0.50

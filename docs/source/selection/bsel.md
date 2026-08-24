@@ -60,8 +60,8 @@ rows, but new pipeline runs never write it.
 ## Shared implementation
 
 The maintained implementation lives in
-[`src/pipelines/cosmology/bsel.py`](/Users/jesteves/Documents/Dev/github/y3_cluster_cpp/src/pipelines/cosmology/bsel.py).
-`y3_buzzard/bsel.py` is only a compatibility entry point, and
+[`src/pipelines/systematics/selection_bias/python/bsel.py`](/Users/jesteves/Documents/Dev/github/y3_cluster_cpp/src/pipelines/systematics/selection_bias/python/bsel.py).
+`src/pipelines/cosmology/bsel.py` remains a compatibility reference, and
 `src/pipelines/shared/datablock_models.py` owns the data and HOD models shared
 by `sel_function` and `bsel`.
 
@@ -225,7 +225,7 @@ No theta quadrature belongs in the Python closure.
 
 ```ini
 [bsel]
-file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/cosmology/bsel.py
+file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/systematics/selection_bias/python/bsel.py
 n_ltr         = 128
 ltr_lo       = 1.0
 ltr_hi_factor = 3.0
@@ -259,14 +259,16 @@ wall row -> exact (lambda_bin, zob) lookup
 
 | Consumer | Implementation | Exact lookup |
 |---|---|---|
-| production CPU | `src/models/sigma_prj_t.hh` (`ShearPrjCore`, GSL, Cuhre) | `sp_detail::BSelBins::at` |
-| frozen CPU | `src/models/sigma_prj_frozen_t.hh` and `sigma_prj_frozen_interp_t.hh` | `sp_detail::BSelBins::at` |
+| production CPU | `src/pipelines/systematics/shear_prj/cpp/sigma_prj_t.hh` (`ShearPrjCore`, GSL, Cuhre) | `sp_detail::BSelBins::at` |
+| frozen CPU | `src/pipelines/systematics/shear_prj/cpp/sigma_prj_frozen_t.hh` and `sigma_prj_frozen_interp_t.hh` | `sp_detail::BSelBins::at` |
 | fast-mass Python | `shear_prj_fast_mass.py` | `dm.BSelBins.values` |
 | frozen fast-mass CUDA | `ShearPrjFrozenGpu.cu` | `sp_detail::BSelBins::at` |
 | full-ltmz CUDA | `DSigmaPrjFullLtmzGpu.cu` | `sp_detail::BSelBins::at` |
 
-The C++ helper is in
-[`src/models/bsel_bins_t.hh`](/Users/jesteves/Documents/Dev/github/y3_cluster_cpp/src/models/bsel_bins_t.hh).
+The maintained C++ helper is in
+[`src/pipelines/systematics/selection_bias/cpp/bsel_bins_t.hh`](/Users/jesteves/Documents/Dev/github/y3_cluster_cpp/src/pipelines/systematics/selection_bias/cpp/bsel_bins_t.hh).
+The original `src/models/bsel_bins_t.hh` remains available for legacy
+production modules.
 It validates vector alignment, redshift midpoints, and duplicate exact rows.
 
 ## Compatibility and validation

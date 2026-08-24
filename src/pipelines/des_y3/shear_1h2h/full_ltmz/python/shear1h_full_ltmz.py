@@ -55,7 +55,7 @@ for _p in Path(__file__).resolve().parents:
 from shared import datablock_models as dm
 from shared import full_ltmz_core
 from shared import lensing_profiles as lp
-from shared import sel_kernels
+from systematics.selection_richness.python import sel_kernels
 
 OUTPUT_SECTION = "shear1h_full_ltmz"
 

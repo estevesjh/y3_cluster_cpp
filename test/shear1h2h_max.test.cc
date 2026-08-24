@@ -1,5 +1,5 @@
 // Unit tests for the shear1h2h_max C++ backend (the traditional 1h+2h
-// "max model" shear -- src/pipelines/des_y3/observables/shear_1h2h/
+// "max model" shear -- src/pipelines/des_y3/shear_1h2h/
 // fast_mass/cpp/Shear1h2hMax.cc).
 //
 // Unlike shear1h_radial_series (RadialSeriesTable) or Shear1hFastMass

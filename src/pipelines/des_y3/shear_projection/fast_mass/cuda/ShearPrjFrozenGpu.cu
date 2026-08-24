@@ -1,7 +1,8 @@
 // Projection shear, frozen-physics fast path — GPU adaptation.
 //
 // A faithful port of the production ShearPrjFrozenPhysics machinery
-// (src/models/sigma_prj_frozen_t.hh, the mock_mcmc_buzzard.ini stage):
+// (systematics/shear_prj/cpp/sigma_prj_frozen_t.hh, the
+// mock_mcmc_buzzard.ini stage):
 // identical theta grid (y3_cluster::sp_detail::build_theta_grid), identical
 // ring+wings z grid, identical frozen clustered channel (mass shape at
 // z_ob, r_s-anchored scalar drift a_b(z)), identical b_sel plateaus and
@@ -29,7 +30,7 @@
 #include "models/hmf_t.hh"
 #include "models/nfw_dsigma_mis.cuh"
 #include "models/omega_z_des.hh"
-#include "models/sigma_prj_t.hh"
+#include "pipelines/systematics/shear_prj/cpp/sigma_prj_t.hh"
 #include "models/z_kernel_data.hh"
 #include "utils/datablock_reader.hh"
 #include "utils/interp_1d.hh"

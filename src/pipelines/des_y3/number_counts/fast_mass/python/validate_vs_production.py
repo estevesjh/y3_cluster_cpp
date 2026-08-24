@@ -20,7 +20,7 @@ for _p in Path(__file__).resolve().parents:
         break
 
 from shared import datablock_models as dm
-from shared import sel_kernels
+from systematics.selection_richness.python import sel_kernels
 
 TOL = 1e-12
 ZT_LO, ZT_HI = 0.05, 0.80

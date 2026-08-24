@@ -444,8 +444,10 @@ class BSelWallVector:
 
     Datablock inputs
     -----------------
-    ``b_sel_marg_P1/{lambda_bin, zo_low, zo_high, vals}``
-        C++ wall key and ``P1`` values.
+    ``b_sel_marg_P1/vals``
+        C++ ``P1`` values. The wall keys are taken from the selection
+        function's published ``zob_min/zob_max`` arrays because the generic
+        C++ evaluator writes only the evaluated values.
     ``b_sel_marg_I1/vals``
         C++ ``I1`` values.
     ``b_sel_marg_J/vals``
@@ -474,11 +476,26 @@ class BSelWallVector:
         if lambda_edges.size < 2 or np.any(np.diff(lambda_edges) <= 0.0):
             raise ValueError("lambda_edges must be a strictly increasing vector")
 
-        lambda_bin = source.array(
-            BSEL_WALL_SECTION, "lambda_bin"
-        ).astype(int).ravel()
-        zo_low = source.array(BSEL_WALL_SECTION, "zo_low").ravel()
-        zo_high = source.array(BSEL_WALL_SECTION, "zo_high").ravel()
+        if source.has(BSEL_WALL_SECTION, "lambda_bin"):
+            lambda_bin = source.array(
+                BSEL_WALL_SECTION, "lambda_bin"
+            ).astype(int).ravel()
+            zo_low = source.array(BSEL_WALL_SECTION, "zo_low").ravel()
+            zo_high = source.array(BSEL_WALL_SECTION, "zo_high").ravel()
+        else:
+            # P_operator publishes P1/I1/J values but not the evaluator's
+            # input grid. The selection function owns the same 12-bin wall
+            # geometry, so reconstruct its row keys from the published
+            # redshift bounds and lambda partition.
+            zo_low = source.array("sel_function", "zob_min").ravel()
+            zo_high = source.array("sel_function", "zob_max").ravel()
+            n_lambda = lambda_edges.size - 1
+            if n_lambda <= 0 or zo_low.size % n_lambda != 0:
+                raise ValueError(
+                    "selection wall geometry is not aligned with "
+                    "lambda_edges")
+            lambda_bin = np.tile(
+                np.arange(n_lambda, dtype=int), zo_low.size // n_lambda)
         p1 = source.array(BSEL_WALL_SECTION, "vals").ravel()
         i1 = source.array("b_sel_marg_I1", "vals").ravel()
         j = source.array("b_sel_marg_J", "vals").ravel()

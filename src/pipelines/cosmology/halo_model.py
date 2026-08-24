@@ -1,14 +1,28 @@
-"""Halo model: 1h (NFW) + 2h (cluster_toolkit) lensing, and halo bias.
+"""Halo-model ingredients for cluster lensing and halo bias.
 
-Port of ``y3_buzzard/haloModel.py``. The mass-concentration relations
-it used (``child18_mass_concentration``, ``duffy_concentration_relation``)
-now live in ``concentration.py`` alongside this file; everything else is
-otherwise unchanged. The ``y3_buzzard`` original stays in place — this
-is a copy into the canonical shared location, not a move; see
-``README.md`` in this directory for why.
+This module provides the physical ingredients used by the cluster-observable
+calculations:
 
-Author: Johnny Esteves
-Created: May 16, 2024
+* a one-halo NFW contribution to the projected surface density and excess
+  surface density, using a chosen mass--concentration relation;
+* a two-halo contribution obtained from the nonlinear matter power spectrum
+  through ``cluster_toolkit``; and
+* the Tinker et al. (2010) halo-bias relation, evaluated from the peak height
+  of a halo in the linear matter power spectrum.
+
+For a halo of mass ``M`` at redshift ``z``, ``lensingModel`` stores the
+one-halo and two-halo contributions to ``Sigma`` and ``DeltaSigma`` as
+separate channels. The two-halo channel also provides the projected
+halo--matter correlation function. ``biasModel`` converts the linear power
+spectrum into the mass-dependent halo bias used to weight the two-halo term.
+
+The analytic NFW lensing expressions follow Wright & Brainerd (2000). Mass
+and radius units, the halo mass definition, and the density normalization
+must be kept consistent with the concentration relation and the consuming
+observable pipeline.
+
+The mass--concentration relations are implemented in ``concentration.py``.
+The original implementation was written by Johnny Esteves on May 16, 2024.
 """
 import numpy as np
 import cluster_toolkit as ct

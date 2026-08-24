@@ -49,37 +49,37 @@ add_subdirectory(num_counts_full)
 # maintained implementations live under src/pipelines/des_y3 and are
 # registered here with explicit binary dirs.
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/number_counts/fast_mass/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/fast_mass/cpp
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_fast_mass_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/radial_series/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/radial_series/cpp
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_radial_series_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/number_counts/full_ltmz/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/full_ltmz/cpp
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_full_ltmz_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/number_counts/full_ltmz/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/full_ltmz/cuda
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_full_ltmz_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/full_ltmz/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/full_ltmz/cpp
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_full_ltmz_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_projection/fast_mass/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/fast_mass/cpp
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_fast_mass_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/full_ltmz/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/full_ltmz/cuda
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_full_ltmz_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/fast_mass/cpp
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_fast_mass_cpp)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_projection/full_ltmz/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/full_ltmz/cuda
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_full_ltmz_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_projection/fast_mass/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/fast_mass/cuda
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_frozen_cuda)
 add_subdirectory(
-  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cuda
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/fast_mass/cuda
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_1h2h_max_cuda)
 
 # Many of these are historical

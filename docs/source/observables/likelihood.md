@@ -45,22 +45,21 @@ log_space = F
   `shear_prj` (written in this pipeline by the
   {doc}`shear_prj_frozen_physics <shear_projection>` aliases).
 
-```{warning}
-**Shape contract, 120 vs 180.** As committed, `likelihood_cp.py`
-hard-codes `_SHEAR_N_R = 10` (→ `_SHEAR_N = 120`), while the Buzzard ini
-and `mock_dv_buzzard.npz` use **15 radii → 180 shear points**. With the
-committed constants, `setup()` rejects the Buzzard data vector
-(`data_Shear has size 180, expected 120`). Running the Buzzard pipeline
-requires `_SHEAR_N_R = 15` (it also controls the `np.repeat` tiling of
-the number counts). The 120-point contract matches the widePlanck
-self-closure variant ({doc}`../variants`).
-```
+The likelihood derives the number of radii per bin from the length of
+`data_Shear`, so both supported layouts are valid: 15 radii (180 shear
+points) for the Buzzard pipeline and 10 radii (120 points) for the
+widePlanck self-closure variant ({doc}`../variants`). The `des_y3.ini`
+configuration also supplies the fast-mass DataBlock sections explicitly;
+the legacy section names remain the defaults for the older pipeline.
 
 ## Configuration options
 
 | Option | Meaning | Units | Reference value |
 |---|---|---|---|
 | `filename` | data vector + inverse covariance `.npz` (required) | — | `mock_dv_buzzard.npz` |
+| `num_counts_section` | DataBlock section containing the number-count vector | — | `numcountssel` |
+| `shear_1h_section` | DataBlock section containing the 1-halo shear vector | — | `shear1hmissel` |
+| `shear_prj_section` | DataBlock section containing the projected shear vector | — | `shear_prj` |
 | `log_space` | evaluate the Gaussian on $\ln(\rm obs)$ with the delta-method inverse covariance $C_y^{-1}[i,j] = d_i d_j C^{-1}[i,j]$; A/B-tested statistically identical to linear | — | F |
 | `verbose` | per-sample $\log L$ breakdown | — | F |
 
@@ -82,4 +81,3 @@ file) are ignored.
 | DataBlock output | Meaning | Units / shape | Consumed by |
 |---|---|---|---|
 | `likelihoods/likelihoods_like` | Gaussian $\log L$ | scalar | sampler |
-

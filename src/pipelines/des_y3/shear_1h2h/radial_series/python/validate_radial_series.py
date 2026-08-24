@@ -43,7 +43,7 @@ for _p in Path(__file__).resolve().parents:
         break
 
 from shared import datablock_models as dm
-from shared import sel_kernels
+from systematics.selection_richness.python import sel_kernels
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import nfw_profile_family as pf                       # noqa: E402

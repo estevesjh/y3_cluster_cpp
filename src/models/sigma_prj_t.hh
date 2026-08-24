@@ -1,14 +1,30 @@
-// Sigma_prj integrand (Costanzi-2026 eq. Sprj), CosmoSIS scalar integrand.
+// Projected tangential shear integrand gamma_t^prj (Costanzi-2026 Eq. Sprj),
+// exposed through the CosmoSIS shear_prj scalar integrand.
 //
-// Mirrors richness_selection/sigma_prj.py line-for-line, with PAGANI
-// driving the 3-D outer (z, lnM, theta) integral. Reads b_sel_marginalised
-// from the datablock (written by the canonical cosmology/bsel.py). Each wall
-// row supplies b_small and b_large; the theta dependence is evaluated from
-// the shared sigmoid at the exact (lambda_bin, zob) key.
+// This model first integrates the projected excess surface density
+// DeltaSigma_prj from neighbouring, miscentred haloes and then converts it to
+// shear with
+//
+//   gamma_t^prj(R) = DeltaSigma_prj(R) * Sigma_crit^{-1}(z_ob).
+//
+// Sigma_crit^{-1} is read from average_sigma_crit_inv and evaluated at z_ob;
+// it is not set to unity.  The legacy SigmaPrj and DSigmaPrj wrappers remain
+// as compatibility/diagnostic outputs, but the physical observable is
+// shear_prj.
+//
+// This header contains several numerical paths, with different integration
+// variables: ShearPrjEvaluator uses fixed GL grids and an explicit redshift
+// reduction; ShearPrjGsl uses adaptive GSL QAGP only in z; and ShearPrjCuhre
+// uses Cuhre/Vegas for the inner (z, lnM) integral on a fixed angular GL grid.
+// The frozen Cuhre path is declared in sigma_prj_frozen_interp_t.hh and
+// instead integrates (ln(theta), lnM) after reducing z. All paths read
+// b_sel_marginalised from the datablock (written by cosmology/bsel.py). Each
+// wall row supplies b_small and b_large; the theta dependence is evaluated
+// from the shared sigmoid at the exact (lambda_bin, z_ob) key.
 //
 // The integrand body:
 //
-//   I(z, lnM, theta | lob_i, zob_j, R_k)
+//   I_DeltaSigma(z, lnM, theta | lob_i, zob_j, R_k)
 //     = dV/dzdOmega(z) * n(M, z) * [1 + b(M, z) * b_sel(theta) * xi_NL(Delta_chi)]
 //       * 2 pi sin(theta) * Sigma_mis(R_k, theta * D_A(zob), M, z)
 //       * w_z(z, zob) * (indicator: exclusion Delta_chi >= R_excl)
@@ -948,10 +964,10 @@ namespace y3_cluster {
 
   // =====================================================================
   // ShearPrjGsl -- same integrand as the ShearPrjCore family, but the
-  // outer z-integral is driven by GSL QAGP (piecewise-QAG with an
-  // explicit singular point at z=zob).  QAGP adapts around the xi_nl(Δchi)
-  // peak by construction, so no ring+fg/bg grid is needed.  Inner (lnM, θ)
-  // still use fixed GL, because those axes are smooth.
+  // z-integral is driven by GSL QAGP (piecewise-QAG with an explicit
+  // breakpoint at z=zob). QAGP adapts around the xi_nl(Delta_chi) feature;
+  // z_ob is a non-smooth breakpoint, not necessarily a singularity. Inner
+  // (lnM, ln(theta)) axes still use fixed GL.
   //
   // Writes sigma_prj_gsl / dsigma_prj_gsl / shear_prj_gsl — coexists
   // with the main evaluator so they can be diffed head-to-head.
@@ -1283,10 +1299,10 @@ namespace y3_cluster {
       F.function = &qagp_integrand;
       F.params   = &ctx;
 
-      // QAGP breakpoints: {zt_lo, zob, zt_hi}.  The singular point at
-      // z = zob is handled by QAGP's explicit-breakpoint split -- the
-      // adaptive subdivision clusters evaluations on both sides of the
-      // cusp, which is the mechanism Cuhre/Vegas were using implicitly.
+      // QAGP breakpoints: {zt_lo, zob, zt_hi}.  The non-smooth point at
+      // z = zob is handled by QAGP's explicit-breakpoint split -- adaptive
+      // subdivision can resolve both sides of the feature.  This does not
+      // imply that the integrand diverges at z = zob.
       double pts[3] = {zt_lo_, zob, zt_hi_};
       if (zob <= zt_lo_ || zob >= zt_hi_) {
         // Fall back to plain QAG if zob is on the boundary (shouldn't
@@ -1388,7 +1404,7 @@ namespace y3_cluster {
   // ShearPrjCuhre -- same theta recipe as ShearPrjEvaluator
   // (outer log-GL in theta on segments split at feature breakpoints),
   // but the INNER 2-D (z, lnM) integral is driven by cubacpp::Cuhre or
-  // cubacpp::Vegas.  Acts as the adaptive reference path that must
+  // cubacpp::Vegas.  This is the unfrozen adaptive comparison path; it must
   // converge to the fixed-GL evaluator and to Python SigmaPrj.
   //
   // Writes sigma_prj_cuhre / dsigma_prj_cuhre / shear_prj_cuhre,

@@ -54,7 +54,7 @@ mass integral.
 | --- | --- | --- |
 | Python | Fixed-GL module in `python/numcounts_full_ltmz.py`; the shared adaptive mass reference is in `shared/full_ltmz_core.py`. Kernels are imported from `shared/sel_kernels.py`, not copied. | `numcounts_full_ltmz/vals` |
 | C++ | `cpp/NumCountsFullLtmz.cc` instantiates the immutable scalar integration template; `cpp/num_counts_full_ltmz_t.hh` supplies the Cuhre integrand and model composition. | `numcountsfullltmz/{vals,errors,probs,status,nregions}` |
-| CUDA | `cuda/NumCountsFullLtmzGpu.cu` uses PAGANI. Device kernel ports live in `cuda/full_ltmz_device_kernels.cuh`; fixed-size integrand state is copied to the device. | `numcountsfullltmzgpu/{vals,errors,probs,status,nregions}` |
+| CUDA | `cuda/NumCountsFullLtmzGpu.cu` instantiates the CUDA integration macro; `cuda/num_counts_full_ltmz_gpu_t.cuh` supplies the PAGANI integrand, composing the gpu_prj_costanzi2026 device models (`models/mor_shifted_poisson_t.cuh`, `models/emg_des_t.cuh`; Arwa Qadi, upstream PR #3) plus the local `zkernel_sj`. Note the MOR convention offset documented in the header (Costanzi-2026 form, no central-count shift). | `numcountsfullltmzgpu/{vals,errors,probs,status,nregions}` |
 
 All three evaluate the same mathematical integral. They differ in how the
 outer integration is performed: fixed GL in Python, adaptive Cuhre on CPU,

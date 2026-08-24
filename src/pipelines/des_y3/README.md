@@ -45,11 +45,13 @@ src/pipelines/des_y3/
 implementations of that strategy. A missing language directory means that the
 backend is not implemented.
 
-The observable implementations use shared layers from the sibling
-directories [`../cosmology/`](../cosmology/README.md) and
-`../shared/`. The cosmology layer contains halo-model physics; the shared
-layer contains selection kernels, mass/redshift weights, and common
-integration utilities.
+The observable implementations use the sibling layers
+[`../systematics/`](../systematics/README.md),
+[`../cosmology/`](../cosmology/README.md), and `../shared/`. The systematics
+layer owns richness selection, selection bias, projection parameters, and
+the projection-shear C++ cores. The cosmology layer contains halo-model
+physics; `shared/` contains lower-level datablock models, mass/redshift
+weights, and common integration utilities.
 
 ## Observable entry points
 
