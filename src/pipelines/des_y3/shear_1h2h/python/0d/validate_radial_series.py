@@ -147,7 +147,7 @@ def main():
     if len(sys.argv) > 1:
         dump = Path(sys.argv[1])
     else:
-        dump = (sel_kernels.repo_root() / "docs" / "figs"
+        dump = (sel_kernels.repo_root() / "cosmosis-models"
                 / "real_pipeline_extract_output")
     if not dump.is_dir():
         sys.exit(f"dump directory not found: {dump}\n"

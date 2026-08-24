@@ -170,7 +170,7 @@ def _read_wall_from_ini():
     """dsigma_prj publishes only vals/rnd/cl (the #10-class metadata gap
     again) -- read the wall vectors from the extract ini instead."""
     import re
-    text = (REPO / "docs" / "figs"
+    text = (REPO / "cosmosis-models"
             / "real_pipeline_extract_prj2h.ini").read_text()
     sec = re.search(r"^\[dsigma_prj\]\s*$(.*?)(?:^\[|\Z)", text,
                     re.S | re.M).group(1)

@@ -45,6 +45,14 @@ import sys
 import numpy as np
 from cosmosis.datablock import option_section
 from numba import njit
+# NOTE: numba on-disk caching is deliberately OFF (cache=False):
+# this file is imported under several module names (the cosmosis
+# shim loads it as 'sel_function', offline consumers as
+# 'y3_des_sel_function'), and numba's cache pickles the module
+# name -- a cache written under one name fails to load under the
+# other (ModuleNotFoundError), cross-poisoning parallel test runs
+# and cosmosis runs. Re-enable only together with the module-name
+# unification fix in sel_kernels.py.
 from scipy.special import erf, erfcx
 
 for _parent in Path(__file__).resolve().parents:
@@ -308,7 +316,7 @@ _Z_SAT = 5.0
 _A_SAT = -40.0
 
 
-@njit(cache=True, inline='always', error_model='numpy')
+@njit(cache=False, inline='always', error_model='numpy')
 def _erfcx_poly_nb(x):
     """(1+x)*erfcx(x) via a degree-8 polynomial in t=(x-2)/(x+2), x >= 0.
     Max relative error ~8e-7, uniform for x in [0, inf)."""
@@ -325,7 +333,7 @@ def _erfcx_poly_nb(x):
     return p / (1.0 + x)
 
 
-@njit(cache=True, inline='always', error_model='numpy')
+@njit(cache=False, inline='always', error_model='numpy')
 def _phi_fast_nb(z, exp_mz2):
     """Phi(z), reusing exp_mz2 = exp(-0.5*z^2) already computed for the
     erfcx tail term (Abramowitz & Stegun 26.2.17). Max absolute error
@@ -341,7 +349,7 @@ def _phi_fast_nb(z, exp_mz2):
     return 1.0 - q if z >= 0.0 else q
 
 
-@njit(cache=True, error_model='numpy')
+@njit(cache=False, error_model='numpy')
 def _cdf_lob_stacked_nb(lam_edges, mu, sigma, tau, fprj, out):
     N = mu.shape[0]
     E = lam_edges.shape[0]
@@ -443,6 +451,35 @@ def _K_edges_of_bins(lam_edges, ltr, z, plob_splines):
 def _S_j(ztr, zob_min, zob_max, sigma_z):
     """Gaussian CDF difference over the z-bin."""
     return _phi((zob_max - ztr) / sigma_z) - _phi((zob_min - ztr) / sigma_z)
+
+
+def _seam_weight(z_grid, excl_lo, excl_hi):
+    """Per-node weight excising a TRUE-z interval from the shared grid.
+
+    Buzzard-style mocks drop every halo with z_true inside the
+    simulation-box seam (e.g. [0.33, 0.37]) from the catalog, so the
+    model's true-z integration must skip that interval too (issue #8).
+
+    Each node of the LINEAR grid owns the cell [z_i - dz/2, z_i + dz/2];
+    the weight is the fraction of that cell OUTSIDE [excl_lo, excl_hi].
+    Downstream trapezoid-style integrals over the weighted table then
+    reproduce the excised measure to O(dz^2), instead of the O(dz)
+    edge error of hard-zeroing whole nodes.
+    """
+    z = np.asarray(z_grid, dtype=float)
+    if not (excl_hi > excl_lo):
+        return np.ones_like(z)
+    dz = np.diff(z)
+    if dz.size == 0:
+        return np.ones_like(z)
+    if not np.allclose(dz, dz[0], rtol=1e-6):
+        raise ValueError("_seam_weight expects the linear shared z grid")
+    step = float(dz[0])
+    cell_lo = z - 0.5 * step
+    cell_hi = z + 0.5 * step
+    overlap = np.clip(np.minimum(cell_hi, excl_hi)
+                      - np.maximum(cell_lo, excl_lo), 0.0, step)
+    return 1.0 - overlap / step
 
 
 # ---------------------------------------------------------------------------
@@ -619,6 +656,21 @@ def setup(options):
     cfg['z_grid']   = np.linspace(cfg['zt_low'], cfg['zt_high'],
                                   cfg['n_z_shared'])
 
+    # Optional TRUE-z exclusion range (issue #8): mocks that drop halos
+    # inside a simulation-box seam (Buzzard: z_true in [0.33, 0.37]) need
+    # the same interval excised from the model's true-z integration.
+    # Inactive unless zt_excl_high > zt_excl_low.
+    excl_lo = _read_scalar_or_first(options, option_section,
+                                    'zt_excl_low', 0.0)
+    excl_hi = _read_scalar_or_first(options, option_section,
+                                    'zt_excl_high', -1.0)
+    if excl_hi > excl_lo:
+        cfg['seam_weight'] = _seam_weight(cfg['z_grid'], excl_lo, excl_hi)
+        print(f"[sel_function] true-z exclusion active: "
+              f"[{excl_lo}, {excl_hi}]", flush=True)
+    else:
+        cfg['seam_weight'] = None
+
     # Per-module-instance cache for the plob EMG splines (see
     # _make_plob_splines) — plob_ltr_params never varies across a run in
     # production, so this turns an every-sample rebuild into a one-time
@@ -722,7 +774,7 @@ def _read_mor(block):
 # Validated against the numpy reference across 60 random cluster_mor draws:
 # lam_k/W_k/degenerate match exactly; P_Mz matches to ~1e-10 (floating-point
 # operation-order noise, not an approximation).
-@njit(cache=True, error_model='numpy')
+@njit(cache=False, error_model='numpy')
 def _compute_lam_nodes_and_P_HOD_nb(lnM, z, log10_Mmin, log10_M1, alpha, epsilon,
                                      sigma_lambda, z_pivot, gl_t, gl_w, L,
                                      lam_k, W_k, P_Mz, degenerate):
@@ -915,6 +967,10 @@ def execute(block, config):
         config['zob_max'][:, None],
         config['sigma_z'][:, None],
     )
+    # True-z seam excision (issue #8): the weight multiplies every bin's
+    # S_j on the shared true-z grid, so all S_stack consumers inherit it.
+    if config.get('seam_weight') is not None:
+        redshift_selection = redshift_selection * config['seam_weight'][None, :]
     S_pack = np.ascontiguousarray(
         (richness_selection * redshift_selection[:, None, :])
         .transpose(0, 2, 1)

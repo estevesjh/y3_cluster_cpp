@@ -45,6 +45,14 @@ import sys
 import numpy as np
 from cosmosis.datablock import option_section
 from numba import njit
+# NOTE: numba on-disk caching is deliberately OFF (cache=False):
+# this file is imported under several module names (the cosmosis
+# shim loads it as 'sel_function', offline consumers as
+# 'y3_des_sel_function'), and numba's cache pickles the module
+# name -- a cache written under one name fails to load under the
+# other (ModuleNotFoundError), cross-poisoning parallel test runs
+# and cosmosis runs. Re-enable only together with the module-name
+# unification fix in sel_kernels.py.
 from scipy.special import erf, erfcx
 
 _PIPELINES_DIR = str(Path(__file__).resolve().parents[1])
@@ -302,7 +310,7 @@ _Z_SAT = 5.0
 _A_SAT = -40.0
 
 
-@njit(cache=True, inline='always', error_model='numpy')
+@njit(cache=False, inline='always', error_model='numpy')
 def _erfcx_poly_nb(x):
     """(1+x)*erfcx(x) via a degree-8 polynomial in t=(x-2)/(x+2), x >= 0.
     Max relative error ~8e-7, uniform for x in [0, inf)."""
@@ -319,7 +327,7 @@ def _erfcx_poly_nb(x):
     return p / (1.0 + x)
 
 
-@njit(cache=True, inline='always', error_model='numpy')
+@njit(cache=False, inline='always', error_model='numpy')
 def _phi_fast_nb(z, exp_mz2):
     """Phi(z), reusing exp_mz2 = exp(-0.5*z^2) already computed for the
     erfcx tail term (Abramowitz & Stegun 26.2.17). Max absolute error
@@ -335,7 +343,7 @@ def _phi_fast_nb(z, exp_mz2):
     return 1.0 - q if z >= 0.0 else q
 
 
-@njit(cache=True, error_model='numpy')
+@njit(cache=False, error_model='numpy')
 def _cdf_lob_stacked_nb(lam_edges, mu, sigma, tau, fprj, out):
     N = mu.shape[0]
     E = lam_edges.shape[0]
@@ -760,7 +768,7 @@ def _read_mor(block):
 # Validated against the numpy reference across 60 random cluster_mor draws:
 # lam_k/W_k/degenerate match exactly; P_Mz matches to ~1e-10 (floating-point
 # operation-order noise, not an approximation).
-@njit(cache=True, error_model='numpy')
+@njit(cache=False, error_model='numpy')
 def _compute_lam_nodes_and_P_HOD_nb(lnM, z, log10_Mmin, log10_M1, alpha, epsilon,
                                      sigma_lambda, z_pivot, gl_t, gl_w, L,
                                      lam_k, W_k, P_Mz, degenerate):

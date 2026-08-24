@@ -36,7 +36,7 @@ ENV = dict(zt_low=0.05, zt_high=0.80, lnm_low=29.9336, lnm_high=36.7300)
 
 def main():
     dump = (Path(sys.argv[1]) if len(sys.argv) > 1 else
-            sel_kernels.repo_root() / "docs" / "figs"
+            sel_kernels.repo_root() / "cosmosis-models"
             / "real_pipeline_extract_output")
     src = dm.DumpSource(str(dump))
     mor = sel_kernels.mor_from_source(src)

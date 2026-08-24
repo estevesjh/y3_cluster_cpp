@@ -48,7 +48,7 @@ LNM_LO, LNM_HI = 29.9336, 36.7300
 
 def main():
     dump = (Path(sys.argv[1]) if len(sys.argv) > 1 else
-            sel_kernels.repo_root() / "docs" / "figs"
+            sel_kernels.repo_root() / "cosmosis-models"
             / "real_pipeline_extract_output")
     if not dump.is_dir():
         sys.exit(f"dump directory not found: {dump}")

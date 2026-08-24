@@ -526,9 +526,20 @@ class TestShearPrjGl(unittest.TestCase):
         np.testing.assert_allclose(cl, ex_c, rtol=1e-8, atol=0.0)
         np.testing.assert_allclose(vals, ex_v, rtol=1e-8, atol=0.0)
 
+        # Frozen-physics backend, signed era (see
+        # docs/known_issues/frozen_physics_signed_rnd_defect.md): the
+        # frozen amplitude algebra predates the signed mis-centering
+        # kernel, so its rnd channel no longer tracks the exact one
+        # (max rel 2.3e+2 at the fiducial sample). The cl channel — the
+        # only one production's likelihood consumes — stays usable at
+        # the ~2e-2 level. Guard cl (must stay GREEN); keep the
+        # historical vals comparison DELIBERATELY red until the frozen
+        # algebra is re-derived for the signed kernel.
+        fr_c = source.array("dsigma_prj_frozen_physics", "cl")
+        np.testing.assert_allclose(cl, fr_c, rtol=2e-2, atol=0.0)
         fr_v = source.array("dsigma_prj_frozen_physics", "vals")
-        # Documented frozen-physics approximation bound is < 0.2%; use a
-        # looser default so this doesn't flake on the fiducial sample.
+        # DELIBERATELY RED (frozen rnd vs signed cancellation; the
+        # historical "< 0.2%" bound was an unsigned-era measurement).
         np.testing.assert_allclose(vals, fr_v, rtol=3e-3, atol=0.0)
 
 

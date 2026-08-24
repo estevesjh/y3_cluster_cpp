@@ -66,7 +66,7 @@ QUAD_PINS = [  # (lambda_bin, zob, R_cMpch, rnd, cl)
 def _wall_from_ini():
     """dsigma_prj publishes only vals/rnd/cl; wall geometry lives in the
     extract ini (the #10-class metadata gap for this section)."""
-    text = (REPO / "docs" / "figs"
+    text = (REPO / "cosmosis-models"
             / "real_pipeline_extract_prj2h.ini").read_text()
     sec = re.search(r"^\[dsigma_prj\]\s*$(.*?)(?:^\[|\Z)", text,
                     re.S | re.M).group(1)

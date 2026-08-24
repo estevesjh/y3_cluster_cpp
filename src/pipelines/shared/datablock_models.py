@@ -116,11 +116,23 @@ class DumpSource:
         self.dir = dirpath
         self._values = {}
 
+    def _section_dir(self, section: str) -> str:
+        """Resolve a section to its on-disk directory, case-insensitively.
+
+        The datablock is case-insensitive and writers publish mixed-case
+        section names (e.g. b_sel_marg_P1), but the test sampler saves
+        lowercase directories -- resolve exact first, then lowercase.
+        """
+        exact = os.path.join(self.dir, section)
+        if os.path.isdir(exact):
+            return exact
+        return os.path.join(self.dir, section.lower())
+
     def _section_values(self, section: str) -> dict:
         """Load and cache scalar values for one dump section."""
         if section not in self._values:
             vals = {}
-            path = os.path.join(self.dir, section, "values.txt")
+            path = os.path.join(self._section_dir(section), "values.txt")
             if os.path.exists(path):
                 for line in open(path):
                     if "=" in line:
@@ -134,7 +146,7 @@ class DumpSource:
 
     def array(self, section: str, key: str) -> np.ndarray:
         """Read an array file and restore its optional shape header."""
-        path = os.path.join(self.dir, section, key.lower() + ".txt")
+        path = os.path.join(self._section_dir(section), key.lower() + ".txt")
         shape = None
         with open(path) as f:
             for line in f:
@@ -156,7 +168,7 @@ class DumpSource:
         if key.lower() in self._section_values(section):
             return True
         return os.path.exists(
-            os.path.join(self.dir, section, key.lower() + ".txt"))
+            os.path.join(self._section_dir(section), key.lower() + ".txt"))
 
 
 # ---------------------------------------------------------------------------

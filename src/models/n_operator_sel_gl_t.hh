@@ -281,12 +281,16 @@ namespace y3_cluster {
                                                w::mis_detail::TAU_MIS_DEFAULT);
       double const omm = s.view<double>("cosmological_parameters", "omega_M");
       dsigma_mis_.set_rho_mult(omm);
-      // Feed haloModel/concentration (Child18 x concentration_amplitude) into
-      // the miscentered NFW, so the 1h miscentered part uses the SAME c(M) as
-      // the centered 1h (dSigma_nfw table) and the 2-halo (ShearPrjCore),
-      // instead of the fixed c=4 it was built with. Without this the
-      // miscentered fraction f_mis of the 1-halo ignores the concentration.
-      if (s.has_val("haloModel", "concentration"))
+      // OPT-IN (miscentering/use_halo_model_conc != 0, default 0 = the
+      // ratified fixed-c production path): feed haloModel/concentration
+      // (Child18 x concentration_amplitude) into the miscentered NFW so
+      // the 1h miscentered part uses the SAME c(M) as the centered 1h
+      // (dSigma_nfw table) and the 2-halo (ShearPrjCore). Kept opt-in
+      // until the fixed-c physical-density default has passed the
+      // report-based validation (issue #14; same contract as the
+      // use_halo_model_conc option on the projection cores).
+      if (w::mis_detail::read_mis_param(s, "use_halo_model_conc", 0.0) != 0.0
+          && s.has_val("haloModel", "concentration"))
         dsigma_mis_.set_concentration_table(
             make_Interp1D(s, "haloModel", "lnM", "concentration"));
 

@@ -313,17 +313,21 @@ class TestFirstHaloTermRedshiftHandling(unittest.TestCase):
         sys.path.insert(0, str(REPO / "y3_buzzard"))
         import halo_model_cosmosis as hmc
         src_exec = inspect.getsource(hmc.execute).replace(" ", "")
-        # z_halo feeds ONLY the concentration; the profile term stays
-        # at z=0 so the published tables remain comoving (first_halo_term
-        # scales its density by (1+z)^3 -- physical).
+        # z_halo feeds ONLY the concentration; the profile-density term
+        # is z_density (ini key one_halo_z_density, DEFAULT 0.0 = the
+        # ratified comoving rho_m0 convention; > 0 opts in to physical
+        # rho_m0*(1+z)^3, issue #22). The two knobs are deliberately
+        # independent: concentration choice vs density normalisation.
         self.assertIn("concentration_at_M(M,z=one_halo_z,", src_exec)
-        self.assertIn("first_halo_term(M,z=0,", src_exec)
+        self.assertIn("first_halo_term(M,z=z_density,", src_exec)
         src_setup = inspect.getsource(hmc.setup).replace(" ", "")
         self.assertIn('"z_halo"', src_setup)          # canonical ini key
         self.assertIn('"one_halo_z"', src_setup)      # deprecated alias
         self.assertIn('0.4', src_setup)               # convention default
+        self.assertIn('"one_halo_z_density"', src_setup)  # density knob
+        self.assertIn("z_density=0.0", src_setup)     # comoving default
         # Legacy dumps/self-closure DVs pin z_halo = 0.0 explicitly in
-        # their inis (docs/figs extract inis, mock_mcmc_cp_camb.ini).
+        # their inis (cosmosis-models extract inis, mock_mcmc_cp_camb.ini).
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)

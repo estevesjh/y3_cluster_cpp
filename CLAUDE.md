@@ -397,7 +397,11 @@ grid → bsel/shear_prj external-test deviations),
 wrong radial axis in `wp_cluster.cuh`; fix deferred pending a
 legacy-consumer audit), and
 `docs/known_issues/xi_nl_linear_fallback.md` (ξ_NL is linear until cp_camb
-provides nonlinear P(k) — issue #9).
+provides nonlinear P(k) — issue #9), and
+`docs/known_issues/frozen_physics_signed_rnd_defect.md` (the frozen-physics
+ΔΣ_prj benchmark's rnd channel is incompatible with the signed
+mis-centering kernel; its cl channel holds at ~2e-2, production is
+unaffected).
 
 ### Known model defect: HOD normalization at low occupation
 
