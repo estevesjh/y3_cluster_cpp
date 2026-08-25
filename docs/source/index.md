@@ -25,6 +25,7 @@ math/index
 :caption: Getting started
 
 running
+benchmark_inis
 installation
 building_macos
 pipeline_organization
