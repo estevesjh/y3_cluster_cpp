@@ -51,9 +51,18 @@ genuine content of issue #5: the fixed c=4 family vs Child18 c(M)
 (<= ~9% at inner radii, vanishing at high mass at z_halo = 0) plus the
 ell-truncation/interpolation of the series (~few x 1e-3). The
 deliberately-red pin `test_cpp_radial_series_matches_cpp_full_ltmz`
-stays until that concentration question is decided; the measured
-envelope should be re-recorded after the convention migration's pin
-regeneration.
+stays until that concentration question is decided.
+
+Measured envelope after the convention migration's pin regeneration
+(2026-08-24, 120-point wall on the fixture's pinned z_halo = 0 tables,
+regenerated `CPP_RADIAL_SERIES` vs `CPP_FULL_LTMZ`):
+**-10.6% .. +3.9%**, sign flipping with radius within each bin (e.g.
+bin 0: -10.0% at R = 0.2 rising through zero near R ~ 1.4 to +3.5% at
+R = 5 cMpc/h) — the shape signature of a concentration mismatch, no
+longer an amplitude offset. Down from the pre-unification 56-86%.
+(On z_halo = 0.4 tables the same envelope is -3.6% .. +4.6% — Child18
+c at z = 0 sits further from the family's fixed c = 4, so the pinned
+legacy-z dump shows the larger residual.)
 
 Historical note: the "~4% shape difference" in the module docstrings and
 the earlier "~10% shape residual" were artifacts of shape-only
