@@ -15,7 +15,7 @@
 #include "models/dv_do_dz_t.cuh"
 #include "models/emg_des_t.cuh"
 #include "models/hmf_t.cuh"
-#include "models/mor_shifted_poisson_t.cuh"
+#include "models/mor_hod_t.cuh"
 #include "models/nfw_dsigma_mis.cuh"
 #include "models/omega_z_des.cuh"
 
@@ -53,7 +53,12 @@ private:
   // kernel (DSIGMA_MIS_CONC) so cross-backend identity pins stay valid.
   std::optional<y3_cuda::NFW_DSIGMA_MIS> dsigma_mis_;
   bool use_halo_model_conc_ = false;   // issue #14, opt-in diagnostic leg
-  std::optional<y3_cuda::MOR_SHIFTED_POISSON_t> mor_;
+  // Device HOD MOR (central-shifted Costanzi-2019 form) — the SAME
+  // convention as the CPU twin's y3_cluster::MOR_HOD_t, so the
+  // CPU<->GPU cross-backend pins compare identical physics. The
+  // no-central MOR_SHIFTED_POISSON_t is reserved for the P[X]/b_sel
+  // operators (p_operator_gpu_t.cuh).
+  std::optional<y3_cuda::MOR_HOD_t> mor_;
   std::optional<y3_cuda::EMG_DES_t> emg_;
   double f_mis_{0.0}, tau_mis_{0.0};
   bool phys_density_{false};

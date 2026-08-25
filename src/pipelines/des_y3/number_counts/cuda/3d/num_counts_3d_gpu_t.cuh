@@ -10,19 +10,22 @@
 // (same conventions as their host twins, including the HMF mass-axis
 // shift and hmf_s/hmf_q nuisance). The HOD and the EMG observed-richness
 // kernel S_i are the gpu_prj_costanzi2026 device models (Arwa Qadi,
-// upstream PR #3): y3_cuda::MOR_SHIFTED_POISSON_t (continuous
-// shifted-Poisson MOR, reads cluster_mor like the CPU MOR_HOD_t) and
+// upstream PR #3): y3_cuda::MOR_HOD_t (central-shifted Costanzi-2019
+// shifted-Poisson HOD, the device mirror of the CPU MOR_HOD_t —
+// same cluster_mor input contract, same algebra) and
 // y3_cuda::EMG_DES_t (analytic EMG CDF over plob_ltr_params, so
 // S_i = F(lam_max | lt, zt) − F(lam_min | lt, zt) with no lambda_ob
 // quadrature).
 //
-// MOR convention note: MOR_SHIFTED_POISSON_t is the Costanzi-2026
-// P-operator form (p_operator_t.hh, x = ltr + δ — no central-count
-// shift), whereas the CPU explicit-3d backend uses MOR_HOD_t
-// (x = ltr − λ_cen + δ, λ_cen = 1 for M ≥ Mmin). The two are related
-// exactly by MOR_SP(ltr) = MOR_HOD(ltr + 1) above Mmin, so CPU↔GPU
-// backend agreement carries a one-unit ltr offset in the HOD term —
-// pinned in test/num_counts_3d_gpu.test.cu.
+// MOR convention note: this backend previously used
+// MOR_SHIFTED_POISSON_t — the Costanzi-2026 P-operator form
+// (p_operator_t.hh, x = ltr + δ, no central-count shift) — which made
+// the GPU integrand the CPU one offset by one ltr unit
+// (MOR_SP(ltr) = MOR_HOD(ltr + 1) above Mmin; identity pinned in
+// test/num_counts_3d_gpu.test.cu). The explicit-3d backends now all
+// use the HOD form so CPU↔GPU cross-backend pins compare identical
+// physics; MOR_SHIFTED_POISSON_t remains the P[X]/b_sel operator MOR
+// (p_operator_gpu_t.cuh), matching its CPU twin.
 //
 // The observed-redshift kernel S_j is the 3-line Gaussian
 // CDF difference below, verbatim the CPU richness_zkernel with the
@@ -50,7 +53,7 @@
 #include "models/dv_do_dz_t.cuh"
 #include "models/emg_des_t.cuh"
 #include "models/hmf_t.cuh"
-#include "models/mor_shifted_poisson_t.cuh"
+#include "models/mor_hod_t.cuh"
 #include "models/omega_z_des.cuh"
 
 #include <cmath>
@@ -91,7 +94,7 @@ private:
   std::optional<y3_cuda::HMF_t> hmf_;
   std::optional<y3_cuda::DV_DO_DZ_t> dv_do_dz_;
   std::optional<y3_cuda::OMEGA_Z_DES> omega_z_;
-  std::optional<y3_cuda::MOR_SHIFTED_POISSON_t> mor_;
+  std::optional<y3_cuda::MOR_HOD_t> mor_;
   std::optional<y3_cuda::EMG_DES_t> emg_;
 
   // Current-bin scalars, set by set_grid_point.

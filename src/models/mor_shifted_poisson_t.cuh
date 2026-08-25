@@ -73,11 +73,20 @@ namespace y3_cuda {
       // Try cluster_mor first (CPU convention), fall back to cluster_abundance
       if (sample.has_val("cluster_mor", "log10_Mmin")) {
         log10_Mmin_ = sample.view<double>("cluster_mor", "log10_Mmin");
-        log10_M1_   = sample.view<double>("cluster_mor", "log10_M1");
+        // SAME input contract as CPU MOR_HOD_t: either an explicit
+        // log10_M1 or the widePlanck-style log10_ratio encoding
+        // (log10_M1 = log10_Mmin + log10_ratio), and z_pivot optional
+        // with the shared 0.45 default.
+        log10_M1_ =
+          sample.has_val("cluster_mor", "log10_M1")
+            ? sample.view<double>("cluster_mor", "log10_M1")
+            : log10_Mmin_ + sample.view<double>("cluster_mor", "log10_ratio");
         alpha_      = sample.view<double>("cluster_mor", "alpha");
         sigma_intr_ = sample.view<double>("cluster_mor", "sigma_lambda");
         epsilon_    = sample.view<double>("cluster_mor", "epsilon");
-        z_pivot_    = sample.view<double>("cluster_mor", "z_pivot");
+        z_pivot_    = sample.has_val("cluster_mor", "z_pivot")
+                        ? sample.view<double>("cluster_mor", "z_pivot")
+                        : 0.45;   // MOR_HOD_t::Z_PIVOT_DEFAULT
       } else {
         // Fallback to cluster_abundance with ratio encoding
         double const mor_logMmin = sample.view<double>("cluster_abundance", "mor_logMmin");
