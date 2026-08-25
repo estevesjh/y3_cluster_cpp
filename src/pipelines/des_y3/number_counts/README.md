@@ -154,10 +154,10 @@ under-integrate the near-delta richness ridge by about one percent in
 the lowest-richness bin; the accepted setting is `eps_rel=1e-4`.
 
 The CUDA backend composes the gpu_prj_costanzi2026 device models
-(`models/mor_shifted_poisson_t.cuh`, `models/emg_des_t.cuh`; Arwa Qadi,
+(`models/mor_sat_only_t.cuh`, `models/emg_des_t.cuh`; Arwa Qadi,
 upstream PR #3) plus the local `zkernel_sj`. Note the MOR convention
 offset documented in the header (Costanzi-2026 form, no central-count
-shift; `MOR_SP(ltr) = MOR_HOD(ltr+1)` above `Mmin`).
+shift; `MOR_SAT_ONLY(ltr) = MOR_HOD(ltr+1)` above `Mmin`).
 
 ## Running the backends
 
