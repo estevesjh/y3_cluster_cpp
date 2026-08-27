@@ -7,6 +7,10 @@
 #include "models/nfw_dsigma_mis.cuh"
 #include "utils/cuda_interp_2d.cuh"
 
+// Host twin, for the r_s() device-vs-host parity check below.
+#include "models/nfw_dsigma_mis.hh"
+#include "utils/interp_1d.hh"
+
 #include <fstream>
 #include <iomanip>
 #include <fmt/format.h>
@@ -79,6 +83,48 @@ TEST_CASE("Test NFW Misc Implementation")
             << expected_result << '\t'
             << calculated_result << '\n';
       }
+    }
+  }
+}
+
+// y3_cuda::NFW_DSIGMA_MIS::r_s(lnM) was added 2026-08-27 (issue #24
+// debugging: shear_prj_frozen_gpu_t.cuh's cl-channel amplitude anchor
+// was hand-computing r_200/(fixed c=4) with a bare rho_crit constant
+// instead of calling this method, diverging from the profile's actual
+// rho_ref/per-mass concentration -- see
+// docs/known_issues/frozen_physics_signed_rnd_defect.md). Pin it
+// against the CPU twin (nfw_dsigma_mis.hh:129) so the two can't drift
+// apart again, with and without a concentration table set.
+TEST_CASE("y3_cuda::NFW_DSIGMA_MIS::r_s matches the host twin exactly")
+{
+  double const conc = 4.0;
+  double const rho_ref = 2.77533742639e+11 * 0.3;  // omega_m * rho_crit,0
+
+  SECTION("fixed concentration (no table set)")
+  {
+    y3_cluster::NFW_DSIGMA_MIS host(conc, rho_ref, "single");
+    NFW_DSIGMA_MIS dev(conc, rho_ref, y3_cuda::DSIGMA_MIS_SINGLE);
+
+    for (double log10_M : {12.0, 13.0, 14.0, 14.5, 15.0, 15.5}) {
+      double const lnM = std::log(std::pow(10.0, log10_M));
+      CHECK(dev.r_s(lnM) == Approx(host.r_s(lnM)).epsilon(1.0e-12));
+    }
+  }
+
+  SECTION("per-mass concentration table set")
+  {
+    std::vector<double> const lnM_tab{28.0, 30.0, 32.0, 34.0, 36.0};
+    std::vector<double> const conc_tab{6.0, 5.5, 5.0, 4.2, 3.5};
+
+    y3_cluster::NFW_DSIGMA_MIS host(conc, rho_ref, "single");
+    host.set_concentration_table(y3_cluster::Interp1D(lnM_tab, conc_tab));
+
+    NFW_DSIGMA_MIS dev(conc, rho_ref, y3_cuda::DSIGMA_MIS_SINGLE);
+    dev.set_concentration_table(lnM_tab, conc_tab);
+
+    for (double lnM : {29.0, 31.0, 33.0, 35.0}) {
+      CHECK(dev.conc_at(lnM) == Approx(host.conc_at(lnM)).epsilon(1.0e-12));
+      CHECK(dev.r_s(lnM) == Approx(host.r_s(lnM)).epsilon(1.0e-12));
     }
   }
 }
