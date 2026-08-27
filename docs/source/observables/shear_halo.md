@@ -24,7 +24,10 @@ profile and adds the projection term.
   `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear1h_0d_cpp/Shear1hGl.so`.
 - Disk tables: `data/nfw_off_center/*gamma*` — $1000 \times 1000$ log-log
   grids of the gamma-kernel miscentred NFW in
-  $(R/r_s, R_{\rm mis}/r_s)$, loaded once at module construction.
+  $(R/r_s, R_{\rm mis}/r_s)$, loaded once at module construction, built
+  at a single **frozen $\rho_{\rm ref}=\rho_{m,0}$** — see "Evaluating the
+  frozen table at any redshift" below for how a per-sample $z$ is folded
+  in without rebuilding it.
 
 ## DES Y3 implementations
 
@@ -93,6 +96,49 @@ step-by-step recipe lives in {doc}`../numerics/index`,
 Setting `miscentering/f_mis = 0` recovers the centred-only `Shear1hSel`
 result ({doc}`../variants`). Model derivation: {doc}`../math/index`;
 miscentering model: {doc}`../math/index`.
+
+### Evaluating the frozen table at any redshift (`one_halo_physical_density`)
+
+The NFW disk tables are built once, at a single fixed reference density
+$\rho_{\rm ref}=\rho_{m,0}$ (comoving, frozen at $z=0$). Rebuilding them
+per-sample at the halo's actual physical mean density,
+$\rho_m(z)=\rho_{m,0}(1+z)^3$ — the convention Buzzard's own halo
+catalog uses (issue #22) — would mean tabulating over mass **and**
+dozens of $z$ values instead of one table. NFW self-similarity avoids
+that entirely: the profile has exactly one length scale, $r_s$, and
+every lensing observable has the Wright & Brainerd (2000) form
+$(\Sigma,\bar\Sigma) = \Sigma_0\cdot(\text{dimensionless function of }R/r_s)$
+with the **same** prefactor $\Sigma_0 \equiv 2\rho_s r_s$ for both, so
+$\Delta\Sigma(R) = \Sigma_0\cdot F(R/r_s)$ too. Only $\rho_{\rm ref}$
+changes between conventions ($M$, $c$ are the same halo); at fixed
+$(M,c)$,
+
+$$r_{200}=\Big[\frac{3M}{4\pi\cdot200\cdot\rho_{\rm ref}}\Big]^{1/3},\quad
+r_s=\frac{r_{200}}{c},\quad \rho_s=\delta_c(c)\,\rho_{\rm ref}
+\;\;\Longrightarrow\;\;
+\Sigma_0 = 2\rho_s r_s \propto \rho_{\rm ref}^{2/3}.$$
+
+($\rho_s\propto\rho_{\rm ref}^{1}$, $r_s\propto\rho_{\rm ref}^{-1/3}$;
+the product nets the $2/3$ power.) Plugging in the physical/frozen
+density ratio, $\rho_{\rm ref,phys}/\rho_{\rm ref,frozen}=(1+z)^3$,
+gives $\Sigma_0$'s redshift dependence directly:
+$[(1+z)^3]^{2/3}=(1+z)^2$. Combined with the $r_s\propto\rho_{\rm
+ref}^{-1/3}$ shrink — smaller $r_s$ at fixed physical $R$ is the same
+argument as querying the **frozen**-table shape at a bigger radius,
+$R(1+z)$ — the exact identity is
+
+$$\Delta\Sigma_{\rm phys}(R\mid z) = (1+z)^2\;\Delta\Sigma_{\rm frozen}\big(R\,(1+z)\big).$$
+
+So the physical-density evaluation costs **zero new tables**: query the
+one frozen-$z{=}0$ disk table at $R(1+z)$ instead of $R$, multiply by
+$(1+z)^2$. Opt-in via `[halo_model] one_halo_physical_density = T`
+(incompatible with `one_halo_z_density \neq 0`); implemented as
+`z_amp_power=2` folded into the $z$-integration weight
+(`sel_gl_weights.hh::build_weights`) and the `R\to R(1+z)` query
+rescale at the bin's $z_{\rm eff}$ (`shear1h_gl_t.hh::evaluate`). Not
+yet implemented for `Shear1h2hMaxGpu` or the Python explicit/max
+mirrors (fails loudly there). See GitHub issue #22 for the Buzzard
+validation this identity answers.
 
 ## CosmoSIS setup
 
