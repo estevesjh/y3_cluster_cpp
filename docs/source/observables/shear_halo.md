@@ -39,7 +39,7 @@ alternative cells described in {doc}`../pipeline_organization`:
 | `3d` | C++, CUDA | Explicit $(\lambda_{\rm true},\ln M,z)$ adaptive one-halo miscentred references | 3.3e-4 / 3.4e-4 (vs the adaptive certifier) |
 | `0d` | Python | Explicit fixed-GL 3-dim grid | 4.9e-5 |
 | `0d` | **C++ (this page)**, Python | Exact redshift contraction, 1-dim GL mass sum; `Shear1hGl.so` is bitwise-equivalent to `Shear1hMisSel.so` (identity recorded separately) | 8.4e-4 |
-| `0d` | Python, C++ | Offline $U_\ell$ radial-series tables plus per-sample population moments; a review comment flags a possible double-counted miscentering term here — see {doc}`../variants` | 3.7e-3 truncation vs same-profile fiducial; raw vs-3d amplitude is the open c=4 defect |
+| `0d` | Python, C++ | Offline $U_\ell$ radial-series tables plus per-sample population moments; a review comment flags a possible double-counted miscentering term here — see {doc}`../variants` | 3.7e-3 truncation vs same-profile fiducial; the 56–86% amplitude offset was a density-convention mismatch, RESOLVED 2026-08-24 (unified `rho_m_ref`); residual -10.6%–+3.9% is the fixed-c=4-family-vs-Child18 concentration mismatch, accepted per the fixed-concentration policy decision — see `docs/known_issues/radial_series_vs_full_ltmz_defect.md` |
 | `0d` | Python, C++, CUDA | `Shear1h2hMax` — traditional $\max(1h,b\,2h)$ model, $z$-resolved 2-dim GL sum, not part of this reference pipeline — see {doc}`../variants` | 8.3e-4 (through the Python max chain) |
 
 The radial-series tables are versioned under `data/radial_series` and are

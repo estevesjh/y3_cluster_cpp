@@ -1,4 +1,4 @@
-# ✅ RESOLVED — radial series (0d) vs the 3d reference: the 56-86% offset was a density-convention mismatch
+# ✅ RESOLVED — radial series (0d) vs the 3d reference: density-convention mismatch + fixed-c policy decision (issue #5 closed)
 
 **Raised 2026-08-14; root-caused and RESOLVED 2026-08-24.** The original
 write-up attributed the offset to the hardcoded `CONC = 4.0` in
@@ -44,14 +44,30 @@ identical density `first_halo_term` builds the centred tables with.
   the shear z-weight + the query-radius rescale (exact at live z;
   bin-z_eff in the z-contracted evaluators). Number counts untouched.
 
-## What remains open
+## Concentration question: decided (2026-08-27) — closes issue #5
 
-The residual radial-series-vs-3d disagreement after unification is the
-genuine content of issue #5: the fixed c=4 family vs Child18 c(M)
-(<= ~9% at inner radii, vanishing at high mass at z_halo = 0) plus the
-ell-truncation/interpolation of the series (~few x 1e-3). The
-deliberately-red pin `test_cpp_radial_series_matches_cpp_full_ltmz`
-stays until that concentration question is decided.
+The residual radial-series-vs-3d disagreement after unification was the
+genuine remaining content of issue #5: the fixed c=4 family vs Child18
+c(M) (<= ~9% at inner radii, vanishing at high mass at z_halo = 0) plus
+the ell-truncation/interpolation of the series (~few x 1e-3). The
+deliberately-red pin `test_cpp_radial_series_matches_cpp_full_ltmz` was
+gated on deciding whether the family should adopt Child18 c(M) too.
+
+Owner decision (2026-08-27): fixed concentration, not Child18 c(M), is
+the project's direction for the 1-halo term (see the `concentration_fixed`
+knob added to `halo_model.py` / `halo_model_cosmosis.py`, and the Buzzard
+mock's own c=5 fixed-concentration switch in `des-nersc-cluster-scripts`).
+The family's fixed c=4 is therefore the correct model choice, not a
+defect to close by chasing Child18 -- the residual -10.6%..+3.9%
+envelope (below) is an accepted, permanent characteristic of the
+fixed-c approximation, not an open question. Issue #5 is closed on
+this basis.
+
+Follow-up (not done here, tracked separately if it matters later):
+`test_cpp_radial_series_matches_cpp_full_ltmz`'s tolerance/red-pin status
+should be revisited to reflect "accepted approximation" rather than
+"defect pending a decision" -- a wording/tolerance change, not a physics
+change.
 
 Measured envelope after the convention migration's pin regeneration
 (2026-08-24, 120-point wall on the fixture's pinned z_halo = 0 tables,
