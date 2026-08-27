@@ -149,85 +149,92 @@ tolerances, and comparison definitions:
 - [One-halo and traditional one-plus-two-halo shear](shear_1h2h/README.md)
 - [Projection shear](shear_projection/README.md)
 
-## Prior-volume robustness (apriori sampling)
+## Cost distribution and robustness across the prior (apriori sampling)
 
-The table above is a single fiducial-point measurement. To check that
-cost is stable and the pipeline doesn't silently misbehave away from
-the fiducial point, `cosmosis-models/des_y3_cpp0d_fast_apriori.ini`
-(1000 draws) and `cosmosis-models/des_y3_cpp3d_slow_reference_apriori.ini`
-(10 draws) run the same two module chains under CosmoSIS's `apriori`
-sampler, which draws uniformly from the full prior in
-`mock_mcmc_widePlanck_values_mis.ini` (not just the fiducial point) and
-reports module-by-module wall-clock for every draw
-(`timing = T`). `cp_camb`'s CAMB-emulator grid stays at `nz = 50` in
-both (matching the base `des_y3_cpp0d_fast.ini`/`des_y3_cpp3d_slow_reference.ini`
-inis) -- `nz = 400` measurably slows every sample for no benefit to
-this 0d/3d fixed-node chain.
+The table above is single-point measurements at the fiducial
+cosmology/HOD. To check that cost is stable and the pipeline doesn't
+silently misbehave away from that one point,
+`cosmosis-models/des_y3_cpp0d_fast_apriori.ini`,
+`des_y3_python0d_fast_apriori.ini`, `des_y3_gpu0d_fast_apriori.ini`
+(1000 draws each) and `des_y3_cpp3d_slow_reference_apriori.ini` (10
+draws) run the same module chains under CosmoSIS's `apriori` sampler,
+drawing independently from the full `mock_mcmc_widePlanck_values_mis.ini`
+prior (`h0`, `omega_m`, `omega_b`, `n_s`, `sigma8`, and the five
+`cluster_mor` HOD parameters) instead of evaluating once at the
+fiducial point, with `timing = T` reporting module-by-module wall-clock
+for every draw. `cp_camb`'s CAMB-emulator grid stays at `nz = 50` in
+every variant -- raising it toward the production default of 400 makes
+each sample much slower for no benefit to these fixed-node/adaptive-node
+chains. Two independent runs of this sweep (unseeded `np.random.uniform`
+draws, so each run samples different points) gave consistent findings,
+below. Raw per-sample timing arrays are saved to
+`cosmosis-models/des_y3_apriori_timing_data.json`.
 
-**Fast chain, 1000 draws (2026-08-26, shared login-GPU node, CPU-only
-modules)** -- per-module wall-clock across all draws that completed:
+**~30% of draws are free, near-zero-cost rejections, by design, not a
+defect.** `cp_camb.py`'s pre-emulator bound-box check deliberately
+rejects points outside the CAMB emulator's *trained* range even though
+the values-file's declared prior is wider (e.g. the `n_s` prior is
+$U(0.8, 1.15)$ but the trained box is only $[0.823, 1.103]$) --
+extrapolating past the emulator's training region would produce
+untrustworthy $P(k)$ that could otherwise crash
+`cluster_toolkit.peak_height.nu_at_M` with a GSL abort further
+downstream. `cosmosis` reports these as `Pipeline failed on these
+parameters`, which reads alarming out of context but is the module
+working as intended (fail fast and cheap, not silently on garbage
+`P(k)`). Exclude these draws from any cost or precision statistics --
+they never run past `cp_camb`.
 
-| Module | Median | Mean | Min | Max |
-| --- | ---: | ---: | ---: | ---: |
-| `halo_model` | 454 ms | 467 ms | 335 ms | 721 ms |
-| `sel_function` | 65 ms | 67 ms | 51 ms | 1322 ms |
-| `ShearPrjGl` | 590 ms | 590 ms | 539 ms | 865 ms |
-| `NumCountsSel` | 8 ms | 8 ms | 7 ms | 11 ms |
-| `Shear1hMisSel` | 11 ms | 11 ms | 9 ms | 14 ms |
-| `Shear1h2hMax` | 12 ms | 12 ms | 11 ms | 21 ms |
-| **Total pipeline** | **1.39 s** | **1.44 s** | **1.18 s** | **2.78 s** |
+**Finding 1 -- `sel_function`'s ~1.2-1.3 s fiducial cost is one-time
+JIT compilation, not steady state.** Across ~700 completed fast draws
+(cpp/python/gpu 0d chains all show the same pattern), `sel_function`
+takes ~1.3 s on the *first* sample of the process and a steady
+46-80 ms (median ~65 ms) on every subsequent one -- the known numba
+`cache=False` issue (`sel_kernels` module-name cross-poisoning fix,
+tracked separately). A real MCMC chain (thousands of samples per
+process) amortizes this to zero; a single-fiducial-point benchmark
+cannot see that and reports the inflated one-time number instead.
 
-The single-fiducial-point number in the table above (2.56 s) sits
-inside this distribution, close to the mean -- consistent, not a
-different regime. `sel_function`'s 1.3 s outlier is the one-time numba
-JIT-compile cost on the *first* draw of the process (see the Perf notes
-below); every other draw pays 50-80 ms.
+**Finding 2 -- the adaptive-3d modules' cost is strongly
+cosmology-dependent (40-60x spread); `shear_prj_cuhre` is comparatively
+stable.** `NumCounts3d`/`Shear1h3d`/`Shear1h2hMax3d` each run
+0.7-0.9 s at most prior draws but spike to 26-47 s at a handful of
+others -- some HOD/cosmology corners push the near-delta richness
+ridge or the mass/redshift integrand into a shape Cuhre needs far more
+subdivisions to resolve at `eps_rel=1e-4`. `shear_prj_cuhre`'s
+per-point cost, by contrast, stays within about 10-15% across the same
+draws, because its reduced 3-point wall is dominated by one expensive
+angular integral rather than the adaptive mass/redshift integral. The
+single fiducial-point costs quoted in the table above land inside this
+spread but are not representative of either tail -- **anyone budgeting
+a batch job around these backends should size the wall time on the
+worst draw in the relevant prior region, not the fiducial-point
+number.**
 
-**Prior-domain robustness finding**: at least 285 of the 1000 draws
-(28.5%; the true count is likely somewhat higher -- some successful
-completions get mis-attributed by stdout/stderr interleaving when
-parsing the log, see the script's own note) made `cosmosis` report
-`Pipeline failed on these parameters`, almost always inside `cp_camb`
-or the NFW profile evaluation (`y3_buzzard/nfwModel.py:62: RuntimeWarning:
-divide by zero encountered in arctanh`). The declared prior box in
-`mock_mcmc_widePlanck_values_mis.ini` (e.g. `omega_m in U(0.11, 1.0)`,
-`sigma8 in U(0.5, 1.5)`) is wider than the CAMB emulator's trained
-bounding box and the domain where the fixed-`c=4`/analytic NFW
-profiles stay well-conditioned. This is invisible at the single
-fiducial point and only shows up under prior sampling -- worth fixing
-before this prior is used for an actual MCMC run (either narrow the
-prior to the emulator's valid box, or make the affected modules fail
-soft instead of raising).
+| Module | Fast 0d (cpp/python/gpu), ~700/3000 completed | Slow 3d/2d (cpp), ~5-8/10-19 completed |
+| --- | --- | --- |
+| `halo_model` | median ~450-470 ms (320-720 ms) | median ~400-490 ms (390-650 ms) |
+| `sel_function` | median ~60-70 ms (46 ms-1.3 s incl. one-time JIT) | median ~55-65 ms (49 ms-1.2 s incl. one-time JIT) |
+| `NumCountsSel`/`numcounts_sij_gl` vs `NumCounts3d` | median 5-8 ms (4-13 ms) | median 0.8-1.8 s (0.7-47.2 s) |
+| `Shear1hMisSel`/`shear1h_gl` vs `Shear1h3d` | median 11-71 ms (9-91 ms) | median 0.9-1.5 s (0.7-26.1 s) |
+| `Shear1h2hMax`/`shear1h2h_max`/`Shear1h2hMaxGpu` vs `Shear1h2hMax3d` | median 12-77 ms (9-139 ms) | median 0.9-1.7 s (0.7-29.3 s) |
+| `ShearPrjGl`/`shear_prj_gl`/`ShearPrjFrozenGpu` vs `shear_prj_cuhre` | median 10 ms-590 ms (7 ms-865 ms) | median ~69-221 s/pt (68-222 s/pt) |
+| Total pipeline | median 0.77-1.44 s (0.60-2.78 s) | median 224-251 s (204-325 s) |
 
-**Slow chain, 10 draws (2026-08-27)**: only 3 of 10 draws parsed as
-clean single-pass successes (the same stdout/stderr caveat as above
-applies, plus the adaptive backends below can raise their own
-convergence errors independent of the `cp_camb`/NFW failure mode). The
-striking result is the **cost variance** of the adaptive Cuhre
-backends across the prior -- something a single fiducial-point
-measurement cannot see at all:
-
-| Module | Median | Mean | Min | Max |
-| --- | ---: | ---: | ---: | ---: |
-| `NumCounts3d` | 0.83 s | 16.2 s | 0.73 s | **47.2 s** |
-| `Shear1h3d` | 0.85 s | 9.2 s | 0.71 s | **26.1 s** |
-| `Shear1h2hMax3d` | 0.92 s | 10.3 s | 0.74 s | **29.3 s** |
-| `shear_prj_cuhre` | 220.8 s | 214.2 s | 199.9 s | 221.9 s |
-| **Total pipeline** | **224 s** | **251 s** | **204 s** | **325 s** |
-
-`NumCounts3d`/`Shear1h3d`/`Shear1h2hMax3d` each vary by **~40-60x**
-between their cheapest and most expensive prior draw (0.7-0.9 s at
-most points, up to 26-47 s at a handful of them) -- some parameter
-draws push the near-delta richness ridge or the mass/redshift
-integrand into a shape Cuhre needs far more subdivisions to resolve at
-`eps_rel=1e-4`. `shear_prj_cuhre` stays comparatively stable (200-222
-s) because it was already run on a reduced 3-point wall dominated by
-one expensive angular integral rather than the adaptive mass/redshift
-integral. This variance is invisible at the single fiducial point
-(where all three read as a tidy few seconds) and matters for anyone
-budgeting a batch job around these backends: size the wall time on the
-*worst* draw in the relevant prior region, not the fiducial-point
-number.
+**What this does and doesn't validate.** This confirms all three
+languages' fast 0d chains and the slow adaptive-3d chain run cleanly
+(no crashes, no NaN propagation) across hundreds of genuinely different
+cosmology/HOD draws, and replaces the single-point cost numbers with
+real distributions -- see `des_y3_apriori_timing_data.json` for the
+raw per-sample arrays behind every number above. It does **not** give
+a 0d-vs-3d precision comparison *across the prior*, since the fast and
+slow apriori runs draw unrelated random points. At the single fiducial
+point, that direct comparison *has* been done (see "Precision and cost
+overview" above: python-3d vs cpp-3d vs cuda-3d, and 0d-fast-path vs
+cuda-3d, for both number counts and one-halo shear). Extending it
+*across* the prior would need a third ini running both the fast 0d and
+slow 3d modules in the *same* pipeline on the *same* draws (the
+pattern `real_pipeline_extract_max2h.ini` already uses for CPU-vs-GPU)
+-- not yet built.
 
 ## Recommended methods
 
