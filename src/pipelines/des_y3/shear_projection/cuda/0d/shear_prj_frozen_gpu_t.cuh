@@ -385,15 +385,25 @@ public:
                  (1.0 + std::exp(-k_sig * (tg.theta[it] - theta0)));
 
       // Frozen mass shapes at zob + r_s-anchored drift denominator.
+      // anchor[im] must be lnm_w_[im] * r_s(M) from the SAME
+      // mis-centering model the dsmis_contract kernel evaluates
+      // (dsigma_mis_dev_->r_s, which honors set_rho_ref and any
+      // per-mass concentration table via conc_at) -- mirroring
+      // ShearPrjFrozenPhysics's CPU anchor_M
+      // (sigma_prj_frozen_interp_t.hh). The previous hardcoded
+      // r_200/4.0 with a bare rho_crit constant diverged from
+      // dsigma_mis_dev_'s actual rho_ref/concentration, producing a
+      // denom that could nearly cancel at some (zob, mass grid)
+      // combinations and overflow under division. Fixes one of two
+      // bugs behind the broken cl channel -- see
+      // docs/known_issues/frozen_physics_signed_rnd_defect.md for the
+      // second (a b_sel(theta) lookup bug, not yet fixed).
       double denom = 0.0;
       wcl_k[k].resize(N_lnm_);
       for (std::size_t im = 0; im != N_lnm_; ++im) {
         n_o[im] = (*hmf_)(lnm_x_[im], zob);
         b_o[im] = hmb_->clamp(lnm_x_[im], zob);
-        double const r_200 =
-          std::cbrt(3.0 * std::exp(lnm_x_[im]) /
-                    (800.0 * M_PI * 2.77533742639e+11));
-        anchor[im] = lnm_w_[im] * (r_200 / 4.0);
+        anchor[im] = lnm_w_[im] * dsigma_mis_dev_->r_s(lnm_x_[im]);
         denom += anchor[im] * n_o[im] * b_o[im];
         wcl_k[k][im] = lnm_w_[im] * n_o[im] * b_o[im];
       }

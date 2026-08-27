@@ -68,3 +68,34 @@ real reason above.
 the `cl`-channel guard (≤ 2e-2) must stay green; the `vals` comparison at
 the historical 3e-3 is kept DELIBERATELY red until the frozen algebra is
 fixed or the backend is demoted to a cl-only benchmark.
+
+## GPU `cl` root cause, isolated (2026-08-27, issue #24 comment)
+
+Two separate bugs in `shear_prj_frozen_gpu_t.cuh`, not a single
+device-buffer indexing issue as originally suspected:
+
+1. **(Fixed)** `y3_cuda::NFW_DSIGMA_MIS` had no `r_s(lnM)` accessor
+   (unlike the CPU twin, `nfw_dsigma_mis.hh:129`), so the frozen-GPU
+   `cl`-channel amplitude anchor hand-computed `r_200/4.0` with a
+   hardcoded fixed `c=4` and a bare `rho_crit,0` constant instead of
+   the profile's actual `rho_m_ref`/per-mass concentration. Added
+   `r_s()` to `nfw_dsigma_mis.cuh` (mirrors the CPU formula exactly)
+   and switched the anchor to call it. This alone changed the failure
+   mode from overflow (`cl` up to ~1e232) to near-zero/denormal (`cl`
+   ~1e-310) — real, verified improvement, but not sufficient on its
+   own.
+2. **(Open)** `bsel_k[k][it]` (the b_sel(θ) plateau weight) is NaN at
+   zob=0.425 and denormal garbage at zob=0.575. Root cause: the
+   frozen-GPU module hand-rolls a zob-interpolation over
+   `b_sel_marginalised/{zob,lob,b_small,b_large}` assuming they form a
+   dense cartesian `n_zob × n_lob` grid, indexed `j0*n_lob+lob_bin`.
+   They don't -- per `src/models/bsel_bins_t.hh`, that section is a
+   flat list of *exact wall rows* (12 for the fiducial 4-λ×3-z wall),
+   not sorted/unique by zob. The CPU frozen counterpart
+   (`sigma_prj_frozen_interp_t.hh:182`) does an **exact**
+   `(lambda_bin, zob)` lookup via `BSelBins::at`, no interpolation.
+   The GPU module's zob-walk overruns past the true 12-element arrays
+   for any zob beyond the first slice, reading adjacent heap memory.
+   Fix: replace the ad-hoc interpolation block with a `BSelBins`
+   instance + `.at(lob_bin, zob)`, matching the CPU reference. Not
+   landed yet -- see the issue #24 comment thread for full detail.

@@ -139,7 +139,7 @@ evaluator), the baseline is stated in the cell:
 | `2d` | Projection shear | [`2d`](shear_projection/README.md#the-2d-backend), `ShearPrjCuhre` C++ | ~72 s/pt (measured 2026-08-26, 3-pt sample; full 180-pt wall ≈ 3.6 h, not run interactively) | not yet measured |
 | `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), exact-z Python (3-dim region-split GL) | 270 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open); 1.6e-11 vs exact evaluator, 5.5e-5 vs frozen production (separate baselines) |
 | `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), exact-z C++ (3-dim region-split GL) | 154 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open); 1e-11 vs exact evaluator (separate baseline) |
-| `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), frozen GPU path | 16 ms (measured 2026-08-26, full 180-pt wall) | broken: `cl` channel is uninitialized/mis-indexed device memory (up to 100% off, some NaN/denormal), not a faithful port — [known defect](../../../docs/known_issues/frozen_physics_signed_rnd_defect.md) |
+| `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), frozen GPU path | 16 ms (measured 2026-08-26, full 180-pt wall) | broken: `cl` channel is NaN/denormal beyond the first z-slice, root-caused 2026-08-27 to a host-side b_sel(θ) lookup bug (not device memory) — one contributing bug fixed (wrong ρ_ref/concentration in the amplitude anchor), the b_sel indexing bug remains open, [issue #24](https://github.com/estevesjh/y3_cluster_cpp/issues/24) |
 
 The observable READMEs contain the complete backend tables, grid
 settings (including the "GL nodes and weights" quadrature sections),

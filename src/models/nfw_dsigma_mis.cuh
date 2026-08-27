@@ -170,6 +170,21 @@ namespace y3_cuda {
     // (legacy Omega_m, the physical (1+z)^2) are applied OUTSIDE.
     void set_rho_ref(double rho) { _rho_b = rho; }
 
+    // Scale radius r_s(M) [cMpc/h], exposed for callers that need it
+    // directly (e.g. the frozen-physics r_s(M)-anchored amplitude
+    // drift a_b(z), ShearPrjFrozenGpu). Mirrors
+    // y3_cluster::NFW_DSIGMA_MIS::r_s (nfw_dsigma_mis.hh) exactly,
+    // including per-mass concentration via conc_at(lnM) when a
+    // concentration table has been set -- duplicates the formula
+    // operator() computes inline, so any future change to that
+    // formula must be mirrored here too.
+    __host__ __device__ double
+    r_s(double lnM) const
+    {
+      double const r_200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rho_b));
+      return r_200 / conc_at(lnM);
+    }
+
     __device__ __host__ double
     operator()(double r, double rmis, double lnM) const
     {
