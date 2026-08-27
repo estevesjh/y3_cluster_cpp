@@ -3,7 +3,7 @@
 // This is the code we're actually testing: the device models the
 // explicit-3d GPU backends compose — y3_cuda::MOR_HOD_t (the device
 // mirror of the host HOD MOR), y3_cuda::EMG_DES_t's closed-form
-// primitives, the b_sel-operator MOR y3_cuda::MOR_SAT_ONLY_t —
+// primitives, the b_sel-operator MOR y3_cuda::MOR_SHIFTED_POISSON_t —
 // plus the zkernel_sj observed-redshift kernel carried by
 // num_counts_3d_gpu_t.cuh. NumCounts3dGpu
 // itself (the CosmoSIS integrand) composes these with the pre-existing
@@ -12,7 +12,7 @@
 // construct, so this test isolates the genuinely new pieces instead.
 #include "models/emg_des_t.cuh"
 #include "models/mor_hod_t.cuh"
-#include "models/mor_sat_only_t.cuh"
+#include "models/mor_shifted_poisson_t.cuh"
 #include "pipelines/des_y3/number_counts/cuda/3d/num_counts_3d_gpu_t.cuh"
 
 // Host twins: rk_detail's phi/erfcx closed forms (richness_kernel_t.hh)
@@ -57,13 +57,13 @@ TEST_CASE("zkernel_sj matches the host richness_zkernel closed form")
   }
 }
 
-TEST_CASE("MOR_SAT_ONLY_t is MOR_HOD_t shifted by the central count")
+TEST_CASE("MOR_SHIFTED_POISSON_t is MOR_HOD_t shifted by the central count")
 {
   // The Costanzi-2026 P-operator form (x = ltr + delta) relates to
   // MOR_HOD_t's central-shifted form (x = ltr - lambda_cen + delta,
   // lambda_cen = 1 above Mmin) exactly by
   //
-  //   MOR_SAT_ONLY(ltr, lnM, z) = MOR_HOD(ltr + 1, lnM, z)   for M >= Mmin
+  //   MOR_SP(ltr, lnM, z) = MOR_HOD(ltr + 1, lnM, z)   for M >= Mmin
   //
   // away from the mu_sat -> 0 fallback branch. This pins the
   // b_sel-operator device model's formula; the explicit-3d GPU
@@ -73,7 +73,7 @@ TEST_CASE("MOR_SAT_ONLY_t is MOR_HOD_t shifted by the central count")
                sigma_lambda = 0.35, epsilon = -0.2, z_pivot = 0.45;
   MOR_HOD_t const mor_hod(log10_Mmin, log10_M1, alpha, epsilon,
                           sigma_lambda, z_pivot);
-  y3_cuda::MOR_SAT_ONLY_t const mor_sat(
+  y3_cuda::MOR_SHIFTED_POISSON_t const mor_sp(
     log10_Mmin, log10_M1, alpha, sigma_lambda, epsilon, z_pivot);
 
   double const lnM = std::log(std::pow(10.0, 14.2));
@@ -83,13 +83,13 @@ TEST_CASE("MOR_SAT_ONLY_t is MOR_HOD_t shifted by the central count")
                         std::array<double, 3>{40.0, lnM_high, 0.4},
                         std::array<double, 3>{80.0, lnM_high, 0.6}}) {
     double const lt = p[0], m = p[1], zt = p[2];
-    CHECK(mor_sat(lt, m, zt) ==
+    CHECK(mor_sp(lt, m, zt) ==
           Approx(mor_hod(lt + 1.0, m, zt)).epsilon(PORT_TOL));
   }
 
   // Below Mmin both conventions vanish.
   double const lnM_below = std::log(std::pow(10.0, 13.5));
-  CHECK(mor_sat(5.0, lnM_below, 0.4) == 0.0);
+  CHECK(mor_sp(5.0, lnM_below, 0.4) == 0.0);
 }
 
 TEST_CASE("y3_cuda::MOR_HOD_t matches the host MOR_HOD_t exactly")

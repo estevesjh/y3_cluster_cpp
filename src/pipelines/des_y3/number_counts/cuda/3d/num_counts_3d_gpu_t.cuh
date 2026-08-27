@@ -18,13 +18,13 @@
 // quadrature).
 //
 // MOR convention note: this backend previously used
-// MOR_SAT_ONLY_t — the Costanzi-2026 P-operator form
+// MOR_SHIFTED_POISSON_t — the Costanzi-2026 P-operator form
 // (p_operator_t.hh, x = ltr + δ, no central-count shift) — which made
 // the GPU integrand the CPU one offset by one ltr unit
-// (MOR_SAT_ONLY(ltr) = MOR_HOD(ltr + 1) above Mmin; identity pinned in
+// (MOR_SP(ltr) = MOR_HOD(ltr + 1) above Mmin; identity pinned in
 // test/num_counts_3d_gpu.test.cu). The explicit-3d backends now all
 // use the HOD form so CPU↔GPU cross-backend pins compare identical
-// physics; MOR_SAT_ONLY_t remains the P[X]/b_sel operator MOR
+// physics; MOR_SHIFTED_POISSON_t remains the P[X]/b_sel operator MOR
 // (p_operator_gpu_t.cuh), matching its CPU twin.
 //
 // The observed-redshift kernel S_j is the 3-line Gaussian

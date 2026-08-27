@@ -56,7 +56,7 @@ private:
   // Device HOD MOR (central-shifted Costanzi-2019 form) — the SAME
   // convention as the CPU twin's y3_cluster::MOR_HOD_t, so the
   // CPU<->GPU cross-backend pins compare identical physics. The
-  // no-central MOR_SAT_ONLY_t is reserved for the P[X]/b_sel
+  // no-central MOR_SHIFTED_POISSON_t is reserved for the P[X]/b_sel
   // operators (p_operator_gpu_t.cuh).
   std::optional<y3_cuda::MOR_HOD_t> mor_;
   std::optional<y3_cuda::EMG_DES_t> emg_;

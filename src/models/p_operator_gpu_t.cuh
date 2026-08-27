@@ -27,7 +27,7 @@
 
 #include "models/dv_do_dz_t.cuh"
 #include "models/hmf_t.cuh"
-#include "models/mor_sat_only_t.cuh"   // instead of mor_des_log_t.cuh
+#include "models/mor_shifted_poisson_t.cuh"   // instead of mor_des_log_t.cuh
 #include "models/sigma_photoz_table_t.cuh"    // instead of sigma_photoz_des.cuh
 
 #include "utils/make_interp_1d.cuh"
@@ -119,7 +119,7 @@ namespace y3_cuda {
 
     std::optional<y3_cuda::HMF_t>                hmf_;
     std::optional<y3_cuda::DV_DO_DZ_t>           dv_do_dz_;
-    std::optional<y3_cuda::MOR_SAT_ONLY_t> mor_;  // Correct MOR
+    std::optional<y3_cuda::MOR_SHIFTED_POISSON_t> mor_;  // Correct MOR
 
     std::optional<quad::Interp2D> hmb_;     // haloModel/bias(lnM, z)
     std::optional<quad::Interp2D> xi_nl_;   // xi_nl(r, z)
@@ -145,7 +145,7 @@ namespace y3_cuda {
     {
       hmf_.emplace(sample);
       dv_do_dz_.emplace(sample);
-      mor_.emplace(sample);  // uses MOR_SAT_ONLY_t
+      mor_.emplace(sample);  // uses MOR_SHIFTED_POISSON_t
 
       // Interpolators from datablock
       hmb_.emplace(make_Interp2D(sample, "haloModel", "lnM", "z", "bias"));
