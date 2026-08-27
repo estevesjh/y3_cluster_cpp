@@ -185,12 +185,16 @@ TEST_CASE("ShearPrjCore's DSigma_mis convention (c=4, single kernel) matches the
   };
   // Golden values from shared/lensing_profiles.py::
   // NfwDsigmaMisProduction(kernel="single", rho_ref=0.3096*RHOC) -- the
-  // unified rho_m replica of this same class. Regenerated 2026-08-24
-  // for the unified convention (signed table + rho_m boundary/amplitude).
+  // unified rho_m replica of this same class. Regenerated 2026-08-27 for
+  // the CLensPy-imported cusp-safe (ln xmis, ln q) single-kernel table
+  // (GitHub issue #6; see data/nfw_off_center/import_clenspy_single_table.py
+  // and review/08272026/issue6_rationale.md) -- previously regenerated
+  // 2026-08-24 for the unified convention (signed table + rho_m
+  // boundary/amplitude).
   Point const pts[] = {
-    {0.4117, 0.30, 32.0, 19.5101377487909},
-    {1.0257, 0.75, 33.5, 23.0268833950299},
-    {4.0265, 1.50, 34.5, 21.7039426371394},
+    {0.4117, 0.30, 32.0, 19.5579615444891},
+    {1.0257, 0.75, 33.5, 23.0485519653304},
+    {4.0265, 1.50, 34.5, 21.7119767835667},
   };
   for (auto const& p : pts) {
     CHECK(dsigma_mis(p.R, p.r_mis, p.lnM) == Approx(p.expected).epsilon(1e-3));
