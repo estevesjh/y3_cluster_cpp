@@ -124,36 +124,3 @@ TEST_CASE("y3_cuda::MOR_HOD_t matches the host MOR_HOD_t exactly")
     }
   }
 }
-
-TEST_CASE("y3_cuda::MOR_HOD_t matches the host MOR_HOD_t exactly")
-{
-  // The device HOD MOR is the model the explicit-3d GPU backends
-  // (NumCounts3dGpu, Shear1h3dGpu) actually compose; it must be
-  // bit-level the same algebra as the host class so CPU<->GPU
-  // cross-backend pins compare identical physics.
-  double const log10_Mmin = 11.4, log10_M1 = 12.7, alpha = 0.86,
-               sigma_lambda = 0.18, epsilon = 0.0, z_pivot = 0.45;
-  MOR_HOD_t const host(log10_Mmin, log10_M1, alpha, epsilon,
-                       sigma_lambda, z_pivot);
-  y3_cuda::MOR_HOD_t const dev(log10_Mmin, log10_M1, alpha, epsilon,
-                               sigma_lambda, z_pivot);
-
-  // Span the DES Y3 integration range: masses below/at/above Mmin,
-  // richness from the lambda_central cutoff into the bins, both
-  // redshift edges. Includes the mu_sat -> 0 Gaussian fallback branch
-  // (M barely above Mmin) and the lt < lambda_central hard zero.
-  for (double log10_M : {11.0, 11.4000001, 11.8, 13.0, 14.5, 15.5}) {
-    double const lnM = std::log(std::pow(10.0, log10_M));
-    for (double lt : {0.0, 0.5, 0.9999, 1.0, 2.0, 20.0, 60.0, 199.0}) {
-      for (double zt : {0.05, 0.45, 0.80}) {
-        double const h = host(lt, lnM, zt);
-        double const d = dev(lt, lnM, zt);
-        if (h == 0.0) {
-          CHECK(d == 0.0);
-        } else {
-          CHECK(d == Approx(h).epsilon(PORT_TOL));
-        }
-      }
-    }
-  }
-}
