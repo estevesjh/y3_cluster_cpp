@@ -62,8 +62,8 @@ baselines are stated in-cell.
 | Dims | Method and backend | Cost | Precision vs 3d |
 | --- | --- | ---: | --- |
 | `3d` | [adaptive Python reference](#the-3d-backends) | 35 s | Reference (3d); reported integration error at or below 1e-6 |
-| `3d` | [Cuhre C++](#the-3d-backends) | 51 s | 3.3e-4 vs the 3d Python reference |
-| `3d` | [PAGANI CUDA/A100](#the-3d-backends) | 32 s | 3.4e-4 (baseline: the 3d C++ twin) |
+| `3d` | [Cuhre C++](#the-3d-backends) | 51 s | 2.6e-4 direct vs the 3d Python reference (re-measured 2026-08-26 on the reduced 6-pt corner wall, same fiducial point) |
+| `3d` | [PAGANI CUDA/A100](#the-3d-backends) | 32 s | 3.0e-4 direct vs the 3d Python reference (re-measured 2026-08-26); CUDA vs C++ twin 4.3e-5 (separate baseline, shared A100) |
 | `0d` | [explicit Python (3-dim GL)](#explicit-fixed-gl-python-references) | 149 ms | 4.9e-5 |
 | `0d` | [one-halo Python/C++ (1-dim GL, z contracted)](#one-halo-z-contracted-gl) | 74 / 9 ms | 8.4e-4; also identity with production (separate baseline) |
 | `0d` | [max C++/CUDA/A100 (2-dim GL, z-resolved)](#traditional-1h2h-max-model-z-resolved-gl) | 11 / 8 ms | 8.3e-4; CUDA agrees with C++ to 6.4e-15 (twin baseline) |

@@ -123,16 +123,16 @@ evaluator), the baseline is stated in the cell:
 | Dims | Observable | Method and backend | Cost | Precision vs 3d |
 | --- | --- | --- | ---: | --- |
 | `3d` | Counts | [`3d`](number_counts/README.md#the-3d-backends), adaptive Python | 25 s | Reference (3d); reported integration error at or below 1e-6 |
-| `3d` | Counts | [`3d`](number_counts/README.md#the-3d-backends), Cuhre C++ | 3.1 s | 4.9e-4 (baseline: the 0d explicit fixed-GL Python, itself 3.5e-5 from the 3d reference) |
-| `3d` | Counts | [`3d`](number_counts/README.md#the-3d-backends), PAGANI CUDA/A100 | 2.0 s | 5.1e-4 (same fixed-GL baseline); CUDA vs C++ twin 2.1e-5 (re-verified 2026-08-26, shared A100) |
+| `3d` | Counts | [`3d`](number_counts/README.md#the-3d-backends), Cuhre C++ | 3.1 s | 1.1e-4 direct vs the 3d Python reference (re-measured 2026-08-26, same fiducial point as `real_pipeline_extract_output`; supersedes the older 4.9e-4 proxy-via-0d-Python figure) |
+| `3d` | Counts | [`3d`](number_counts/README.md#the-3d-backends), PAGANI CUDA/A100 | 2.0 s | 1.2e-4 direct vs the 3d Python reference (re-measured 2026-08-26); CUDA vs C++ twin 2.1e-5 (separate baseline, shared A100) |
 | `0d` | Counts | [`0d`](number_counts/README.md#explicit-fixed-gl-python-reference), explicit Python (3-dim GL) | 83 ms | 3.5e-5 |
-| `0d` | Counts | [`0d`](number_counts/README.md#redshift-contracted-fast-path), fast path Python (2-dim GL, S_ij tab) | 5 ms | 7.6e-4; also 2.4e-15 vs production (separate baseline) |
-| `0d` | Counts | [`0d`](number_counts/README.md#redshift-contracted-fast-path), fast path C++ (2-dim GL, S_ij tab) | 6 ms | 7.6e-4; also identity with production (separate baseline) |
+| `0d` | Counts | [`0d`](number_counts/README.md#redshift-contracted-fast-path), fast path Python (2-dim GL, S_ij tab) | 5 ms | 7.6e-4; also 2.4e-15 vs production (separate baseline); 1.1e-3 direct vs cuda-3d (re-measured 2026-08-26, identical to the C++ row -- numerically identical output) |
+| `0d` | Counts | [`0d`](number_counts/README.md#redshift-contracted-fast-path), fast path C++ (2-dim GL, S_ij tab) | 6 ms | 7.6e-4; also identity with production (separate baseline); 1.1e-3 direct vs cuda-3d (re-measured 2026-08-26) |
 | `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), adaptive Python | 35 s | Reference (3d); reported integration error at or below 1e-6 |
-| `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), Cuhre C++ | 51 s | 3.3e-4 vs the 3d Python reference |
-| `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), PAGANI CUDA/A100 | 32 s | 3.4e-4 (baseline: the 3d C++ twin); CUDA vs C++ twin 4.3e-5 (re-verified 2026-08-26, shared A100, reduced 6-pt corner wall) |
+| `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), Cuhre C++ | 51 s | 2.6e-4 direct vs the 3d Python reference (re-measured 2026-08-26 on the reduced 6-pt corner wall, same fiducial point) |
+| `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), PAGANI CUDA/A100 | 32 s | 3.0e-4 direct vs the 3d Python reference (re-measured 2026-08-26); CUDA vs C++ twin 4.3e-5 (separate baseline, shared A100) |
 | `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), explicit Python (3-dim GL) | 149 ms | 4.9e-5 |
-| `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), 1h C++ (1-dim GL, z contracted) | 9 ms | 8.4e-4; also identity with production (separate baseline) |
+| `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), 1h C++ (1-dim GL, z contracted) | 9 ms | 8.4e-4; also identity with production (separate baseline); 2.3e-4 direct vs cuda-3d on the reduced 6-pt wall (re-measured 2026-08-26, python twin gave numerically identical values) |
 | `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), radial series (tables + moments) | 6--7 ms | 56--86% (known fixed-c=4 defect); 3.7e-3 internal fixed-profile consistency (separate baseline) |
 | `0d` | Max model | [`0d`](shear_1h2h/README.md#the-0d-backends), max C++/CUDA (2-dim GL, z-resolved) | 11 / 8 ms | 8.3e-4; CUDA vs C++ twin 6.4e-15 (separate baseline) |
 | `3d` | Projection shear | [`3d`](shear_projection/README.md#the-3d-backend), PAGANI on A100, eps_rel=1e-3 | 95 s | Reference-class diagnostic (3d); convergence open — median 9.5e-4, maximum 2.2% vs region-split GL (separate baseline) |
@@ -148,6 +148,86 @@ tolerances, and comparison definitions:
 - [Number counts](number_counts/README.md)
 - [One-halo and traditional one-plus-two-halo shear](shear_1h2h/README.md)
 - [Projection shear](shear_projection/README.md)
+
+## Prior-volume robustness (apriori sampling)
+
+The table above is a single fiducial-point measurement. To check that
+cost is stable and the pipeline doesn't silently misbehave away from
+the fiducial point, `cosmosis-models/des_y3_cpp0d_fast_apriori.ini`
+(1000 draws) and `cosmosis-models/des_y3_cpp3d_slow_reference_apriori.ini`
+(10 draws) run the same two module chains under CosmoSIS's `apriori`
+sampler, which draws uniformly from the full prior in
+`mock_mcmc_widePlanck_values_mis.ini` (not just the fiducial point) and
+reports module-by-module wall-clock for every draw
+(`timing = T`). `cp_camb`'s CAMB-emulator grid stays at `nz = 50` in
+both (matching the base `des_y3_cpp0d_fast.ini`/`des_y3_cpp3d_slow_reference.ini`
+inis) -- `nz = 400` measurably slows every sample for no benefit to
+this 0d/3d fixed-node chain.
+
+**Fast chain, 1000 draws (2026-08-26, shared login-GPU node, CPU-only
+modules)** -- per-module wall-clock across all draws that completed:
+
+| Module | Median | Mean | Min | Max |
+| --- | ---: | ---: | ---: | ---: |
+| `halo_model` | 454 ms | 467 ms | 335 ms | 721 ms |
+| `sel_function` | 65 ms | 67 ms | 51 ms | 1322 ms |
+| `ShearPrjGl` | 590 ms | 590 ms | 539 ms | 865 ms |
+| `NumCountsSel` | 8 ms | 8 ms | 7 ms | 11 ms |
+| `Shear1hMisSel` | 11 ms | 11 ms | 9 ms | 14 ms |
+| `Shear1h2hMax` | 12 ms | 12 ms | 11 ms | 21 ms |
+| **Total pipeline** | **1.39 s** | **1.44 s** | **1.18 s** | **2.78 s** |
+
+The single-fiducial-point number in the table above (2.56 s) sits
+inside this distribution, close to the mean -- consistent, not a
+different regime. `sel_function`'s 1.3 s outlier is the one-time numba
+JIT-compile cost on the *first* draw of the process (see the Perf notes
+below); every other draw pays 50-80 ms.
+
+**Prior-domain robustness finding**: at least 285 of the 1000 draws
+(28.5%; the true count is likely somewhat higher -- some successful
+completions get mis-attributed by stdout/stderr interleaving when
+parsing the log, see the script's own note) made `cosmosis` report
+`Pipeline failed on these parameters`, almost always inside `cp_camb`
+or the NFW profile evaluation (`y3_buzzard/nfwModel.py:62: RuntimeWarning:
+divide by zero encountered in arctanh`). The declared prior box in
+`mock_mcmc_widePlanck_values_mis.ini` (e.g. `omega_m in U(0.11, 1.0)`,
+`sigma8 in U(0.5, 1.5)`) is wider than the CAMB emulator's trained
+bounding box and the domain where the fixed-`c=4`/analytic NFW
+profiles stay well-conditioned. This is invisible at the single
+fiducial point and only shows up under prior sampling -- worth fixing
+before this prior is used for an actual MCMC run (either narrow the
+prior to the emulator's valid box, or make the affected modules fail
+soft instead of raising).
+
+**Slow chain, 10 draws (2026-08-27)**: only 3 of 10 draws parsed as
+clean single-pass successes (the same stdout/stderr caveat as above
+applies, plus the adaptive backends below can raise their own
+convergence errors independent of the `cp_camb`/NFW failure mode). The
+striking result is the **cost variance** of the adaptive Cuhre
+backends across the prior -- something a single fiducial-point
+measurement cannot see at all:
+
+| Module | Median | Mean | Min | Max |
+| --- | ---: | ---: | ---: | ---: |
+| `NumCounts3d` | 0.83 s | 16.2 s | 0.73 s | **47.2 s** |
+| `Shear1h3d` | 0.85 s | 9.2 s | 0.71 s | **26.1 s** |
+| `Shear1h2hMax3d` | 0.92 s | 10.3 s | 0.74 s | **29.3 s** |
+| `shear_prj_cuhre` | 220.8 s | 214.2 s | 199.9 s | 221.9 s |
+| **Total pipeline** | **224 s** | **251 s** | **204 s** | **325 s** |
+
+`NumCounts3d`/`Shear1h3d`/`Shear1h2hMax3d` each vary by **~40-60x**
+between their cheapest and most expensive prior draw (0.7-0.9 s at
+most points, up to 26-47 s at a handful of them) -- some parameter
+draws push the near-delta richness ridge or the mass/redshift
+integrand into a shape Cuhre needs far more subdivisions to resolve at
+`eps_rel=1e-4`. `shear_prj_cuhre` stays comparatively stable (200-222
+s) because it was already run on a reduced 3-point wall dominated by
+one expensive angular integral rather than the adaptive mass/redshift
+integral. This variance is invisible at the single fiducial point
+(where all three read as a tidy few seconds) and matters for anyone
+budgeting a batch job around these backends: size the wall time on the
+*worst* draw in the relevant prior region, not the fiducial-point
+number.
 
 ## Recommended methods
 
