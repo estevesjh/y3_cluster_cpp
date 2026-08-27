@@ -121,11 +121,11 @@ compose the one-halo and biased two-halo terms by the **pointwise max**
 (Hayashi & White 2008, the DES Y1 lensing-analysis prescription — not a
 sum):
 
-$$\Phi_{\max}(R, \ln M, z \mid i) = \max\!\big(
+$$\Delta\Sigma_{\max}(R, \ln M, z \mid i) = \max\!\big(
 \Delta\Sigma_{\rm cl}(R, \ln M \mid i),\;
 b(\ln M, z)\,\Delta\Sigma_{\rm hh}(R, z)\big), \qquad
 \gamma_t^{\rm theory}(R \mid i) =
-N_i[\Phi_{\max}](R)\,\langle\Sigma_{\rm crit}^{-1}\rangle / N_i[1].$$
+N_i[\Delta\Sigma_{\max}](R)\,\langle\Sigma_{\rm crit}^{-1}\rangle / N_i[1].$$
 
 Implemented by
 [`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py)

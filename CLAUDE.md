@@ -262,9 +262,14 @@ These bit future-you; enforce in any new integrand:
   z-weight (`SelGLCore::build_weights` z_amp_power; exact per z node)
   and the query-radius rescale is exact at live z (3d, live-zt weights,
   max z-sum) and at the bin's selection-weighted `z_eff` in the
-  z-contracted 0d evaluators. Number counts are never touched. Not
-  implemented (fails loudly): Shear1h2hMaxGpu, the Python explicit/max
-  mirrors.
+  z-contracted 0d evaluators. Number counts are never touched.
+  `shear1h2h_max.py`/`shear1h2h_max_explicit_gl.py` now implement it too
+  (the 2-halo term already forces a z-resolved 1-halo evaluation, so no
+  restructuring was needed — just evaluate the 1-halo mixture per z-node
+  instead of once). Still not implemented (fails loudly):
+  `Shear1h2hMaxGpu` (CUDA), and `shear1h_explicit_gl.py` (the pure-1h
+  explicit-3d reference, which z-contracts *before* the profile is known
+  and would need restructuring to support this at all).
 - **Concentration convention** (owner-ratified, same review): the
   **1-halo term** uses the concentration evaluated at the cluster
   redshift (`[halo_model] one_halo_z`; Child18 `stacked_nfw`); the

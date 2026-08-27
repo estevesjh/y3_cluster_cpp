@@ -374,7 +374,7 @@ class TestShear1hCrossBackend(unittest.TestCase):
         np.testing.assert_allclose(CUDA_MAX_MODEL, CPP_MAX_MODEL, rtol=1e-10)
 
     def test_max_model_is_never_less_than_1h_only(self):
-        # Model invariant: Phi_max(R, lnM, z) = max(DSigma_cl, b*DSigma_hh)
+        # Model invariant: DSigma_max(R, lnM, z) = max(DSigma_cl, b*DSigma_hh)
         # >= DSigma_cl always, so the selection-weighted integral of the
         # max model can only be >= the pure-1h fast_mass integral, for
         # every (bin, R) -- true regardless of the ΔΣ_hh open defect

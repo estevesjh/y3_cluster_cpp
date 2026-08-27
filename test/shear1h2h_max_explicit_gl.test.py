@@ -6,8 +6,8 @@ This module had ZERO coverage before this change (not even imported by
 ``des_y3_pipeline.test.py``). Uses ``real_pipeline_extract_max2h_output``
 (``compute_lensing_2h = T``). Exercises ``setup(options)``/
 ``execute(block, cfg)``: the per-bin array contract, GL-knob defaults,
-``include_miscentering``, and the fail-loud ``one_halo_physical_density``
-branch -- plus a direct numeric check against the fixed-GL
+``include_miscentering``, and the ``one_halo_physical_density``
+1-halo z-resolution branch -- plus a direct numeric check against the fixed-GL
 ``shear1h2h_max`` fast path, isolating the S_ij-tabulation error the
 module's own docstring documents.
 """
@@ -94,14 +94,26 @@ class TestExecuteAgainstProduction(unittest.TestCase):
         # Measured 8.4e-4 (same S_ij-tabulation error as the 1-halo pair).
         np.testing.assert_allclose(vals, prod, rtol=5e-3, atol=0.0)
 
-    def test_physical_density_flag_raises_not_implemented(self):
+    def test_physical_density_flag_selects_the_1pz_weighted_branch(self):
+        # one_halo_physical_density IS wired into this z-resolved mirror
+        # (unlike the z-contracted-early shear1h_explicit_gl): the 2-halo
+        # term already forces a z-resolved 1-halo evaluation, so no
+        # restructuring is needed -- see compute_shear_max's docstring.
+        cfg = mod.setup(make_options(_base_options()))
+        mod.execute(self.block, cfg)
+        off_vals = np.array(self.block[mod.OUTPUT_SECTION, "vals"])
+
         self.block["halomodel", "one_halo_physical_density"] = 1.0
         try:
-            cfg = mod.setup(make_options(_base_options()))
-            with self.assertRaises(NotImplementedError):
-                mod.execute(self.block, cfg)
+            mod.execute(self.block, cfg)
+            on_vals = np.array(self.block[mod.OUTPUT_SECTION, "vals"])
         finally:
             self.block["halomodel", "one_halo_physical_density"] = 0.0
+
+        self.assertTrue(np.all(np.isfinite(on_vals)))
+        self.assertTrue(np.all(on_vals > 0.0))
+        self.assertFalse(np.allclose(on_vals, off_vals),
+                         "physical-density toggle had no effect")
 
     def test_include_miscentering_false_changes_the_answer(self):
         cfg_on = mod.setup(make_options(_base_options()))

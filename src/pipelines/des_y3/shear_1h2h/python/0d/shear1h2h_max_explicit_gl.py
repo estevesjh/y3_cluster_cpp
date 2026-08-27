@@ -5,19 +5,19 @@ explicit composition
 
     O_ij(R) = int dz int dlnM int dlt  n(M,z) dV/dOmega/dz(z) Omega(z)
               Sigma_crit_inv(z) S_j(z) S_i(lt, z) P_HOD(lt | M, z)
-              d_tot(R, lnM, z | bin)
+              DSigma_max(R, lnM, z | bin)
 
-    d_tot = max( DSigma_cl(R, lnM | bin),
+    DSigma_max = max( DSigma_cl(R, lnM | bin),
                  bias(lnM, z) * dSigma_hh(R, z) )
 
 with every selection kernel evaluated at the quadrature nodes (no S_ij
 tabulation, no interpolation of the selection). Unlike the 1-halo
-explicit-3d backend, d_tot is z-dependent (the biased two-halo term) and
+explicit-3d backend, DSigma_max is z-dependent (the biased two-halo term) and
 the max is nonlinear, so the z integral cannot be contracted past the
 profile: this module uses the z-RESOLVED explicit-3d weight
 (shared.explicit_grid_core.explicit_mass_z_weights, Sigma_crit_inv folded
 into the z factors) and performs the double fixed-GL contraction
-sum_kq W2d * d_tot per (bin, R) — the same contraction as the fixed-GL
+sum_kq W2d * DSigma_max per (bin, R) — the same contraction as the fixed-GL
 shear1h2h_max backend, whose S_ij-tabulation error this reference
 isolates.
 
@@ -60,18 +60,35 @@ from systematics.selection_richness.python import sel_kernels
 OUTPUT_SECTION = "shear1h2h_max_explicit_gl"
 
 
-def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp):
-    """O(R) = sum_kq lnm_w_k W2d[b,k,q] d_tot(b, R, lnM_k, z_q)."""
+def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
+                      physical=False):
+    """O(R) = sum_kq lnm_w_k W2d[b,k,q] DSigma_max(b, R, lnM_k, z_q).
+
+    physical: fold one_halo_physical_density's exact identity
+    DSigma_phys(R|z) = (1+z)^2 DSigma_frozen(R(1+z)) into the 1-halo
+    term. The z-axis is already resolved here (the 2-halo term forces
+    it), so this just evaluates the 1-halo mixture PER z-node with
+    q=1+z instead of once at q=1 -- no weight restructuring needed.
+    """
     r_perp = np.asarray(r_perp, dtype=float)
     n_r = r_perp.size
+    n_z = z_x.size
     vals = np.empty(len(bin_index) * n_r)
     for i, b in enumerate(bin_index):
-        one = profile._one(b, r_perp[:, None], lnm_x[None, :])   # (r, k)
-        two = (profile._bias(lnm_x[:, None], z_x[None, :])[None, :, :]
-               * profile._hh(r_perp[:, None], z_x[None, :])[:, None, :])
-        d_tot = np.maximum(one[:, :, None], two)                 # (r, k, q)
+        if physical:
+            DSigma_1h = np.empty((n_r, lnm_x.size, n_z))
+            for iq, z in enumerate(z_x):
+                qf = 1.0 + z
+                DSigma_1h[:, :, iq] = profile._one(
+                    b, r_perp[:, None], lnm_x[None, :], q=qf) * qf**2
+        else:
+            DSigma_1h = profile._one(
+                b, r_perp[:, None], lnm_x[None, :])[:, :, None]
+        DSigma_2h = (profile._bias(lnm_x[:, None], z_x[None, :])[None, :, :]
+                    * profile._hh(r_perp[:, None], z_x[None, :])[:, None, :])
+        DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
         vals[i * n_r:(i + 1) * n_r] = np.einsum(
-            "rkq,kq->r", d_tot, w2d[b] * lnm_w[:, None])
+            "rkq,kq->r", DSigma_max, w2d[b] * lnm_w[:, None])
     return vals
 
 
@@ -109,19 +126,10 @@ def setup(options):
 
 
 def execute(block, cfg):
-    # one_halo_physical_density is not yet wired into this reference
-    # mirror -- fail loudly instead of silently diverging from the C++
-    # backends (which implement the exact identity).
-    _src_flag = dm.DataBlockSource(block)
-    if dm.physical_density_flag(_src_flag):
-        raise NotImplementedError(
-            "shear1h2h_max_explicit_gl: one_halo_physical_density is not wired "
-            "into this Python mirror yet; use the C++ backend or extend "
-            "this module first")
-
     t0 = time.perf_counter()
     sf = sel_kernels.load()
     source = dm.DataBlockSource(block)
+    physical = dm.physical_density_flag(source)
     profile = lp.MaxMixtureProfile(
         source, lob_centers=cfg["lob_centers"],
         # Required: no fallback to the fiducial defaults — a pipeline
@@ -140,7 +148,8 @@ def execute(block, cfg):
         l_lam=cfg["l_lam"])
 
     block[OUTPUT_SECTION, "vals"] = compute_shear_max(
-        profile, lnm_x, lnm_w, z_x, w2d, cfg["bin_index"], cfg["r_perp"])
+        profile, lnm_x, lnm_w, z_x, w2d, cfg["bin_index"], cfg["r_perp"],
+        physical=physical)
     dt_ms = 1000.0 * (time.perf_counter() - t0)
     print(f"[shear1h2h_max_explicit_gl] {cfg['bin_index'].size} bins x "
           f"{cfg['r_perp'].size} radii "

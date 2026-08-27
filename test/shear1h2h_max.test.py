@@ -8,8 +8,8 @@ unlike ``real_pipeline_extract_output``). ``test/des_y3_pipeline.test.py``
 already pins the 2h -> 0 max-model limit and the pure ``compute_shear_max``
 composition; this file exercises ``setup(options)``/``execute(block,
 cfg)`` themselves: the ``include_miscentering`` default/override, the
-required bin_index/r_perp options, and the fail-loud
-``one_halo_physical_density`` branch.
+required bin_index/r_perp options, and the ``one_halo_physical_density``
+1-halo z-resolution branch.
 """
 from __future__ import annotations
 
@@ -93,14 +93,26 @@ class TestExecuteAgainstProduction(unittest.TestCase):
         self.assertFalse(np.allclose(vals_on, vals_off),
                          "include_miscentering=False had no effect")
 
-    def test_physical_density_flag_raises_not_implemented(self):
+    def test_physical_density_flag_selects_the_1pz_weighted_branch(self):
+        # one_halo_physical_density IS wired into this z-resolved mirror
+        # (unlike the z-contracted-early shear1h_explicit_gl): the 2-halo
+        # term already forces a z-resolved 1-halo evaluation, so no
+        # restructuring is needed -- see compute_shear_max's docstring.
+        cfg = mod.setup(make_options(_base_options()))
+        mod.execute(self.block, cfg)
+        off_vals = np.array(self.block[mod.OUTPUT_SECTION, "vals"])
+
         self.block["halomodel", "one_halo_physical_density"] = 1.0
         try:
-            cfg = mod.setup(make_options(_base_options()))
-            with self.assertRaises(NotImplementedError):
-                mod.execute(self.block, cfg)
+            mod.execute(self.block, cfg)
+            on_vals = np.array(self.block[mod.OUTPUT_SECTION, "vals"])
         finally:
             self.block["halomodel", "one_halo_physical_density"] = 0.0
+
+        self.assertTrue(np.all(np.isfinite(on_vals)))
+        self.assertTrue(np.all(on_vals > 0.0))
+        self.assertFalse(np.allclose(on_vals, off_vals),
+                         "physical-density toggle had no effect")
 
     def test_z_resolved_weights_agree_with_the_z_contracted_ones(self):
         # z_resolved_weights' docstring promise, at module scope (not

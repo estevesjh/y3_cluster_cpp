@@ -175,8 +175,8 @@ class MaxMixtureProfile:
     """Traditional 1h+2h shear profile: the SIG_MAX/GAMMA_MAX composition
     with the modern haloModel tables,
 
-        Phi_max(b, R, lnM, z) = max( DSigma_cl(R, lnM | bin b),
-                                     bias(lnM, z) * dSigma_hh(R, z) )
+        DSigma_max(b, R, lnM, z) = max( DSigma_cl(R, lnM | bin b),
+                                        bias(lnM, z) * dSigma_hh(R, z) )
 
     where DSigma_cl is the production miscentred 1-halo mixture
     (MisMixtureProfile; set include_miscentering=False for the pure
@@ -207,6 +207,6 @@ class MaxMixtureProfile:
                                   "dsigma_hh", nan_fill=0.0)
 
     def __call__(self, b, r_perp, lnM, z):
-        one = self._one(b, r_perp, lnM)
-        two = self._bias(lnM, z) * self._hh(r_perp, z)
-        return np.maximum(one, two)
+        DSigma_1h = self._one(b, r_perp, lnM)
+        DSigma_2h = self._bias(lnM, z) * self._hh(r_perp, z)
+        return np.maximum(DSigma_1h, DSigma_2h)

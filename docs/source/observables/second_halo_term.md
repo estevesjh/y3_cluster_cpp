@@ -107,7 +107,7 @@ comparing three stacked-lensing compositions. It was pulled after
 review: the plotted "1h + ⟨b⟩ΔΣ_2h" curve was a plain **sum**, not the
 actual max-model composition this page documents
 ($\Sigma_{\max} = \max(\Sigma_{\rm NFW},\, b\,\Sigma_{\rm hh})$). The
-correct recipe — `Phi_max = max(DSigma_cl, bias * dSigma_hh)`,
+correct recipe — `DSigma_max = max(DSigma_cl, bias * dSigma_hh)`,
 population-weighted by $S_{ij}$ — is implemented in
 [`shear1h2h_max.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py)
 (`compute_shear_max`). Regenerating this figure correctly needs a real
