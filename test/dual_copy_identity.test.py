@@ -248,48 +248,45 @@ class TestSelKernelsLoadersAgree(unittest.TestCase):
         cls.b = _load_by_path("_dual_systematics_sel_kernels",
                               SYSTEMATICS_SEL_KERNELS)
 
-    @staticmethod
-    def _load_isolated(shim):
-        """Run a shim's ``load()`` with the shared cache key cleared."""
-        saved = sys.modules.pop("y3_des_sel_function", None)
-        try:
-            return shim.load()
-        finally:
-            sys.modules.pop("y3_des_sel_function", None)
-            if saved is not None:
-                sys.modules["y3_des_sel_function"] = saved
-
     def test_each_loader_targets_its_own_sel_function_copy(self):
-        # Isolated (cache cleared) each shim must find ITS OWN copy -- that
-        # is the whole point of having two shims.
-        self.assertEqual(Path(self._load_isolated(self.a).__file__).resolve(),
+        # Each shim must find ITS OWN copy -- the whole point of having two.
+        # No cache juggling is needed for this any more: the two shims use
+        # distinct sys.modules keys (see the next test), so a plain load()
+        # returns the right module even when both have already run.
+        self.assertEqual(Path(self.a.load().__file__).resolve(),
                          SHARED_SEL_FUNCTION.resolve())
-        self.assertEqual(Path(self._load_isolated(self.b).__file__).resolve(),
+        self.assertEqual(Path(self.b.load().__file__).resolve(),
                          SYSTEMATICS_SEL_FUNCTION.resolve())
 
-    def test_the_two_shims_share_one_sys_modules_cache_key(self):
-        # CHARACTERIZATION of a real hazard, deliberately not "fixed" here
-        # (the dual copy is a kept decision): BOTH shims cache under the
-        # module name "y3_des_sel_function", so in any process that uses
-        # both -- e.g. a pipeline importing shared/sel_kernels while a test
-        # imports the systematics one -- whichever calls load() FIRST wins,
-        # and the second silently gets the other copy.
+    def test_each_shim_uses_a_distinct_sys_modules_cache_key(self):
+        # Both shims used to cache under the SAME name,
+        # "y3_des_sel_function", so in any process that used both -- a
+        # pipeline importing shared/sel_kernels while a test imports the
+        # systematics one -- whichever called load() FIRST won, and the
+        # second silently received the other copy. That was survivable only
+        # because the two sel_function copies are numerically identical
+        # (TestSelFunctionCopiesAgree above), and it would have become a
+        # silent wrong-answer bug the moment they diverged.
         #
-        # This is safe today only because the two sel_function copies are
-        # numerically identical (TestSelFunctionCopiesAgree above). If that
-        # ever stops being true, this collision turns into a silent
-        # wrong-answer bug, which is why the identity tests are the ones
-        # that must stay green.
-        self.assertEqual(self.a.load().__file__, self.b.load().__file__,
-                         "expected the shared cache key to make the second "
-                         "load() return the first shim's module")
-        first = sys.modules.get("y3_des_sel_function")
-        self.assertIsNotNone(first)
-        self.assertIs(self.a.load(), self.b.load())
+        # The keys are now distinct, which is what this pins. The two shims
+        # must return DIFFERENT module objects, each pointing at its own
+        # file, and both keys must be present simultaneously.
+        mod_a, mod_b = self.a.load(), self.b.load()
+        self.assertIsNot(mod_a, mod_b)
+        self.assertNotEqual(mod_a.__file__, mod_b.__file__)
+        self.assertIn("y3_des_sel_function_shared", sys.modules)
+        self.assertIn("y3_des_sel_function_systematics", sys.modules)
+        self.assertIs(sys.modules["y3_des_sel_function_shared"], mod_a)
+        self.assertIs(sys.modules["y3_des_sel_function_systematics"], mod_b)
+        # The old colliding key must not be resurrected by either shim.
+        self.assertNotIn("y3_des_sel_function", sys.modules)
+        # Caching still works: a second call is the same object, not a reload.
+        self.assertIs(self.a.load(), mod_a)
+        self.assertIs(self.b.load(), mod_b)
 
     def test_both_loaders_expose_the_same_kernel_surface(self):
-        mod_a = self._load_isolated(self.a)
-        mod_b = self._load_isolated(self.b)
+        mod_a = self.a.load()
+        mod_b = self.b.load()
         ignore = {"_PIPELINES_DIR", "_parent"}
         self.assertEqual({n for n in dir(mod_a) if not n.startswith("__")}
                          - ignore,

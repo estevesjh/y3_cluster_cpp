@@ -99,7 +99,7 @@ partI_status <- function(df, frac_tol = 0.014, abs_tol = 1e-12) {
   # Costanzi-2026 sections use a looser fractional tolerance (~1.4%
   # for sigma_prj, ~1% for the operators) than the Y1 1e-6 baseline.
   if (is.null(df) || nrow(df) == 0L) {
-    return("**Validation TSV not found — run `make data` after a fresh `cosmosis cosmosis-models/smoke_full_sel_cp_camb.ini`.**")
+    return("**Validation TSV not found — run `make data` after fresh `cosmosis cosmosis-models/physics_validation_pipelines.ini` and `cosmosis cosmosis-models/physics_validation_camb.ini` runs.**")
   }
   npts <- nrow(df)
   pass <- abs(df$fracerr) < frac_tol | abs(df$resid) < abs_tol
@@ -175,7 +175,35 @@ partI_tbd <- function(why) {
 }
 ```
 
-This part validates the **production Costanzi-2026 pipeline** end-to-end.
+This part validates the **Costanzi-2026 pipeline sourced from
+`src/pipelines/`** end-to-end. The numbers behind every subsection come
+from the run pair
+
+* `cosmosis-models/physics_validation_pipelines.ini` — cp_camb backend,
+  dump `cosmosis-models/physics_validation_pipelines_output/`;
+* `cosmosis-models/physics_validation_camb.ini` — CAMB-truth companion
+  (same wall, same widePlanck fiducial), dump
+  `cosmosis-models/physics_validation_camb_output/`;
+
+in which **every observable stage is a `src/pipelines/` implementation**:
+`halo_model` = `src/pipelines/cosmology/halo_model.py`, `prj_params` and
+`sel_function` = `src/pipelines/systematics/{selection_function,
+selection_richness}`, `bsel` = `src/pipelines/systematics/selection_bias`,
+and the observables `NumCountsSijGl`, `NumCounts3d`, `Shear1hGl`,
+`ShearPrjGl`, `ShearPrjCuhre` = `src/pipelines/des_y3/{number_counts,
+shear_1h2h, shear_projection}`. The allowed non-pipelines inputs (owner
+decision, 2026-08-25) are **`MfTinker`** (CSL mass function),
+**`cp_camb`** (CosmoPower emulator), and the **survey-area/footprint**
+inputs; `consistency`/`GrowthFactor` are CosmoSIS bookkeeping. Two
+documented gaps remain sourced from the production tree because no
+`src/pipelines` equivalent exists yet: `average_sigma_crit_inv`
+(`src/modules/average_sigma_crit_inv/`) and the C++ `b_sel_marg`
+operator wall (`src/modules/b_sel_marg_cpu/BSelMargIntegrand.so`) that
+`bsel` closes. Both runs build $\xi_{\rm NL}$ from **linear** $P(k)$
+(`docs/known_issues/xi_nl_linear_fallback.md`, issue #9): the CAMB
+companion deliberately sets `nonlinear = none` so the CAMB-vs-cp_camb
+residuals below are pure-emulator checks, not missing-halofit checks.
+
 Algorithms and numerical recipes live in
 [`docs/pipeline_modules.tex`](../docs/pipeline_modules.tex); the source-tree
 catalog is in [`docs/code_reference.md`](../docs/code_reference.md). Each
@@ -231,10 +259,10 @@ partI_two_panel(df_pk, frac_tol = 0.007,
 
 ## Halo mass function $n(M, z)$ — `mf_tinker`
 
-CosmoSIS `mf_tinker` driven by full CAMB (`ytrue`, read from
-`smoke_sel_camb_output/mass_function/dndlnmh`) vs the same module
+CosmoSIS `MfTinker` driven by full CAMB (`ytrue`, read from
+`physics_validation_camb_output/mass_function/dndlnmh`) vs the same module
 driven by the cp_camb emulator (`ytest`, read from
-`smoke_full_sel_cp_camb_output/mass_function/dndlnmh`). Both use
+`physics_validation_pipelines_output/mass_function/dndlnmh`). Both use
 Tinker 2008 with $\Delta = 200m$ — apples-to-apples through the same
 HMF kernel; the only thing changing between truth and test is the
 upstream linear $P(k, z)$. Restricted to $M \in [10^{12}, 10^{15}]
@@ -262,7 +290,9 @@ partI_two_panel(df_hmf, frac_tol = 0.02,
 
 ## Halo bias $b(M, z)$ — `halo_model`
 
-`halomodel/bias` published by `y3_buzzard/halo_model_cosmosis.py`
+`halomodel/bias` published by `src/pipelines/cosmology/halo_model.py`
+(the pipelines halo-model module; verified bit-identical to the
+`y3_buzzard/halo_model_cosmosis.py` original on the same datablock)
 (`ytest`) vs **`cluster_toolkit.bias.bias_at_M`** (Tinker 2010)
 evaluated on the same widePlanck cosmology with the CAMB-driven
 `cdm_baryon_power_lin` $P(k, z)$ as input (`ytrue`). Δ = 200m,
@@ -287,12 +317,14 @@ partI_two_panel(df_bias, frac_tol = 0.005,
                 log_x = TRUE, log_y = FALSE)
 ```
 
-## Number counts $N_i(\lambda, z)$ — `NumCountsFull`
+## Number counts $N_i(\lambda, z)$ — `NumCounts3d`
 
-### Pure-emulator check: `NumCountsFull` (CAMB) vs `NumCountsFull` (cp_camb)
+### Pure-emulator check: `NumCounts3d` (CAMB) vs `NumCounts3d` (cp_camb)
 
-Both arms run the **same** brute-force triple integral
-`NumCountsFullScalarIntegrand` over $(\ell^t, z, \ln M)$ at the same
+Both arms run the **same** brute-force adaptive triple integral
+`NumCounts3d` (`src/pipelines/des_y3/number_counts/cpp/3d`, the
+pipelines successor of `NumCountsFullScalarIntegrand`) over
+$(\ell^t, z, \ln M)$ at the same
 widePlanck cosmology; the only difference is the upstream linear
 $P(k)$. This mirrors
 [`docs/emulator_validation.tex`](../docs/emulator_validation.tex)
@@ -315,12 +347,14 @@ partI_two_panel(df_nc, frac_tol = 0.01,
                 log_x = TRUE, log_y = TRUE)
 ```
 
-### Production-path check: `NumCountsFull` (CAMB) vs `NumCountsSel` (cp_camb)
+### Production-path check: `NumCounts3d` (CAMB) vs `NumCountsSijGl` (cp_camb)
 
 `ytrue` is the CAMB-driven brute-force triple integral (same as
-above), `ytest` is the production fast path: cp_camb $\to$ mf_tinker
-$\to$ `sel_function` (closed-form $K_i(\ell^t, z)$ kernel from
-`RmSelFunction_t`) $\to$ `NumCountsSel`. The residual combines
+above), `ytest` is the fast path: cp_camb $\to$ `MfTinker`
+$\to$ `sel_function` (closed-form $K_i(\ell^t, z)$ kernel) $\to$
+`NumCountsSijGl` (`src/pipelines/des_y3/number_counts/cpp/0d`, the
+fixed-GL S_ij-tabulated backend — same algorithm as production
+`NumCountsSel` by identity). The residual combines
 (i) the cp_camb emulator's $P(k)$ bias (≤1% per the pure-emulator
 check above) and (ii) the Sel approximation's faithfulness against
 the literal triple integral with full CAMB. After the
@@ -347,7 +381,29 @@ partI_two_panel(df_ncs, frac_tol = 0.05,
 ## Mass- and bias-weighted $N_i$ — effective mass and bias
 
 ```{r mass-bias-weighted, results='asis'}
-partI_tbd("MassWeightedSel and BiasWeightedSel against analytic M_eff = ⟨M⟩_S, b_eff = ⟨b⟩_S on the same 4×3 grid (modules need to be added to smoke_full_sel_cp_camb.ini).")
+partI_tbd("MassWeightedSel and BiasWeightedSel against analytic M_eff = ⟨M⟩_S, b_eff = ⟨b⟩_S on the same 4×3 grid (no src/pipelines backend exists yet; modules would also need adding to physics_validation_pipelines.ini).")
+```
+
+## $(\mathcal{P}[1], I_1, J)$ — selection-bias operators from `b_sel_marg`
+
+The three P[X] operator walls published by the C++ `b_sel_marg` module
+(`BSelMargIntegrand.so`, sections `b_sel_marg_{p1, i1, j}`;
+$J \equiv I_2 - I_1$ computed directly to avoid cancellation), compared
+against the Python `richness_selection.SelBias._P_operator` reference
+evaluated on the same datablock inputs (same HMF, halo bias, $\xi_{\rm
+NL}$, and the dump's own `cluster_mor` HOD point). 12 wall rows
+$\times$ 3 operators = 36 cells.
+
+```{r p-operator-load, include=FALSE}
+df_pop <- read_observable("p_operator")
+```
+
+```{r p-operator-status, results='asis'}
+cat(partI_status(df_pop, frac_tol = 0.05))
+```
+
+```{r p-operator-plot, fig.asp=0.45}
+partI_residual_plot(df_pop, frac_tol = 0.05, facet_col = "label")
 ```
 
 ## $\overline{b}^{\rm LOS}_{ij}, \overline{b}^{\rm LSS}_{ij}$ — sigmoid plateaus from `bsel`
@@ -355,7 +411,8 @@ partI_tbd("MassWeightedSel and BiasWeightedSel against analytic M_eff = ⟨M⟩_
 The two latent-marginalised plateau amplitudes of the
 mixture-of-regimes ansatz [`projection_lensing_paper.tex`
 Eq.~b_sigmoid, Eq.~b_marg_lt] are published by the Python `bsel`
-finisher (`y3_buzzard/bsel.py`) under the datablock keys
+finisher (`src/pipelines/systematics/selection_bias/python/bsel.py`)
+under the datablock keys
 `b_sel_marginalised/{b_small, b_large}`, with the mapping
 
 * `b_small` $\leftrightarrow \overline{b}^{\rm LOS}_{ij}$ (small-$\theta$ /
@@ -404,14 +461,17 @@ partI_two_panel(df_plat, frac_tol = 0.05,
 
 ## $b_{\rm sel,marg}(\theta)$ closure — `bsel`
 
-C++ `b_sel_marginalised/vals` (`ytest`) — the sigmoid-assembled
+**Retired with the theta table.** The current `b_sel_marg` +
+`bsel` pair no longer publishes a `b_sel_marginalised/{theta, vals}`
+grid: the $\theta$ dependence factorizes exactly in the C++ operators,
+so `bsel` publishes only the two plateau scalars
+`b_sel_marginalised/{b_small, b_large}` per wall row and every consumer
+(ShearPrjGl, ShearPrjCuhre) assembles
 $b_{\rm sel,marg}(\theta) = \overline{B_0}\,(1 - \sigma(\theta)) +
-\overline{B_\infty}\,\sigma(\theta)$ on the production $\theta$-grid.
-`ytrue` plugs the scipy-quad plateaus from §2.6 into the same closed
-form, with $\sigma(\theta)$ recovered numerically from one
-`b_lob_theta(\theta\,|\,\ell^t)` evaluation (it is $\ell^t$-independent
-by construction). One (lob, zob) probe at the wall point
-$(\lambda^o = 25,~z^o = 0.275)$.
+\overline{B_\infty}\,\sigma(\theta)$ analytically in-integrand. The
+plateau amplitudes themselves are validated in the previous section;
+there is no longer a published $\theta$-grid to pin. (The historical
+audit-item-7 record below is kept for provenance.)
 
 > **Audit item 7 (fixed 2026-05-19).** `y3_buzzard/bsel.py` previously
 > read `distances/d_c` directly (Mpc) when computing
@@ -443,10 +503,13 @@ partI_two_panel(df_bsel, frac_tol = 0.05,
 
 ## $\Sigma^{1h}(R)$ — 1-halo lensing surface density
 
-CAMB-driven `Sigma1hSel` (`ytrue`) vs cp_camb-driven `Sigma1hSel`
-(`ytest`). Same module on both sides; residual is the pure
-upstream-$P(k)$ effect propagating through the radial integrand.
-12 $(\lambda, z)$ bins $\times$ 10 $R$-points = 120 cells.
+**Not emitted by the pipelines backend.** The des_y3 1-halo module
+`Shear1hGl` (`src/pipelines/des_y3/shear_1h2h/cpp/0d`) publishes the
+observable $\gamma_t^{1h}$ only — there is no pipelines producer of a
+standalone $\Sigma^{1h}$ wall (production `Sigma1hSel` is not part of
+the physics_validation pipeline). The 1-halo physics is covered by the
+$\gamma_t^{1h}$ section below and, at the profile-table level, by
+`test/halo_model.test.py` / `test/shear1h_gl.test.cc`.
 
 ```{r sigma-1h-load, include=FALSE}
 df_s1h <- read_observable("sigma_1h")
@@ -466,8 +529,9 @@ partI_two_panel(df_s1h, frac_tol = 0.01,
 
 ## $\Delta\Sigma^{1h}(R)$ — 1-halo $\Delta\Sigma$
 
-CAMB-driven `DSigma1hSel` (`ytrue`) vs cp_camb-driven `DSigma1hSel`
-(`ytest`). Same idiom as §2.8; same 12 × 10 grid.
+**Not emitted by the pipelines backend** — same status as the
+$\Sigma^{1h}$ section above (`Shear1hGl` publishes $\gamma_t^{1h}$
+only).
 
 ```{r dsigma-1h-load, include=FALSE}
 df_ds1h <- read_observable("dsigma_1h")
@@ -487,10 +551,13 @@ partI_two_panel(df_ds1h, frac_tol = 0.01,
 
 ## $\gamma_t^{1h}(R)$ — 1-halo tangential shear
 
-CAMB-driven `Shear1hSel` (`ytrue`) vs cp_camb-driven `Shear1hSel`
-(`ytest`). Same idiom; tolerance loosened to 5% to absorb the noise
-floor at the largest-$R$ bin where $\gamma_t^{1h}$ is $\sim 10^{-14}$
-(C++ rounding limit).
+CAMB-driven `Shear1hGl` (`ytrue`) vs cp_camb-driven `Shear1hGl`
+(`ytest`) — the fixed-GL des_y3 backend
+(`src/pipelines/des_y3/shear_1h2h/cpp/0d`, bitwise-identical algorithm
+to production `Shear1hMisSel`), with the DES-Y3 gamma-kernel
+miscentering mixture from the `[miscentering]` values. Tolerance 5%
+absorbs the noise floor at the largest-$R$ bin where $\gamma_t^{1h}$
+is tiny (C++ rounding limit).
 
 ```{r shear-1h-load, include=FALSE}
 df_sh1h <- read_observable("shear_1h")
@@ -510,11 +577,15 @@ partI_two_panel(df_sh1h, frac_tol = 0.05,
 
 ## $\Sigma_{\rm prj}$ — two-halo projection
 
-### Pure-emulator check: `ShearPrjEvaluator` (CAMB) vs (cp_camb)
+### Pure-emulator check: `ShearPrjCuhre` (CAMB) vs (cp_camb)
 
-CAMB-driven and cp_camb-driven fixed-GL `ShearPrjEvaluator` outputs.
-Same evaluator, only $P(k)$ differs. Headline: $\le 1.4\%$ over
-$R \in [0.1, 30]\,h^{-1}$ Mpc per `pipeline_modules.tex` §10.
+CAMB-driven and cp_camb-driven `sigma_prj_cuhre` outputs
+(`ShearPrjCuhre`, `src/pipelines/des_y3/shear_projection/cpp/2d` — the
+only $\Sigma_{\rm prj}$ producer in the pipelines run; the fixed-GL
+`ShearPrjGl` publishes $\Delta\Sigma_{\rm prj}$ and
+$\gamma_t^{\rm prj}$ only). Same backend on both arms, only $P(k)$
+differs. Headline: $\le 1.4\%$ over $R \in [0.1, 30]\,h^{-1}$ Mpc per
+`pipeline_modules.tex` §10.
 
 ```{r sigma-prj-load, include=FALSE}
 df_sp <- read_observable("sigma_prj")
@@ -532,18 +603,13 @@ partI_two_panel(df_sp, frac_tol = 0.05,
                 log_x = TRUE, log_y = TRUE)
 ```
 
-### Integrator-precision check: `ShearPrjCuhre` (cp_camb) vs `ShearPrjEvaluator` (cp_camb)
+### Integrator-precision check: `ShearPrjCuhre` (cp_camb) vs `ShearPrjGl` (cp_camb)
 
-> **🚨 FLAGGED — `ShearPrjCuhre` normalisation drift.** The Cuhre
-> adaptive integrator and the fixed-GL Evaluator should agree to the
-> Cuhre tolerance ($\sim 10^{-3}$) on the same datablock. They
-> instead disagree by a flat factor of ~0.46 across **all** 120
-> cells (median $|\Delta|/{\rm Eval} \approx 1.16$). Both `rnd` and
-> `cl` are scaled equally, so it's not a bias-piece bug — it's a
-> multiplicative normalisation missing from the Cuhre code path
-> (likely a $2\pi$ jacobian or an $\Omega(z)$ factor). Cuhre runs in
-> ~10 minutes per pipeline; treat this as a known offset until
-> `ShearPrjCuhre::evaluate` is audited.
+**Not available for $\Sigma_{\rm prj}$:** the fixed-GL `ShearPrjGl`
+does not publish a $\Sigma_{\rm prj}$ wall, so there is no evaluator
+to compare `sigma_prj_cuhre` against. The Cuhre-vs-GL check runs on
+the $\Delta\Sigma_{\rm prj}$ and $\gamma_t^{\rm prj}$ sections
+below — see the normalisation-drift flag there.
 
 ```{r sigma-prj-cuhre-load, include=FALSE}
 df_spc <- read_observable("sigma_prj_cuhre")
@@ -563,9 +629,16 @@ partI_two_panel(df_spc, frac_tol = 0.05,
 
 ## $\Delta\Sigma_{\rm prj}$ — two-halo $\Delta\Sigma$
 
-### Pure-emulator check: `ShearPrjEvaluator` (CAMB) vs (cp_camb)
+### Pure-emulator check: `ShearPrjGl` (CAMB) vs (cp_camb)
 
-> **Audit item 9 — bsel(θ) residual amplification.** $\Delta\Sigma_{\rm prj}$
+CAMB-driven vs cp_camb-driven `dsigma_prj_gl` (`ShearPrjGl`,
+`src/pipelines/des_y3/shear_projection/cpp/0d` — same
+`sp_detail::ShearPrjCore` as production `shear_prj_frozen_physics`).
+With the CAMB companion pinned to linear $\xi_{\rm NL}$ (issue #9
+apples-to-apples, see the Part I preamble) the residual is the pure
+emulator effect: **median 0.02%, max 0.07%** on this run pair.
+
+> **Audit item 9 (historical) — bsel(θ) residual amplification.** $\Delta\Sigma_{\rm prj}$
 > shows a 14% max residual concentrated at small $R$ in low-$\lambda$ bins
 > while $\Sigma_{\rm prj}$ (§2.10) sits at 3.5% max. Decomposition: the
 > `rnd` piece (uniform-foreground, no $b_{\rm sel}$ factor) agrees to
@@ -594,9 +667,19 @@ partI_two_panel(df_dsp, frac_tol = 0.05,
                 log_x = TRUE, log_y = TRUE)
 ```
 
-### Integrator-precision check: Cuhre vs Evaluator (cp_camb)
+### Integrator-precision check: `ShearPrjCuhre` vs `ShearPrjGl` (cp_camb)
 
-Inherits the same ~0.46 normalisation offset flagged in §2.10.
+> **🚨 FLAGGED — `ShearPrjCuhre` normalisation drift (issue #23,
+> backend status "pending" in
+> `src/pipelines/des_y3/shear_projection/README.md`).** The Cuhre
+> adaptive backend and the fixed-GL `ShearPrjGl` should agree to the
+> Cuhre tolerance ($\sim 10^{-3}$) on the same datablock. They instead
+> disagree by a flat factor $\approx 0.46$ (GL $\approx 2.15 \times$
+> Cuhre) across **all** 120 cells (median
+> $|\Delta|/{\rm GL} \approx 1.17$), `cl` and `rnd` scaled equally —
+> a multiplicative normalisation on the Cuhre code path, unchanged
+> from the pre-pipelines smoke runs. Treat as a known offset until the
+> 2d backend's pending re-validation lands.
 
 ```{r dsigma-prj-cuhre-load, include=FALSE}
 df_dspc <- read_observable("dsigma_prj_cuhre")
@@ -616,7 +699,7 @@ partI_two_panel(df_dspc, frac_tol = 0.05,
 
 ## $\gamma_t^{\rm prj}$ — two-halo tangential shear
 
-### Pure-emulator check: `ShearPrjEvaluator` (CAMB) vs (cp_camb)
+### Pure-emulator check: `ShearPrjGl` (CAMB) vs (cp_camb)
 
 $\gamma_t^{\rm prj}(R) = \Delta\Sigma_{\rm prj}(R)\,\Sigma_{\rm crit}^{-1}$
 with $\Sigma_{\rm crit}^{-1}$ computed from the source $p(z)$, identical
@@ -643,9 +726,10 @@ partI_two_panel(df_shp, frac_tol = 0.05,
                 log_x = TRUE, log_y = TRUE)
 ```
 
-### Integrator-precision check: Cuhre vs Evaluator (cp_camb)
+### Integrator-precision check: `ShearPrjCuhre` vs `ShearPrjGl` (cp_camb)
 
-Inherits the same ~0.46 normalisation offset flagged in §2.10.
+Inherits the same $\approx 0.46$ normalisation offset flagged in the
+$\Delta\Sigma_{\rm prj}$ Cuhre subsection (issue #23).
 
 ```{r shear-prj-cuhre-load, include=FALSE}
 df_shpc <- read_observable("shear_prj_cuhre")

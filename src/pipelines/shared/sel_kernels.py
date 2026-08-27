@@ -32,7 +32,7 @@ def repo_root():
 
 def load():
     """Load (once) and return the maintained sel_function module."""
-    name = "y3_des_sel_function"
+    name = "y3_des_sel_function_shared"
     if name in sys.modules:
         return sys.modules[name]
     root = repo_root()
