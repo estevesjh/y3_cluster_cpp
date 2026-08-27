@@ -53,7 +53,20 @@ def _install_cosmosis_stub():
     is not importable outside a CosmoSIS environment, and none of the
     quadrature under test needs it. Installed before the first import
     below, not in a setUpClass, so it does not depend on test ordering.
+
+    Only installs the stub when the REAL cosmosis is genuinely
+    unimportable (GitHub issue #25): unconditionally stubbing used to
+    leak an incomplete module into sys.modules for the rest of the
+    process, shadowing the real cosmosis.datablock.DataBlock for any
+    test file collected afterward in the same pytest run. When cosmosis
+    IS available (any environment that can run the real pipeline),
+    there is nothing to stub and nothing to leak.
     """
+    try:
+        import cosmosis.datablock  # noqa: F401
+        return
+    except ImportError:
+        pass
     if "cosmosis.datablock" in sys.modules:
         return
     stub = types.ModuleType("cosmosis")
