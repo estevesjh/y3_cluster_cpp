@@ -213,8 +213,11 @@ backend, not a production entry point.
 
 ## The 3d backend
 
-(Formerly `full_ltmz`; three adaptive dimensions, CUDA only.) The
-independent fully-coupled diagnostic,
+(Formerly `full_ltmz`; three adaptive dimensions, CUDA only — unlike
+number counts and one-halo shear, there is no C++ or Python adaptive
+3d implementation to cross-check this one against; see
+[docs/known_issues/shear_prj_3d_reference_gap.md](../../../docs/known_issues/shear_prj_3d_reference_gap.md).)
+The independent fully-coupled diagnostic,
 
 $$
 \Delta\Sigma_{\rm prj}(R)=
