@@ -149,6 +149,76 @@ tolerances, and comparison definitions:
 - [One-halo and traditional one-plus-two-halo shear](shear_1h2h/README.md)
 - [Projection shear](shear_projection/README.md)
 
+## Cost distribution across the prior (apriori sampling)
+
+The numbers above are single-point measurements at the fiducial
+cosmology/HOD. `cosmosis-models/des_y3_cpp0d_fast_apriori.ini` (1000
+draws) and `cosmosis-models/des_y3_cpp3d_slow_reference_apriori.ini`
+(10 draws) run the same two pipelines under CosmoSIS's `apriori`
+sampler instead, drawing independently from the `[values]` priors
+(`h0`, `omega_m`, `omega_b`, `n_s`, `sigma8`, and the five `cluster_mor`
+HOD parameters) to characterize cost *variance* and robustness, not a
+single point. Both keep `cp_camb`'s `nz = 50` (the Pk(k,z) grid) --
+raising it toward the production default of 400 makes each sample much
+slower and was not needed at either sample count. Because the two runs
+draw independently, this is not a paired 0d-vs-3d precision check (see
+below for what would be needed for that).
+
+**~30% of draws are free, near-zero-cost rejections** (307/1000 fast,
+5/10 slow): `cp_camb.py`'s pre-emulator bound-box check (line ~247)
+deliberately rejects points outside the CAMB emulator's *trained*
+range even though the values-file's declared prior is wider (e.g. the
+`n_s` prior is $U(0.8, 1.15)$ but the trained box is only
+$[0.823, 1.103]$) -- extrapolating past the emulator's training region
+produces untrustworthy $P(k)$ that would otherwise crash
+`cluster_toolkit.peak_height.nu_at_M` with a GSL abort further downstream.
+This is by design, not a defect; exclude these from any cost or
+precision statistics (they never run past `cp_camb`).
+
+**Finding 1 -- `sel_function`'s ~1.2-1.3 s fiducial cost is one-time
+JIT compilation, not steady state.** Across the 693 completed fast
+draws, `sel_function` took 1.301 s on the *first* sample and a steady
+46-76 ms (median 65 ms) on every one of the other 692 -- consistent
+with the known numba `cache=False` issue (`sel_kernels` module-name
+cross-poisoning fix, deferred in `RHO_M_MIGRATION_SUMMARY.md`): each
+new process pays the JIT cost once, not per sample. A real MCMC chain
+(thousands of samples per process) amortizes this to zero; a
+single-fiducial-point benchmark cannot see that and reports the
+inflated one-time number instead.
+
+**Finding 2 -- the adaptive-3d modules' cost is strongly
+cosmology-dependent; `shear_prj_cuhre` is comparatively stable.** Of
+the 5 completed slow draws, `NumCounts3d` ranged 0.97-7.44 s (median
+1.81 s) and `Shear1h3d`/`Shear1h2hMax3d` similarly spanned roughly an
+order of magnitude -- some HOD/cosmology corners make Cuhre subdivide
+far more than others. `shear_prj_cuhre`'s per-point cost, by contrast,
+only ranged 68-80 s across the same 5 draws (~15%). The single
+fiducial-point costs quoted in the table above (3.36 s / 3.29 s /
+3.96 s) land in the upper half of this spread, not at the median --
+they are not "worst case" but also not typical.
+
+| Module | Fast (0d), n=693/1000 completed | Slow (3d/2d), n=5/10 completed |
+| --- | --- | --- |
+| `cp_camb` | median 4 ms (0-9 ms) | median 2 ms (0-14 ms) |
+| `MfTinker` | median 195 ms (118-583 ms) | median 212 ms (134-580 ms) |
+| `halo_model` | median 464 ms (351-721 ms) | median 487 ms (418-654 ms) |
+| `sel_function` | median 65 ms (46 ms-1.30 s incl. one-time JIT) | median 62 ms (46 ms-1.32 s incl. one-time JIT) |
+| `NumCountsSel` / `NumCounts3d` | median 8 ms (7-12 ms) | median 1.81 s (0.97-7.44 s) |
+| `Shear1hMisSel` / `Shear1h3d` | median 11 ms (9-16 ms) | median 1.54 s (0.87-7.82 s) |
+| `Shear1h2hMax` / `Shear1h2hMax3d` | median 12 ms (10-18 ms) | median 1.72 s (0.99-8.53 s) |
+| `ShearPrjGl` / `shear_prj_cuhre` (per pt) | median 592 ms (549-697 ms) | median 69.4 s/pt (68.5-80.2 s/pt, 3-pt sample) |
+| Total pipeline | median 1.41 s (1.20-2.65 s) | median 232 s (212-248 s) |
+
+**What this does and doesn't validate.** This confirms both pipelines
+run cleanly (no crashes, no NaN propagation) across ~700 fast and 5
+slow genuinely different cosmology/HOD draws, and replaces the
+single-point cost numbers with real distributions. It does **not**
+give a 0d-vs-3d precision comparison across the prior, since the two
+runs drew unrelated random points. That would need a third ini running
+both the fast 0d modules and the slow 3d modules in the *same*
+pipeline on the *same* draws (the pattern `real_pipeline_extract_max2h.ini`
+already uses for CPU-vs-GPU) -- not yet built.
+
 ## Recommended methods
 
 The maintained smoke/reference pipeline uses:
