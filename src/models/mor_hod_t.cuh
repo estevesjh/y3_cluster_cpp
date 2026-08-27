@@ -9,10 +9,10 @@
 // cross-backend pins compare the same physics.
 //
 // The Costanzi-2026 continuous form WITHOUT the central shift
-// (x = ltr + delta) lives in mor_shifted_poisson_t.cuh and is
+// (x = ltr + delta) lives in mor_sat_only_t.cuh and is
 // reserved for the P[X]/b_sel operators, whose CPU twin
 // (p_operator_t.hh) uses that form too. The two are related exactly by
-// MOR_SP(ltr) = MOR_HOD(ltr + 1) above Mmin — pinned in
+// MOR_SAT_ONLY(ltr) = MOR_HOD(ltr + 1) above Mmin — pinned in
 // test/num_counts_3d_gpu.test.cu.
 //
 // Formula (identical to the host class, kernels/mor_hod.py:91-105):

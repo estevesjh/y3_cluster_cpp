@@ -270,6 +270,70 @@ target_include_directories(
   )
 add_test(shear_prj_gl_test shear_prj_gl_test)
 
+# Selection-bias closure reader (src/pipelines/systematics/selection_bias/
+# cpp/bsel_bins_t.hh, and its byte-identical twin src/models/bsel_bins_t.hh):
+# the exact-wall-row lookup contract every projection slice depends on.
+# Previously 0% in both copies.
+add_executable(bsel_bins_test bsel_bins.test.cc)
+target_link_libraries(
+  bsel_bins_test PRIVATE testmain utils cosmosis ${GSL_LIBRARIES}
+  )
+target_include_directories(
+  bsel_bins_test PRIVATE ${CMAKE_SOURCE_DIR}/src
+                         ${CMAKE_SOURCE_DIR}/externals
+                         ${GSL_INCLUDE_DIR}
+  )
+add_test(bsel_bins_test bsel_bins_test)
+
+# End-to-end driver test for the projection-shear 0d wrapper
+# (shear_projection/cpp/0d/shear_prj_gl_t.hh) and the sample-level half of
+# ShearPrjCore that shear_prj_gl_test cannot reach: set_sample, the
+# per-slice theta/z/NFW caches, accumulate_, locate_ and evaluate, driven
+# from a small but complete synthetic sample block.
+add_executable(shear_prj_gl_wrapper_test shear_prj_gl_wrapper.test.cc)
+target_link_libraries(
+  shear_prj_gl_wrapper_test PRIVATE testmain ${GSL_LIBRARIES}
+                                    ${CUBA_LIBRARIES} utils models cosmosis
+                                    fmt::fmt
+  )
+target_include_directories(
+  shear_prj_gl_wrapper_test PRIVATE ${CMAKE_SOURCE_DIR}/src
+                                    ${CMAKE_SOURCE_DIR}/externals
+                                    ${CUBACPP_DIR} ${CUBA_INCLUDE_DIR}
+                                    ${GSL_INCLUDE_DIR}
+  )
+add_test(shear_prj_gl_wrapper_test shear_prj_gl_wrapper_test)
+
+# Load-time smoke test for the CPU pipelines modules: every .so dlopens
+# and exports the setup/execute/cleanup C ABI CosmoSIS dlsyms.  The module
+# .cc translation units are otherwise never loaded by any test (all 0% in
+# the coverage report), so a link regression could reach a pipeline first.
+# Paths come from $<TARGET_FILE:...>, so it always tests THIS build tree.
+add_executable(pipelines_module_so_test pipelines_module_so.test.cc)
+target_compile_definitions(
+  pipelines_module_so_test PRIVATE
+    PIPELINES_SO_NUMCOUNTS_SIJ_GL="$<TARGET_FILE:NumCountsSijGl>"
+    PIPELINES_SO_NUMCOUNTS_3D="$<TARGET_FILE:NumCounts3d>"
+    PIPELINES_SO_SHEAR1H_GL="$<TARGET_FILE:Shear1hGl>"
+    PIPELINES_SO_SHEAR1H_RADIAL_SERIES="$<TARGET_FILE:Shear1hRadialSeries>"
+    PIPELINES_SO_SHEAR1H2H_MAX="$<TARGET_FILE:Shear1h2hMax>"
+    PIPELINES_SO_SHEAR1H_3D="$<TARGET_FILE:Shear1h3d>"
+    PIPELINES_SO_SHEAR1H2H_MAX_3D="$<TARGET_FILE:Shear1h2hMax3d>"
+    PIPELINES_SO_SHEAR_PRJ_GL="$<TARGET_FILE:ShearPrjGl>"
+    PIPELINES_SO_SHEAR_PRJ_CUHRE="$<TARGET_FILE:ShearPrjCuhre>"
+  )
+add_dependencies(
+  pipelines_module_so_test
+    NumCountsSijGl NumCounts3d Shear1hGl Shear1hRadialSeries Shear1h2hMax
+    Shear1h3d Shear1h2hMax3d ShearPrjGl ShearPrjCuhre
+  )
+target_link_libraries(pipelines_module_so_test PRIVATE testmain ${CMAKE_DL_LIBS})
+target_include_directories(
+  pipelines_module_so_test PRIVATE ${CMAKE_SOURCE_DIR}/src
+                                   ${CMAKE_SOURCE_DIR}/externals
+  )
+add_test(pipelines_module_so_test pipelines_module_so_test)
+
 # Pure-Python DES Y3 model/decomposition tests.  Use the interpreter from the
 # active CosmoSIS environment so numpy/scipy match the pipeline runtime.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -384,6 +448,58 @@ add_test(
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/signed_mis_table.test.py
   )
 
+# S_ij-tabulated fixed-GL C++ backend, number_counts (src/pipelines/des_y3,
+# 0d): the reference pipeline's production counts backend.  Pins
+# NumCountsSijGl::evaluate against an independently assembled W_ij(lnM)
+# sum, the include_sci = false counts contract, the HMF
+# ln(m (Omega_m - Omega_nu)) mass-axis convention, per-bin S_stack
+# indexing, SelGlWeights's moments, and the shared Gauss-Legendre
+# primitive's exactness.
+add_executable(numcounts_sij_gl_test numcounts_sij_gl.test.cc)
+target_link_libraries(
+  numcounts_sij_gl_test PRIVATE testmain ${GSL_LIBRARIES} ${CUBA_LIBRARIES}
+                                utils models cosmosis fmt::fmt
+  )
+target_include_directories(
+  numcounts_sij_gl_test PRIVATE ${CMAKE_SOURCE_DIR}/src
+                                ${CMAKE_SOURCE_DIR}/externals
+                                ${CUBACPP_DIR} ${CUBA_INCLUDE_DIR}
+                                ${GSL_INCLUDE_DIR}
+  )
+add_test(numcounts_sij_gl_test numcounts_sij_gl_test)
+
+# src/pipelines/cosmology/ -- the survey-agnostic physics package, which
+# had no test of its own (halo_model.test.py and conc_mass_relation.test.py
+# import the y3_buzzard ORIGINALS, and only one of the two homes survives
+# the merge). External references only: cluster_toolkit, colossus, and the
+# Child+18 / Duffy+08 / Tinker+2010 published coefficients; plus an
+# equivalence leg against the y3_buzzard copies so drift fails loudly.
+add_test(
+  NAME cosmology_package_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/cosmology_package.test.py
+  )
+
+# Identity pins for the deliberately-duplicated pipeline sources
+# (shared vs systematics sel_function/sel_kernels, cosmology vs
+# systematics prj_params and bsel, src/models vs systematics
+# bsel_bins_t.hh). The duplication is a KEPT decision; this asserts the
+# copies still agree, and characterizes the shared sys.modules cache key
+# both sel_kernels shims use.
+add_test(
+  NAME dual_copy_identity_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/dual_copy_identity.test.py
+  )
+
+# Convergence of shared/explicit_grid_core.py -- the project's accuracy
+# REFERENCE (CLAUDE.md quotes every accuracy number against it), which
+# previously had no test of its own. Checks the GL primitive against
+# analytic and scipy.quad answers, and the adaptive integrator's reported
+# error against scipy QUADPACK. Dump-free.
+add_test(
+  NAME explicit_grid_core_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/explicit_grid_core.test.py
+  )
+
 add_executable(numcounts_3d_test numcounts_3d.test.cc)
 target_link_libraries(
   numcounts_3d_test PRIVATE testmain utils models cosmosis
@@ -410,6 +526,25 @@ target_include_directories(
                              ${CUBACPP_DIR} ${GSL_INCLUDE_DIR}
   )
 add_test(shear1h2h_max_test shear1h2h_max_test)
+
+# The SAME observable, but driving the real header class
+# (shear_1h2h/cpp/0d/shear1h2h_max_t.hh) instead of the byte-for-byte
+# mirror above -- that mirror predates the class becoming public in the
+# header, which is why coverage reported the header at 0% next to a
+# passing shear1h2h_max_test.  Adds the z-resolved reference, the
+# physical-density (1+z)^2 identity, and the ini/DataBlock contracts.
+add_executable(shear1h2h_max_t_test shear1h2h_max_t.test.cc)
+target_link_libraries(
+  shear1h2h_max_t_test PRIVATE testmain ${GSL_LIBRARIES} ${CUBA_LIBRARIES}
+                               utils models cosmosis fmt::fmt
+  )
+target_include_directories(
+  shear1h2h_max_t_test PRIVATE ${CMAKE_SOURCE_DIR}/src
+                               ${CMAKE_SOURCE_DIR}/externals
+                               ${CUBACPP_DIR} ${CUBA_INCLUDE_DIR}
+                               ${GSL_INCLUDE_DIR}
+  )
+add_test(shear1h2h_max_t_test shear1h2h_max_t_test)
 
 # fast_mass C++ backend, shear_1h2h (des_y3 Phase 2): SelGLCore + the
 # miscentred NFW mixture vs an independently-assembled reference, and

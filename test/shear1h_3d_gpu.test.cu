@@ -1,7 +1,7 @@
 #include "catch2/catch.hpp"
 
 #include "models/emg_des_t.cuh"
-#include "models/mor_shifted_poisson_t.cuh"
+#include "models/mor_sat_only_t.cuh"
 #include "pipelines/des_y3/number_counts/cuda/3d/num_counts_3d_gpu_t.cuh"
 
 #include "models/mor_hod_t.hh"

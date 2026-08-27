@@ -1,11 +1,15 @@
-#ifndef Y3_CLUSTER_MOR_SHIFTED_POISSON_T_CUH
-#define Y3_CLUSTER_MOR_SHIFTED_POISSON_T_CUH
+#ifndef Y3_CLUSTER_MOR_SAT_ONLY_T_CUH
+#define Y3_CLUSTER_MOR_SAT_ONLY_T_CUH
 
-// Costanzi-2026 shifted-Poisson MOR for GPU.
+// Satellite-only shifted-Poisson MOR for GPU (Costanzi-2026 P-operator
+// form): NO central-galaxy count shift — x = ltr + delta, continuous in
+// ltr. The HOD form WITH the central shift (x = ltr - lambda_cen + delta)
+// is y3_cuda::MOR_HOD_t (mor_hod_t.cuh); the two relate exactly by
+// MOR_SAT_ONLY(ltr) = MOR_HOD(ltr + 1) above Mmin.
 //
-// Matches the CPU implementation in p_operator_t.hh (lines 177-235).
-// This is the continuous shifted-Poisson form, which is used in p_operator_gpu_t.cuh instead of the Costanzi-2019
-// skewed-Gaussian used by mor_des_log_t.cuh
+// Matches the CPU implementation inlined in p_operator_t.hh (lines
+// 177-235). Used by p_operator_gpu_t.cuh (the P[X]/b_sel operators)
+// instead of the Costanzi-2019 skewed-Gaussian used by mor_des_log_t.cuh.
 //
 // Formula:
 //   l_sat(M, z) = ((M - Mmin) / (M1 - Mmin))^alpha * ((1+z)/(1+z_pivot))^epsilon
@@ -21,7 +25,7 @@
 
 namespace y3_cuda {
 
-  class MOR_SHIFTED_POISSON_t {
+  class MOR_SAT_ONLY_t {
   private:
     double log10_Mmin_;
     double log10_M1_;
@@ -37,7 +41,7 @@ namespace y3_cuda {
 
   public:
     __host__ __device__
-    MOR_SHIFTED_POISSON_t()
+    MOR_SAT_ONLY_t()
       : log10_Mmin_(13.0)
       , log10_M1_(14.0)
       , alpha_(1.0)
@@ -49,12 +53,12 @@ namespace y3_cuda {
       , dM1_(M1_ - Mmin_)
     {}
 
-    MOR_SHIFTED_POISSON_t(double log10_Mmin,
-                          double log10_M1,
-                          double alpha,
-                          double sigma_intr,
-                          double epsilon,
-                          double z_pivot)
+    MOR_SAT_ONLY_t(double log10_Mmin,
+                   double log10_M1,
+                   double alpha,
+                   double sigma_intr,
+                   double epsilon,
+                   double z_pivot)
       : log10_Mmin_(log10_Mmin)
       , log10_M1_(log10_M1)
       , alpha_(alpha)
@@ -68,7 +72,7 @@ namespace y3_cuda {
 
     // Construct from datablock - reads from cluster_mor section
     // (same as CPU MOR_HOD_t)
-    explicit MOR_SHIFTED_POISSON_t(cosmosis::DataBlock& sample)
+    explicit MOR_SAT_ONLY_t(cosmosis::DataBlock& sample)
     {
       // Try cluster_mor first (CPU convention), fall back to cluster_abundance
       if (sample.has_val("cluster_mor", "log10_Mmin")) {
