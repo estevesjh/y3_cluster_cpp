@@ -84,9 +84,10 @@ device-buffer indexing issue as originally suspected:
    mode from overflow (`cl` up to ~1e232) to near-zero/denormal (`cl`
    ~1e-310) — real, verified improvement, but not sufficient on its
    own.
-2. **(Open)** `bsel_k[k][it]` (the b_sel(θ) plateau weight) is NaN at
+2. **(Fixed 2026-08-27, unverified on GPU -- see below)**
+   `bsel_k[k][it]` (the b_sel(θ) plateau weight) was NaN at
    zob=0.425 and denormal garbage at zob=0.575. Root cause: the
-   frozen-GPU module hand-rolls a zob-interpolation over
+   frozen-GPU module hand-rolled a zob-interpolation over
    `b_sel_marginalised/{zob,lob,b_small,b_large}` assuming they form a
    dense cartesian `n_zob × n_lob` grid, indexed `j0*n_lob+lob_bin`.
    They don't -- per `src/models/bsel_bins_t.hh`, that section is a
@@ -94,8 +95,14 @@ device-buffer indexing issue as originally suspected:
    not sorted/unique by zob. The CPU frozen counterpart
    (`sigma_prj_frozen_interp_t.hh:182`) does an **exact**
    `(lambda_bin, zob)` lookup via `BSelBins::at`, no interpolation.
-   The GPU module's zob-walk overruns past the true 12-element arrays
+   The GPU module's zob-walk overran past the true 12-element arrays
    for any zob beyond the first slice, reading adjacent heap memory.
-   Fix: replace the ad-hoc interpolation block with a `BSelBins`
-   instance + `.at(lob_bin, zob)`, matching the CPU reference. Not
-   landed yet -- see the issue #24 comment thread for full detail.
+   Fixed by replacing the ad-hoc interpolation block with a `BSelBins`
+   instance (`bsel_.emplace(sample)`) + `.at(lob_bin, zob)` in the
+   per-slice host loop, matching the CPU reference exactly (same
+   `lobc = bsel_bin.lob`, `Bs/Bl = bsel_bin.b_small/b_large`, no
+   interpolation). **This is host-side C++ inside a `.cuh` file that
+   only builds with `USE_CUDA=On` (Perlmutter) -- not yet built or
+   tested; `test/shear_prj_frozen_gpu.test.cu` needs a Perlmutter run
+   to confirm the `cl` channel is clean (no more NaN/denormal) and
+   matches the CPU frozen module.**

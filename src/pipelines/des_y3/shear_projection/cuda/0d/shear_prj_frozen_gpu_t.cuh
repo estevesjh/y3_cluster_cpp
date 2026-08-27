@@ -127,6 +127,7 @@ private:
   std::optional<y3_cluster::OMEGA_Z_DES> omega_z_;
   std::optional<y3_cluster::Interp1D> chi_, sci_, sigma_z_;
   std::optional<y3_cuda::NFW_DSIGMA_MIS> dsigma_mis_dev_;
+  std::optional<y3_cluster::sp_detail::BSelBins> bsel_;
   bool use_halo_model_conc_ = false;   // issue #14
   double h0_{0.7};
 
@@ -311,19 +312,15 @@ public:
     dsigma_mis_dev_->set_rho_ref(
       sample.view<double>("haloModel", "rho_m_ref"));
 
-    auto const b_sel_lob =
-      sample.view<std::vector<double>>("b_sel_marginalised", "lob");
-    auto const b_sel_zob =
-      sample.view<std::vector<double>>("b_sel_marginalised", "zob");
-    int const n_lob = int(b_sel_lob.size());
-    int const n_zob = int(b_sel_zob.size());
-    // read_bsel_vector, NOT view<ndarray<double>>: production bsel.py
-    // publishes b_small/b_large as 1-D double arrays (vector<double> on
-    // this side); the tolerant helper accepts either representation.
-    std::vector<double> const b_small =
-      y3_cluster::sp_detail::read_bsel_vector(sample, "b_small");
-    std::vector<double> const b_large =
-      y3_cluster::sp_detail::read_bsel_vector(sample, "b_large");
+    // Exact (lambda_bin, zob) wall lookup -- mirrors the CPU frozen class
+    // (sigma_prj_frozen_t.hh:154,173). issue #24: this used to be a
+    // hand-rolled zob-interpolation walk assuming b_small/b_large form a
+    // dense cartesian (zob, lob) grid indexed j*n_lob+lob_bin. They don't
+    // -- per BSelBins's own docstring, b_sel_marginalised is a flat list
+    // of exact wall rows, not sorted/unique by zob. That produced
+    // NaN/garbage past the first z-slice; BSelBins::at does the same
+    // exact, no-interpolation lookup the CPU class relies on.
+    bsel_.emplace(sample);
 
     // ---- host part: per-slice grids and frozen weights (verbatim port).
     std::size_t const Nlz = lzob_lb_.size();
@@ -337,7 +334,8 @@ public:
     for (std::size_t k = 0; k != Nlz; ++k) {
       int const lob_bin = lzob_lb_[k];
       double const zob = lzob_zob_[k];
-      double const lobc = lob_centers_.at(lob_bin);
+      auto const bsel_bin = bsel_->at(lob_bin, zob);
+      double const lobc = bsel_bin.lob;
       double const chi_o = chi_of(zob);
       double const D_A_o = chi_o / (1.0 + zob);
       double const R_excl = y3_cluster::sp_detail::R_lambda(lobc) * (1.0 + zob);
@@ -357,23 +355,11 @@ public:
           tg.weight[it] * 2.0 * y3_cluster::sp_detail::PI * std::sin(tg.theta[it]);
       }
 
-      // b_sel plateaus + sigmoid (frozen-class arithmetic).
-      double Bs = 0.0, Bl = 0.0;
-      {
-        int j = 0;
-        while (j + 1 < n_zob && b_sel_zob[j + 1] < zob) ++j;
-        int const j0 = (j + 1 < n_zob) ? j : n_zob - 2;
-        int const j1 = (j + 1 < n_zob) ? j + 1 : n_zob - 1;
-        double f = (b_sel_zob[j1] > b_sel_zob[j0])
-                     ? (zob - b_sel_zob[j0]) /
-                         (b_sel_zob[j1] - b_sel_zob[j0])
-                     : 0.0;
-        f = std::clamp(f, 0.0, 1.0);
-        Bs = (1 - f) * b_small[j0 * n_lob + lob_bin] +
-             f * b_small[j1 * n_lob + lob_bin];
-        Bl = (1 - f) * b_large[j0 * n_lob + lob_bin] +
-             f * b_large[j1 * n_lob + lob_bin];
-      }
+      // b_sel plateaus + sigmoid (frozen-class arithmetic): exact
+      // (lambda_bin, zob) wall values from bsel_bin, no interpolation --
+      // matches sigma_prj_frozen_t.hh exactly.
+      double const Bs = bsel_bin.b_small;
+      double const Bl = bsel_bin.b_large;
       double const theta_lam =
         y3_cluster::sp_detail::R_lambda(lobc) * (1.0 + zob) / chi_o;
       double const k_sig = 2.5 / theta_lam;
