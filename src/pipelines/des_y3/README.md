@@ -123,17 +123,23 @@ evaluator), the baseline is stated in the cell:
 | Dims | Observable | Method and backend | Cost | Precision vs 3d |
 | --- | --- | --- | ---: | --- |
 | `3d` | Counts | [`3d`](number_counts/README.md#the-3d-backends), adaptive Python | 25 s | Reference (3d); reported integration error at or below 1e-6 |
-| `0d` | Counts | [`0d`](number_counts/README.md#the-0d-backends), explicit Python (3-dim GL) | 83 ms | 3.5e-5 |
-| `0d` | Counts | [`0d`](number_counts/README.md#the-0d-backends), fast path C++ (2-dim GL, S_ij tab) | 6 ms | 7.6e-4; also identity with production (separate baseline) |
+| `3d` | Counts | [`3d`](number_counts/README.md#the-3d-backends), Cuhre C++ | 3.1 s | 4.9e-4 (baseline: the 0d explicit fixed-GL Python, itself 3.5e-5 from the 3d reference) |
+| `3d` | Counts | [`3d`](number_counts/README.md#the-3d-backends), PAGANI CUDA/A100 | 2.0 s | 5.1e-4 (same fixed-GL baseline); CUDA vs C++ twin 2.1e-5 (re-verified 2026-08-26, shared A100) |
+| `0d` | Counts | [`0d`](number_counts/README.md#explicit-fixed-gl-python-reference), explicit Python (3-dim GL) | 83 ms | 3.5e-5 |
+| `0d` | Counts | [`0d`](number_counts/README.md#redshift-contracted-fast-path), fast path Python (2-dim GL, S_ij tab) | 5 ms | 7.6e-4; also 2.4e-15 vs production (separate baseline) |
+| `0d` | Counts | [`0d`](number_counts/README.md#redshift-contracted-fast-path), fast path C++ (2-dim GL, S_ij tab) | 6 ms | 7.6e-4; also identity with production (separate baseline) |
 | `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), adaptive Python | 35 s | Reference (3d); reported integration error at or below 1e-6 |
+| `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), Cuhre C++ | 51 s | 3.3e-4 vs the 3d Python reference |
+| `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), PAGANI CUDA/A100 | 32 s | 3.4e-4 (baseline: the 3d C++ twin); CUDA vs C++ twin 4.3e-5 (re-verified 2026-08-26, shared A100, reduced 6-pt corner wall) |
 | `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), explicit Python (3-dim GL) | 149 ms | 4.9e-5 |
 | `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), 1h C++ (1-dim GL, z contracted) | 9 ms | 8.4e-4; also identity with production (separate baseline) |
 | `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), radial series (tables + moments) | 6--7 ms | 56--86% (known fixed-c=4 defect); 3.7e-3 internal fixed-profile consistency (separate baseline) |
 | `0d` | Max model | [`0d`](shear_1h2h/README.md#the-0d-backends), max C++/CUDA (2-dim GL, z-resolved) | 11 / 8 ms | 8.3e-4; CUDA vs C++ twin 6.4e-15 (separate baseline) |
-| `3d` | Projection shear | [`3d`](shear_projection/README.md#the-3d-backend), PAGANI on A100 | 95 s | Reference-class diagnostic (3d); convergence open — median 9.5e-4, maximum 2.2% vs region-split GL (separate baseline) |
-| `2d` | Projection shear | [`2d`](shear_projection/README.md#the-2d-backend), `ShearPrjCuhre` C++ | minutes | pending (Perlmutter re-run, issue #23 task) |
+| `3d` | Projection shear | [`3d`](shear_projection/README.md#the-3d-backend), PAGANI on A100, eps_rel=1e-3 | 95 s | Reference-class diagnostic (3d); convergence open — median 9.5e-4, maximum 2.2% vs region-split GL (separate baseline) |
+| `2d` | Projection shear | [`2d`](shear_projection/README.md#the-2d-backend), `ShearPrjCuhre` C++ | ~72 s/pt (measured 2026-08-26, 3-pt sample; full 180-pt wall ≈ 3.6 h, not run interactively) | not yet measured |
+| `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), exact-z Python (3-dim region-split GL) | 270 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open); 1.6e-11 vs exact evaluator, 5.5e-5 vs frozen production (separate baselines) |
 | `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), exact-z C++ (3-dim region-split GL) | 154 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open); 1e-11 vs exact evaluator (separate baseline) |
-| `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), frozen GPU path | 8.3 ms | pending (Perlmutter re-run, issue #23 task); faithful acceleration of frozen production (separate baseline) |
+| `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), frozen GPU path | 16 ms (measured 2026-08-26, full 180-pt wall) | broken: `cl` channel is uninitialized/mis-indexed device memory (up to 100% off, some NaN/denormal), not a faithful port — [known defect](../../../docs/known_issues/frozen_physics_signed_rnd_defect.md) |
 
 The observable READMEs contain the complete backend tables, grid
 settings (including the "GL nodes and weights" quadrature sections),
