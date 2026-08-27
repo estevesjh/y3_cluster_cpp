@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cmath>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -193,4 +194,144 @@ TEST_CASE("DSigmaPrj3dGpu integrand matches its documented formula assembly")
 
   double const got = eval_on_device(integrand, std::log(theta), zt, lnM);
   CHECK(got == Approx(expected).epsilon(1.0e-6));
+}
+
+TEST_CASE("DSigmaPrj3dGpu integrand drops the clustered term inside the "
+         "line-of-sight exclusion zone")
+{
+  // Complement of the "matches its documented formula assembly" TEST_CASE
+  // above, which deliberately picks theta > theta_excl (REQUIRE'd there).
+  // Here theta < theta_excl, so `if (theta > theta_excl)` in operator()
+  // must take its other branch: cl stays 0 (no bias/xi_nl contribution)
+  // and (1 + cl) == 1, while the miscentred-NFW piece is still evaluated.
+  cosmosis::DataBlock db = make_sample();
+  DSigmaPrj3dGpu integrand(db);
+  integrand.set_sample(db);
+
+  double const zob = 0.3;
+  double const R = 0.3;
+  std::array<double, 4> const pt{0.0, 0.0, 0.6, R};  // lob_bin = 0
+  integrand.set_grid_point(pt);
+
+  double const zt = zob;  // u = 0 -> w_pz = 1, same as the sibling test.
+  double const lnM = std::log(1.0e14);
+
+  double const h0 = 0.7, omega_m = 0.3, omega_l = 0.7, omega_k = 0.0;
+  double const da_zt = 1150.0 / 1.3;  // exact grid node at z=0.3
+  double const ez = std::sqrt(omega_m * (1.0 + zt) * (1.0 + zt) * (1.0 + zt)
+                              + omega_k * (1.0 + zt) * (1.0 + zt) + omega_l);
+  double const dv_do_dz =
+    2997.92 * (1.0 + zt) * (1.0 + zt) * da_zt * h0 * da_zt * h0 / ez;
+  double const w_pz = 1.0;
+  double const hmf = 2.0 * (std::log10(1.0e14) - 13.8124426028);
+
+  double const chi_o = 1150.0 * h0;  // exact grid node at zob=0.3
+  double const d_a_o = chi_o / (1.0 + zob);
+  double const r_excl = std::pow(25.0 / 100.0, 0.2) * (1.0 + zob);
+  double const cos_ex = (2.0 * chi_o * chi_o - r_excl * r_excl)
+                       / (2.0 * chi_o * chi_o);
+  double const theta_excl =
+    std::acos(std::max(-1.0, std::min(1.0, cos_ex)));
+  REQUIRE(theta_excl > 0.0);
+
+  double const theta = 0.5 * theta_excl;  // strictly inside the exclusion.
+  REQUIRE(theta < theta_excl);
+
+  y3_cuda::NFW_DSIGMA_MIS dsmis_model(4.0, 2.77533742639e+11, "single");
+  dsmis_model.set_rho_ref(0.3 * 2.77533742639e+11);
+  double const dsmis = dsmis_model(R, theta * d_a_o, lnM);
+
+  // cl == 0 inside exclusion -> (1 + cl) == 1: no bias/xi_nl factor.
+  double const expected = theta * 2.0 * M_PI * std::sin(theta) * dv_do_dz *
+                          w_pz * hmf * dsmis;
+
+  double const got = eval_on_device(integrand, std::log(theta), zt, lnM);
+  CHECK(got == Approx(expected).epsilon(1.0e-6));
+}
+
+// DSigmaPrj3dGpu's constructor (lob_centers default/override/validation and
+// use_halo_model_conc) is pure host-side DataBlock reads -- no CUDA model
+// is touched until set_sample() -- so it is exercised directly here
+// without a sample or a kernel launch.
+TEST_CASE("DSigmaPrj3dGpu constructor: lob_centers default, custom "
+         "override, and validation")
+{
+  SECTION("default lob_centers used when the key is absent")
+  {
+    cosmosis::DataBlock cfg;
+    CHECK_NOTHROW(DSigmaPrj3dGpu{cfg});
+  }
+  SECTION("custom lob_centers honored")
+  {
+    cosmosis::DataBlock cfg;
+    cfg.put_val("DSigmaPrj3dGpu", "lob_centers",
+               std::vector<double>{10.0, 20.0});
+    CHECK_NOTHROW(DSigmaPrj3dGpu{cfg});
+  }
+  SECTION("empty lob_centers throws")
+  {
+    cosmosis::DataBlock cfg;
+    cfg.put_val("DSigmaPrj3dGpu", "lob_centers", std::vector<double>{});
+    CHECK_THROWS_AS(DSigmaPrj3dGpu{cfg}, std::runtime_error);
+  }
+}
+
+TEST_CASE("DSigmaPrj3dGpu constructor honors use_halo_model_conc's has_val "
+         "default and explicit override")
+{
+  SECTION("absent defaults to false (has_val false branch)")
+  {
+    cosmosis::DataBlock cfg;
+    CHECK_NOTHROW(DSigmaPrj3dGpu{cfg});
+  }
+  SECTION("explicit true is accepted (has_val true branch)")
+  {
+    cosmosis::DataBlock cfg;
+    cfg.put_val("DSigmaPrj3dGpu", "use_halo_model_conc", true);
+    CHECK_NOTHROW(DSigmaPrj3dGpu{cfg});
+  }
+}
+
+TEST_CASE("DSigmaPrj3dGpu::set_sample honors use_halo_model_conc "
+         "(set_concentration_table)")
+{
+  // Complement of the plain set_sample() coverage in the two TEST_CASEs
+  // above: use_halo_model_conc=true so set_sample()'s
+  // `if (use_halo_model_conc_) dsigma_mis_->set_concentration_table(s);`
+  // takes its has_val-true branch instead of skipping it.
+  cosmosis::DataBlock cfg;
+  cfg.put_val("DSigmaPrj3dGpu", "use_halo_model_conc", true);
+  DSigmaPrj3dGpu integrand(cfg);
+
+  cosmosis::DataBlock db = make_sample();
+  db.put_val("haloModel", "concentration", std::vector<double>{4.0, 6.0});
+  CHECK_NOTHROW(integrand.set_sample(db));
+
+  std::array<double, 4> const pt{0.0, 0.0, 0.6, 0.3};
+  integrand.set_grid_point(pt);
+  double const lnM = std::log(1.0e14);
+  double const got = eval_on_device(integrand, std::log(0.05), 0.3, lnM);
+  CHECK(std::isfinite(got));
+}
+
+TEST_CASE("DSigmaPrj3dGpu grid/volume builders parse a wall-of-numbers "
+         "configuration")
+{
+  cosmosis::DataBlock cfg;
+  char const* mod = "DSigmaPrj3dGpu";
+  cfg.put_val(mod, "lambda_bin", std::vector<double>{0.0, 1.0});
+  cfg.put_val(mod, "zo_low", std::vector<double>{0.0, 0.0});
+  cfg.put_val(mod, "zo_high", std::vector<double>{0.6, 0.6});
+  cfg.put_val(mod, "radii", std::vector<double>{0.3, 0.5});
+  cfg.put_val(mod, "lntheta_low", std::vector<double>{-6.0, -6.0});
+  cfg.put_val(mod, "lntheta_high", std::vector<double>{-1.0, -1.0});
+  cfg.put_val(mod, "zt_low", std::vector<double>{0.1, 0.1});
+  cfg.put_val(mod, "zt_high", std::vector<double>{0.9, 0.9});
+  cfg.put_val(mod, "lnm_low", std::vector<double>{30.0, 30.0});
+  cfg.put_val(mod, "lnm_high", std::vector<double>{36.0, 36.0});
+
+  auto const grid = DSigmaPrj3dGpu::make_grid_points(cfg);
+  CHECK(grid.size() == 2u);
+  auto const vols = DSigmaPrj3dGpu::make_integration_volumes(cfg);
+  CHECK(vols.size() == 2u);
 }

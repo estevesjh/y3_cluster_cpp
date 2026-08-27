@@ -4,12 +4,16 @@
 // explicit-3d GPU backends compose — y3_cuda::MOR_HOD_t (the device
 // mirror of the host HOD MOR), y3_cuda::EMG_DES_t's closed-form
 // primitives, the b_sel-operator MOR y3_cuda::MOR_SHIFTED_POISSON_t —
-// plus the zkernel_sj observed-redshift kernel carried by
-// num_counts_3d_gpu_t.cuh. NumCounts3dGpu
-// itself (the CosmoSIS integrand) composes these with the pre-existing
-// y3_cuda::HMF_t/DV_DO_DZ_t/OMEGA_Z_DES device models (already covered
-// by their own tests) and needs a live cosmosis::DataBlock to
-// construct, so this test isolates the genuinely new pieces instead.
+// plus the zkernel_sj observed-redshift kernel and the NumCounts3dGpu
+// class itself, carried by num_counts_3d_gpu_t.cuh. NumCounts3dGpu's
+// constructor, set_grid_point() and the make_grid_points()/
+// make_integration_volumes() static glue are pure host-side DataBlock
+// reads (no CUDA model is touched until set_sample()), so they are
+// instantiated and exercised directly below. set_sample() and operator()
+// need the HMF_t/DV_DO_DZ_t/OMEGA_Z_DES/MOR_HOD_t/EMG_DES_t device models
+// live -- a synthetic-but-complete sample is built further below (same
+// role as dsigma_prj_3d_gpu.test.cu's make_sample()) so that path gets
+// exercised too, not just the individual device models in isolation.
 #include "models/emg_des_t.cuh"
 #include "models/mor_hod_t.cuh"
 #include "models/mor_shifted_poisson_t.cuh"
@@ -23,7 +27,15 @@
 #include "models/mor_hod_t.hh"
 #include "models/richness_kernel_t.hh"
 
+#include "cosmosis/datablock/datablock.hh"
+#include "cosmosis/datablock/ndarray.hh"
+
+#include <cuda_runtime.h>
+
 #include <cmath>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 using y3_cluster::MOR_HOD_t;
 namespace rk = y3_cluster::rk_detail;
@@ -123,4 +135,174 @@ TEST_CASE("y3_cuda::MOR_HOD_t matches the host MOR_HOD_t exactly")
       }
     }
   }
+}
+
+// The TEST_CASEs above isolate the device models NumCounts3dGpu composes.
+// NumCounts3dGpu itself is never instantiated -- its constructor, its bin
+// out-of-range check, and its module_label()/make_grid_points()/
+// make_integration_volumes() glue are pure host-side reads of a
+// cosmosis::DataBlock (no CUDA models are touched until set_sample()), so
+// they can and should be exercised directly here, without a real sample or
+// a kernel launch.
+namespace {
+  cosmosis::DataBlock
+  make_numcounts3d_cfg(std::size_t n_lam_min, std::size_t n_lam_max,
+                       std::size_t n_zob_min, std::size_t n_zob_max,
+                       std::size_t n_sigma_z)
+  {
+    cosmosis::DataBlock cfg;
+    char const* mod = "NumCounts3dGpu";
+    cfg.put_val(mod, "lam_min", std::vector<double>(n_lam_min, 20.0));
+    cfg.put_val(mod, "lam_max", std::vector<double>(n_lam_max, 30.0));
+    cfg.put_val(mod, "zob_min", std::vector<double>(n_zob_min, 0.2));
+    cfg.put_val(mod, "zob_max", std::vector<double>(n_zob_max, 0.4));
+    cfg.put_val(mod, "sigma_z", std::vector<double>(n_sigma_z, 0.02));
+    return cfg;
+  }
+}
+
+TEST_CASE("NumCounts3dGpu constructor validates bin definition arrays")
+{
+  SECTION("mismatched bin array lengths throw")
+  {
+    auto cfg = make_numcounts3d_cfg(2, 3, 2, 2, 2);
+    CHECK_THROWS_AS(NumCounts3dGpu{cfg}, std::runtime_error);
+  }
+  SECTION("more than MAX_BINS (32) bins throws")
+  {
+    auto cfg = make_numcounts3d_cfg(33, 33, 33, 33, 33);
+    CHECK_THROWS_AS(NumCounts3dGpu{cfg}, std::runtime_error);
+  }
+  SECTION("a well-formed bin set constructs cleanly")
+  {
+    auto cfg = make_numcounts3d_cfg(3, 3, 3, 3, 3);
+    CHECK_NOTHROW(NumCounts3dGpu{cfg});
+    CHECK(std::string(NumCounts3dGpu::module_label()) == "NumCounts3dGpu");
+  }
+}
+
+TEST_CASE("NumCounts3dGpu::set_grid_point validates bin_index against the "
+         "configured bin count")
+{
+  auto cfg = make_numcounts3d_cfg(2, 2, 2, 2, 2);
+  NumCounts3dGpu integrand(cfg);
+
+  CHECK_NOTHROW(integrand.set_grid_point({0.0}));
+  CHECK_NOTHROW(integrand.set_grid_point({1.0}));
+  CHECK_THROWS_AS(integrand.set_grid_point({-1.0}), std::out_of_range);
+  CHECK_THROWS_AS(integrand.set_grid_point({2.0}), std::out_of_range);
+}
+
+TEST_CASE("NumCounts3dGpu grid/volume builders parse a wall-of-numbers "
+         "configuration")
+{
+  cosmosis::DataBlock cfg;
+  char const* mod = "NumCounts3dGpu";
+  cfg.put_val(mod, "bin_index", std::vector<double>{0.0, 1.0});
+  cfg.put_val(mod, "lt_low", std::vector<double>{0.0, 0.0});
+  cfg.put_val(mod, "lt_high", std::vector<double>{200.0, 200.0});
+  cfg.put_val(mod, "zt_low", std::vector<double>{0.1, 0.1});
+  cfg.put_val(mod, "zt_high", std::vector<double>{0.9, 0.9});
+  cfg.put_val(mod, "lnm_low", std::vector<double>{30.0, 30.0});
+  cfg.put_val(mod, "lnm_high", std::vector<double>{36.0, 36.0});
+
+  auto const grid = NumCounts3dGpu::make_grid_points(cfg);
+  CHECK(grid.size() == 2u);
+  auto const vols = NumCounts3dGpu::make_integration_volumes(cfg);
+  CHECK(vols.size() == 2u);
+}
+
+namespace {
+  // A synthetic-but-complete sample: everything NumCounts3dGpu::set_sample
+  // reads (HMF_t, DV_DO_DZ_t, OMEGA_Z_DES, MOR_HOD_t, EMG_DES_t), same
+  // role as dsigma_prj_3d_gpu.test.cu's make_sample() -- not a fiducial
+  // physics pin, just internally-consistent inputs so set_sample() and
+  // operator() actually run instead of only being exercised in isolation.
+  cosmosis::DataBlock
+  make_numcounts3d_sample()
+  {
+    cosmosis::DataBlock db;
+    db.put_val("cosmological_parameters", "h0", 0.7);
+    db.put_val("cosmological_parameters", "omega_m", 0.3);
+    db.put_val("cosmological_parameters", "omega_M", 0.3);
+    db.put_val("cosmological_parameters", "omega_nu", 0.0);
+    db.put_val("cosmological_parameters", "omega_lambda", 0.7);
+    db.put_val("cosmological_parameters", "omega_k", 0.0);
+
+    db.put_val("distances", "z", std::vector<double>{0.0, 0.3, 0.9});
+    db.put_val("distances", "d_a",
+              std::vector<double>{0.0, 1150.0 / 1.3, 2100.0 / 1.9});
+    db.put_val("distances", "d_c", std::vector<double>{0.0, 1150.0, 2100.0});
+
+    db.put_val("mass_function", "m_h", std::vector<double>{1.0e13, 1.0e16});
+    db.put_val("mass_function", "z", std::vector<double>{0.0, 0.9});
+    db.put_val(
+      "mass_function", "dndlnmh",
+      cosmosis::ndarray<double>(std::vector<double>{2.0, 2.0, 2.0, 2.0},
+                                {2, 2}));
+    db.put_val("cluster_abundance", "hmf_s", 1.0);
+    db.put_val("cluster_abundance", "hmf_q", 0.0);
+
+    db.put_val("cluster_mor", "log10_Mmin", 13.8);
+    db.put_val("cluster_mor", "log10_M1", 14.5);
+    db.put_val("cluster_mor", "alpha", 1.1);
+    db.put_val("cluster_mor", "sigma_lambda", 0.35);
+    db.put_val("cluster_mor", "epsilon", -0.2);
+
+    std::vector<double> const zp{0.10, 0.45, 0.80};
+    auto const flat = [](double v) { return std::vector<double>{v, v, v}; };
+    db.put_val("plob_ltr_params", "z", zp);
+    db.put_val("plob_ltr_params", "a_mu", flat(0.2));
+    db.put_val("plob_ltr_params", "b_mu", flat(1.05));
+    db.put_val("plob_ltr_params", "a_sig", flat(0.55));
+    db.put_val("plob_ltr_params", "b_sig", flat(0.9));
+    db.put_val("plob_ltr_params", "a_tau", flat(0.30));
+    db.put_val("plob_ltr_params", "b_tau", flat(0.02));
+    db.put_val("plob_ltr_params", "a_fprj", flat(1.2));
+    db.put_val("plob_ltr_params", "b_fprj", flat(0.65));
+    return db;
+  }
+
+  // NumCounts3dGpu holds quad::Interp2D-backed device models (HMF_t) that
+  // copy their tables to device memory at construction and segfault if
+  // evaluated directly from host code (same reason as
+  // dsigma_prj_3d_gpu.test.cu) -- evaluate through a trivial kernel
+  // instead, exactly as PAGANI itself invokes the integrand.
+  __global__ void
+  numcounts3d_eval_kernel(NumCounts3dGpu obj, double lt, double zt,
+                          double lnM, double* out)
+  {
+    *out = obj(lt, zt, lnM);
+  }
+
+  double
+  numcounts3d_eval_on_device(NumCounts3dGpu const& obj, double lt, double zt,
+                             double lnM)
+  {
+    double* d_out = nullptr;
+    REQUIRE(cudaMalloc(&d_out, sizeof(double)) == cudaSuccess);
+    numcounts3d_eval_kernel<<<1, 1>>>(obj, lt, zt, lnM, d_out);
+    REQUIRE(cudaDeviceSynchronize() == cudaSuccess);
+    double out = 0.0;
+    REQUIRE(cudaMemcpy(&out, d_out, sizeof(double), cudaMemcpyDeviceToHost) ==
+           cudaSuccess);
+    cudaFree(d_out);
+    return out;
+  }
+}
+
+TEST_CASE("NumCounts3dGpu::set_sample builds its device models and "
+         "operator() returns a finite, non-negative integrand value")
+{
+  auto cfg = make_numcounts3d_cfg(1, 1, 1, 1, 1);
+  NumCounts3dGpu integrand(cfg);
+
+  auto sample = make_numcounts3d_sample();
+  CHECK_NOTHROW(integrand.set_sample(sample));
+  integrand.set_grid_point({0.0});
+
+  double const lt = 20.0, zt = 0.3, lnM = std::log(1.0e14);
+  double const val = numcounts3d_eval_on_device(integrand, lt, zt, lnM);
+  CHECK(std::isfinite(val));
+  CHECK(val >= 0.0);
 }

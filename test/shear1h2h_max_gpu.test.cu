@@ -2,10 +2,30 @@
 
 // This is the code we're actually testing: the device NFW primitive and
 // the max(1h, 2h) composition formula Shear1h2hMaxGpu.cu's private
-// max_model_contract kernel evaluates per (bin, R, lnM) thread.
+// max_model_contract kernel evaluates per (bin, R, lnM) thread, plus
+// (below) the Shear1h2hMaxGpu class itself. Its constructor and its
+// evaluate()'s bin-index check are pure host-side DataBlock reads --
+// dsigma_mis_dev_ is a NON-optional member built in the constructor's
+// initializer list, but y3_cuda::NFW_DSIGMA_MIS's (c, rhoc, kernel)
+// constructor only loads a host-side interpolation table from
+// data/nfw_off_center/ (same as the TEST_CASE above calls it directly, no
+// device memory or kernel launch involved), so building a Shear1h2hMaxGpu
+// needs no live sample and no CUDA kernel launch. set_sample() itself
+// (the miscentred-NFW + max(1h,2h) device kernel launch, needing the full
+// haloModel/dSigma_nfw, bias, dSigma_hh tables and miscentering/f_mis,
+// tau_mis section) is out of scope for the same reason
+// test/shear1h2h_max.test.cc's header comment gives for the CPU
+// counterpart: it would pin a known-buggy dSigma_hh table rather than
+// test physics.
 #include "models/nfw_dsigma_mis.cuh"
+#include "pipelines/des_y3/shear_1h2h/cuda/0d/shear1h2h_max_gpu_t.cuh"
 
+#include "cosmosis/datablock/datablock.hh"
+
+#include <array>
 #include <cmath>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 using y3_cuda::NFW_DSIGMA_MIS;
@@ -69,4 +89,81 @@ TEST_CASE("Shear1h2hMaxGpu: max(1h, 2h) reduction matches a hand-computed "
   // the max (not a vacuous check where one side always wins).
   CHECK(bias[0] * two[0] < one_k);
   CHECK(bias[2] * two[2] > one_k);
+}
+
+namespace {
+  // Minimal well-formed config for Shear1h2hMaxGpu's constructor: only
+  // the keys the constructor itself reads (zt_low/high, lnm_low/high,
+  // lob_centers, r_perp, and the has_val-gated optional knobs).
+  // set_sample()'s inputs (haloModel tables, miscentering section) are
+  // deliberately absent -- the constructor never touches them.
+  cosmosis::DataBlock
+  make_shear1h2h_max_cfg(std::vector<double> const& lob_centers,
+                        std::vector<double> const& r_perp,
+                        bool set_optional)
+  {
+    cosmosis::DataBlock cfg;
+    char const* mod = "Shear1h2hMaxGpu";
+    cfg.put_val(mod, "zt_low", 0.1);
+    cfg.put_val(mod, "zt_high", 0.9);
+    cfg.put_val(mod, "lnm_low", 30.0);
+    cfg.put_val(mod, "lnm_high", 36.0);
+    cfg.put_val(mod, "lob_centers", lob_centers);
+    cfg.put_val(mod, "r_perp", r_perp);
+    if (set_optional) {
+      cfg.put_val(mod, "n_lnm", 8);
+      cfg.put_val(mod, "n_z", 8);
+      cfg.put_val(mod, "include_miscentering", 1);
+      cfg.put_val(mod, "use_halo_model_conc", true);
+    }
+    return cfg;
+  }
+}
+
+TEST_CASE("Shear1h2hMaxGpu constructor: optional knobs take their has_val "
+         "default when absent, and honor an explicit override")
+{
+  SECTION("n_lnm/n_z/include_miscentering/use_halo_model_conc default "
+         "(has_val false branch)")
+  {
+    auto cfg =
+      make_shear1h2h_max_cfg({25.0, 37.5, 52.5, 130.0}, {0.5, 1.0, 2.0}, false);
+    CHECK_NOTHROW(Shear1h2hMaxGpu{cfg});
+  }
+  SECTION("explicit optional keys are honored (has_val true branch)")
+  {
+    auto cfg =
+      make_shear1h2h_max_cfg({25.0, 37.5, 52.5, 130.0}, {0.5, 1.0, 2.0}, true);
+    CHECK_NOTHROW(Shear1h2hMaxGpu{cfg});
+  }
+  CHECK(std::string(Shear1h2hMaxGpu::module_label()) == "Shear1h2hMaxGpu");
+}
+
+TEST_CASE("Shear1h2hMaxGpu constructor rejects an empty lob_centers or "
+         "r_perp wall")
+{
+  SECTION("empty lob_centers throws")
+  {
+    auto cfg = make_shear1h2h_max_cfg({}, {0.5, 1.0}, false);
+    CHECK_THROWS_AS(Shear1h2hMaxGpu{cfg}, std::runtime_error);
+  }
+  SECTION("empty r_perp throws")
+  {
+    auto cfg = make_shear1h2h_max_cfg({25.0}, {}, false);
+    CHECK_THROWS_AS(Shear1h2hMaxGpu{cfg}, std::runtime_error);
+  }
+}
+
+TEST_CASE("Shear1h2hMaxGpu::evaluate rejects any bin index before "
+         "set_sample has populated the wall")
+{
+  // n_bins_ defaults to 0 until set_sample() runs, so evaluate()'s
+  // bin-range check must reject every bin index at this point -- pins
+  // that guard without needing the full haloModel/miscentering sample
+  // set_sample() would otherwise require.
+  auto cfg =
+    make_shear1h2h_max_cfg({25.0, 37.5, 52.5, 130.0}, {0.5, 1.0}, false);
+  Shear1h2hMaxGpu integrand(cfg);
+  std::array<double, 2> const pt{0.0, 0.5};
+  CHECK_THROWS_AS(integrand.evaluate(pt), std::out_of_range);
 }

@@ -88,7 +88,13 @@ if (USE_CUDA)
   target_compile_definitions(shear_prj_frozen_gpu_test PRIVATE
     SHEAR_PRJ_FROZEN_GPU_SO_DEFAULT="$<TARGET_FILE:ShearPrjFrozenGpu>")
   target_link_libraries(shear_prj_frozen_gpu_test PRIVATE cosmosis ${NVTX_LIBRARY} utils models cuda_models cuda_utils ${GSL_LIBRARIES} ${CUBA_LIBRARIES} testmain fmt::fmt)
-  target_include_directories(shear_prj_frozen_gpu_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/externals ${CUBACPP_DIR} ${PAGANI_DIR} ${GSL_INCLUDE_DIR})
+  # CUBA_INCLUDE_DIR: needed now that this test directly #includes
+  # shear_prj_frozen_gpu_t.cuh (for constructor-level coverage), which
+  # pulls in sigma_prj_t.hh -> cubacpp/cubacpp.hh -> cuba.h. The module
+  # target itself gets this via a directory-scoped include_directories()
+  # in its own CMakeLists.txt; this test lives in a different directory
+  # scope, so it needs it listed explicitly.
+  target_include_directories(shear_prj_frozen_gpu_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/externals ${CUBACPP_DIR} ${PAGANI_DIR} ${GSL_INCLUDE_DIR} ${CUBA_INCLUDE_DIR})
   set_target_properties(shear_prj_frozen_gpu_test PROPERTIES POSITION_INDEPENDENT_CODE ON CUDA_ARCHITECTURES ${Y3GCC_TARGET_ARCH})
   target_compile_options(shear_prj_frozen_gpu_test PRIVATE "--expt-relaxed-constexpr" "-lineinfo" "-DCURAND")
   add_test(shear_prj_frozen_gpu_test shear_prj_frozen_gpu_test)

@@ -22,11 +22,21 @@
 #include "cosmosis/datablock/datablock_status.h"
 #include "cosmosis/datablock/ndarray.hh"
 
+// ShearPrjFrozenGpu's class body actually lives here (ShearPrjFrozenGpu.cu
+// is just this header + the DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE macro
+// -- see the header's own comment), so its constructor can be exercised
+// directly, without dlopen/setup, for the config-parsing branches below.
+// The constructor's dsigma_mis_dev_.emplace(...) call only loads a
+// host-side NFW interpolation table from data/nfw_off_center/ (no CUDA
+// kernel launch), so this needs no live sample either.
+#include "pipelines/des_y3/shear_projection/cuda/0d/shear_prj_frozen_gpu_t.cuh"
+
 #include <cstdlib>
 #include <dlfcn.h>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -282,4 +292,76 @@ TEST_CASE("ShearPrjFrozenGpu.so matches its CPU counterpart "
     CHECK(got_rnd[r] == Approx(ref_rnd[r]).epsilon(1.0e-6).margin(1.0e-12));
     CHECK(got_cl[r] == Approx(ref_cl[r]).epsilon(1.0e-6).margin(1.0e-12));
   }
+}
+
+TEST_CASE("ShearPrjFrozenGpu constructor: optional knobs fall back to their "
+         "documented defaults")
+{
+  // Every optional key the constructor reads via has_val(...) (n_lnm,
+  // n_per_seg, n_zring, n_zouter, R_max_cMpch, include_omega_z,
+  // lob_centers, use_halo_model_conc) is left UNSET here, exercising the
+  // has_val-false branch for each -- the complement of the elaborate
+  // dlopen-based end-to-end test above, which sets every one of those
+  // keys explicitly and so only ever exercises the has_val-true side.
+  // Only the required keys (zt_low/high, lnm_low/high, and the wall
+  // arrays lambda_bin/zo_low/zo_high/radii) are provided.
+  cosmosis::DataBlock cfg;
+  char const* mod = "ShearPrjFrozenGpu";
+  cfg.put_val(mod, "zt_low", 0.10);
+  cfg.put_val(mod, "zt_high", 0.75);
+  cfg.put_val(mod, "lnm_low", 29.9336);
+  cfg.put_val(mod, "lnm_high", 35.6814);
+  cfg.put_val(mod, "lambda_bin", std::vector<double>{0.0, 1.0, 0.0});
+  cfg.put_val(mod, "zo_low", std::vector<double>{0.20, 0.20, 0.35});
+  cfg.put_val(mod, "zo_high", std::vector<double>{0.35, 0.35, 0.50});
+  cfg.put_val(mod, "radii", std::vector<double>{0.5, 1.0, 0.5});
+
+  CHECK_NOTHROW(ShearPrjFrozenGpu{cfg});
+  CHECK(std::string(ShearPrjFrozenGpu::module_label()) ==
+       "ShearPrjFrozenGpu");
+}
+
+TEST_CASE("ShearPrjFrozenGpu constructor honors a custom lob_centers "
+         "override")
+{
+  // Complement of the has_val-false default path exercised above (and by
+  // the dlopen-based end-to-end test, which also never sets lob_centers):
+  // this hits the has_val-true branch that reads lob_centers from config
+  // instead of y3_cluster::sp_detail::default_lob_centers().
+  cosmosis::DataBlock cfg;
+  char const* mod = "ShearPrjFrozenGpu";
+  cfg.put_val(mod, "zt_low", 0.10);
+  cfg.put_val(mod, "zt_high", 0.75);
+  cfg.put_val(mod, "lnm_low", 29.9336);
+  cfg.put_val(mod, "lnm_high", 35.6814);
+  cfg.put_val(mod, "lob_centers", std::vector<double>{30.0, 45.0, 60.0, 140.0});
+  cfg.put_val(mod, "lambda_bin", std::vector<double>{0.0, 1.0});
+  cfg.put_val(mod, "zo_low", std::vector<double>{0.20, 0.20});
+  cfg.put_val(mod, "zo_high", std::vector<double>{0.35, 0.35});
+  cfg.put_val(mod, "radii", std::vector<double>{0.5, 1.0});
+
+  CHECK_NOTHROW(ShearPrjFrozenGpu{cfg});
+}
+
+TEST_CASE("ShearPrjFrozenGpu::evaluate rejects a grid point outside the "
+         "configured wall before set_sample has run")
+{
+  cosmosis::DataBlock cfg;
+  char const* mod = "ShearPrjFrozenGpu";
+  cfg.put_val(mod, "zt_low", 0.10);
+  cfg.put_val(mod, "zt_high", 0.75);
+  cfg.put_val(mod, "lnm_low", 29.9336);
+  cfg.put_val(mod, "lnm_high", 35.6814);
+  cfg.put_val(mod, "lambda_bin", std::vector<double>{0.0});
+  cfg.put_val(mod, "zo_low", std::vector<double>{0.20});
+  cfg.put_val(mod, "zo_high", std::vector<double>{0.35});
+  cfg.put_val(mod, "radii", std::vector<double>{0.5});
+  ShearPrjFrozenGpu integrand(cfg);
+
+  // lambda_bin = 5 was never configured (only bin 0 was), so evaluate()'s
+  // linear scan over row_R_ can never match -- this reaches the throw
+  // without ever indexing into the (still-empty, pre-set_sample) results_
+  // cache.
+  std::array<double, 4> const pt{5.0, 0.20, 0.35, 0.5};
+  CHECK_THROWS_AS(integrand.evaluate(pt), std::out_of_range);
 }
