@@ -187,7 +187,6 @@ validation document (the legacy Y1 per-term appendix, unchanged). The values fil
     <tr><td>N_i production-path</td><td><code>num_counts_sel.tsv</code></td><td class="path">camb/numcounts3d</td><td class="path">cp/numcounts_sij_gl</td><td class="num pass">12/12 @ 5%</td></tr>
     <tr><td>P[X] operators (P1, I1, J) — new section</td><td><code>p_operator.tsv</code></td><td>Python richness_selection SelBias._P_operator</td><td class="path">cp/b_sel_marg_{p1,i1,j}</td><td class="num pass">36/36 @ 5% (max 2.3%)</td></tr>
     <tr><td>b̄ sigmoid plateaus — bsel</td><td><code>bsel_plateaus.tsv</code></td><td>scipy.quad ℓᵗ-marginalisation</td><td class="path">cp/b_sel_marginalised/{b_small,b_large}</td><td class="num">20/24 @ 5% (max 9.3%, B_small)</td></tr>
-    <tr><td>b_sel,marg(θ) closure</td><td>—</td><td colspan="2">Retired: the θ table is no longer published (θ-dependence is the analytic sigmoid; plateaus cover the physics)</td><td class="num">n/a</td></tr>
     <tr><td>γ_t^1h — Shear1hGl (des_y3 stand-in)</td><td><code>shear_1h.tsv</code></td><td class="path">camb/shear1h_gl</td><td class="path">cp/shear1h_gl</td><td class="num pass">120/120 @ 5% (max 0.07%)</td></tr>
     <tr><td>Σ_prj pure-emulator — ShearPrjCuhre</td><td><code>sigma_prj.tsv</code></td><td class="path">camb/sigma_prj_cuhre</td><td class="path">cp/sigma_prj_cuhre</td><td class="num pass">120/120 @ 5% (max 0.03%)</td></tr>
     <tr><td>ΔΣ_prj pure-emulator — ShearPrjGl</td><td><code>dsigma_prj.tsv</code></td><td class="path">camb/dsigma_prj_gl</td><td class="path">cp/dsigma_prj_gl</td><td class="num pass">120/120 @ 5% (max 0.07%)</td></tr>
@@ -229,8 +228,11 @@ module, which isn't built on this CPU-only tree.</p>
 </table>
 </div>
 <p style="font-size:.85rem; color:var(--ink-soft);"><code>smoke_full_sel_cp_camb.ini</code> as committed fails
-(<code>cp_camb.py</code> requires <code>sigma8</code>, the values file only carries <code>log1e10As</code>) —
-run here with <code>-v cosmological_parameters.sigma8=0.8238</code> (same widePlanck point used throughout
+(<code>cp_camb.py</code> requires <code>sigma8</code>, the values file only carries <code>log1e10As</code>; the s8
+emulator <code>.npz</code> paths also need pointing at the <code>_s8_</code> variants, and <code>CAMB_EMULATOR_DIR</code>
+needs to be on <code>PYTHONPATH</code> for <code>cp_numpy</code> to import) —
+run here with <code>-p cp_camb.linear_pk_path=... cp_camb.linear_nonu_pk_path=...</code> and
+<code>-v cosmological_parameters.sigma8=0.8238</code> (same widePlanck point used throughout
 this document), a staleness worth fixing separately from the projection-term finding above.</p>
 
 <div class="note">
