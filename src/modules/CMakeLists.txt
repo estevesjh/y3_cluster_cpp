@@ -45,6 +45,10 @@ add_subdirectory(sigma_prj_cpu)
 # used to validate the n_operator_sel family on the same datablock layout.
 add_subdirectory(num_counts_full)
 
+# Arwa Qadi's GPU projection pipeline (upstream gpu_prj_pipeline_costanzi2026).
+# CUDA-only; every target inside is guarded by if (USE_CUDA).
+add_subdirectory(gpu_prj_costanzi2026)
+
 # des_y3 Phase 2 backends (src/pipelines/des_y3/README.md): new
 # maintained implementations live under src/pipelines/des_y3 and are
 # registered here with explicit binary dirs.
@@ -88,6 +92,12 @@ add_subdirectory(
 add_subdirectory(
   ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/cuda/3d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_3d_cuda)
+
+# Arwa Qadi's GPU P[X]/b_sel module, moved here from
+# src/modules/gpu_prj_costanzi2026/shear_prj_module/ (contents unchanged).
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/systematics/selection_bias/cuda/3d
+  ${CMAKE_CURRENT_BINARY_DIR}/systematics_bsel_3d_cuda)
 
 # Many of these are historical
 # add_subdirectory(DESxSPTModule)
