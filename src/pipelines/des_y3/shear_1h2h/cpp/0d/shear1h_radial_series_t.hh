@@ -190,7 +190,19 @@ namespace y3_cluster {
       {
         namespace w = y3_pipelines;
 
-        core_.build_weights(s, /*include_sci=*/true);
+        // Physical mean density (opt-in, issue #22): (1+z)^2 in the
+        // z-weight (folded into Wb below via z_amp_power, so norm_/
+        // ybar_/mu2_/mu3_ inherit it automatically) + the query rescale
+        // R -> R(1+z), r_mis -> r_mis(1+z) in evaluate(). Mirrors
+        // shear1h_gl_t.hh exactly; this backend previously ignored the
+        // flag entirely (silent divergence from its Python twin,
+        // shear1h_radial_series.py, which already implements it).
+        int phys = 0;
+        if (s.has_val("haloModel", "one_halo_physical_density"))
+          s.get_val("haloModel", "one_halo_physical_density", phys);
+        phys_density_ = (phys != 0);
+        core_.build_weights(s, /*include_sci=*/true,
+                            phys_density_ ? 2.0 : 0.0);
 
         // Required: no fallback to the fiducial defaults — a pipeline
         // that has not published the miscentering section must fail
@@ -246,8 +258,12 @@ namespace y3_cluster {
         if (b < 0 || static_cast<std::size_t>(b) >= core_.n_bins())
           throw std::out_of_range(
             "Shear1hRadialSeries: bin_index outside sel_function range");
-        return {table_.series(R, r_mis_[b], norm_[b], ybar_[b], mu2_[b],
-                              mu3_[b], f_mis_, rho_ref_, ell_max_)};
+        // Query-radius half of the physical-density identity: R and
+        // r_mis both scale by q=1+z_eff(b) (the amplitude half already
+        // rode in Wb via z_amp_power in set_sample).
+        double const q = phys_density_ ? 1.0 + core_.z_eff(b) : 1.0;
+        return {table_.series(R * q, r_mis_[b] * q, norm_[b], ybar_[b],
+                              mu2_[b], mu3_[b], f_mis_, rho_ref_, ell_max_)};
       }
 
       static char const*
@@ -282,6 +298,7 @@ namespace y3_cluster {
 
       double f_mis_{0.0};
       double rho_ref_{0.0};
+      bool phys_density_{false};
       std::vector<double> norm_, ybar_, mu2_, mu3_, r_mis_;
     };
 
