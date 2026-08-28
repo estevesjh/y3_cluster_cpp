@@ -92,7 +92,7 @@ Pinned 180-point wall fiducial measurements; cost is per sample.
 | --- | --- | ---: | --- |
 | `0d` | [exact-z Python (3-dim region-split GL)](#the-0d-backends) | 270 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (whose own convergence is open — the region split is the higher-precision side); 1.6e-11 vs exact evaluator, 5.5e-5 vs frozen production (separate baselines) |
 | `0d` | [exact-z C++ (3-dim region-split GL)](#the-0d-backends) | 154 ms | same vs-3d relation as the Python row; 9.9e-12 vs exact evaluator (separate baseline) |
-| `0d` | [frozen CUDA/A100](#the-0d-backends) | 16 ms (measured 2026-08-26, full 180-pt wall) | broken: `cl` channel is uninitialized/mis-indexed device memory (up to 100% off, some NaN/denormal) — [known defect](../../../docs/known_issues/frozen_physics_signed_rnd_defect.md); `rnd` matches the CPU frozen module to 2.6e-12 |
+| `0d` | [frozen CUDA/A100](#the-0d-backends) | 16 ms (measured 2026-08-26, full 180-pt wall) | **FIXED, verified 2026-08-28 on Perlmutter GPU**: `vals`/`rnd`/`cl` all agree with the CPU frozen module to ~1e-10 across the full 180-pt wall (issue #24 closed) |
 | `2d` | [`ShearPrjCuhre` C++ (fixed log-GL angle, adaptive (z, lnM))](#the-2d-backend) | ~72 s/pt (measured 2026-08-26, 3-pt sample; full 180-pt wall ≈ 3.6 h, not run interactively) | not yet measured |
 | `3d` | [PAGANI CUDA/A100, eps_rel=1e-3](#the-3d-backend) | 95 s | Reference-class diagnostic (3d); median 9.5e-4, maximum 2.2% vs region-split GL; convergence open |
 | `3d` | [PAGANI CUDA/A100, eps_rel=1e-4](#the-3d-backend) | 463 s | Lower requested tolerance does not remove the missed-feature risk |
@@ -122,15 +122,22 @@ projected surface-density and shear triples.
 | --- | --- | ---: | --- |
 | `0d` | Python exact-z (3-dim region-split GL) | 270 ms/sample | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open; the region split is the higher-precision side); $1.6\times10^{-11}$ vs exact evaluator, $5.5\times10^{-5}$ vs frozen production (separate baselines) |
 | `0d` | C++ exact-z (3-dim region-split GL) | 154 ms/sample | same vs-3d relation as the Python row; $9.9\times10^{-12}$ vs exact evaluator (separate baseline) |
-| `0d` | CUDA frozen path / A100 | 16 ms/sample (measured 2026-08-26, full 180-pt wall) | broken: see below |
+| `0d` | CUDA frozen path / A100 | 16 ms/sample (measured 2026-08-26, full 180-pt wall) | **FIXED**, verified 2026-08-28 -- see below |
 
-The frozen production CPU path is about 82 ms/sample. The CUDA port's
-`rnd` channel matches the CPU frozen module to 2.6e-12 (the device
-ΔΣ_mis cache and mean-field sweep are correct), but its `cl` channel
-reads from uninitialized/mis-indexed device memory (NaNs on part of the
-wall, denormal garbage elsewhere, up to 100% off where finite) — it is
-NOT currently a faithful acceleration of the frozen definition. See
-[docs/known_issues/frozen_physics_signed_rnd_defect.md](../../../docs/known_issues/frozen_physics_signed_rnd_defect.md#second-observation-2026-08-24-the-gpu-ports-cl-channel-is-broken-outright).
+The frozen production CPU path is about 82 ms/sample. Two bugs in the
+GPU port were root-caused and fixed (wrong ρ_ref/concentration in the
+`cl`-channel amplitude anchor; a hand-rolled b_sel(θ) zob-interpolation
+that overran its arrays past the first z-slice -- replaced with the
+exact `BSelBins::at` lookup the CPU counterpart uses). Verified on a
+Perlmutter GPU node 2026-08-28: `test/shear_prj_frozen_gpu_test` passes
+completely, and an independent live-pipeline comparison (both modules
+run fresh in the same `cosmosis` process) shows all three channels
+agreeing with the CPU frozen module to ~1e-10 on the full 180-point
+wall (`vals` max rel diff 9.3e-11, `rnd` 1.2e-11, `cl` 8.8e-11). It is
+now a faithful, verified GPU acceleration of the frozen definition.
+See [issue #24](https://github.com/estevesjh/y3_cluster_cpp/issues/24)
+and
+[docs/known_issues/frozen_physics_signed_rnd_defect.md](../../../docs/known_issues/frozen_physics_signed_rnd_defect.md#resolved-2026-08-28-verified-on-perlmutter-gpu).
 
 ### GL nodes and weights
 

@@ -101,8 +101,36 @@ device-buffer indexing issue as originally suspected:
    instance (`bsel_.emplace(sample)`) + `.at(lob_bin, zob)` in the
    per-slice host loop, matching the CPU reference exactly (same
    `lobc = bsel_bin.lob`, `Bs/Bl = bsel_bin.b_small/b_large`, no
-   interpolation). **This is host-side C++ inside a `.cuh` file that
-   only builds with `USE_CUDA=On` (Perlmutter) -- not yet built or
-   tested; `test/shear_prj_frozen_gpu.test.cu` needs a Perlmutter run
-   to confirm the `cl` channel is clean (no more NaN/denormal) and
-   matches the CPU frozen module.**
+   interpolation).
+
+## RESOLVED (2026-08-28, verified on Perlmutter GPU)
+
+Both fixes above were built and run for the first time on a
+GPU-equipped Perlmutter node. `test/shear_prj_frozen_gpu_test` now
+**passes completely** (0 failures, was 24/74 assertions failing) once
+`cosmosis-models/real_pipeline_extract_prj2h_output` is regenerated
+from the *correct* working directory
+(`cd cosmosis-models && cosmosis real_pipeline_extract_prj2h.ini` --
+the dump must be created with `cosmosis-models/` as cwd since the
+ini's `save_dir` is a relative path; running from the repo root instead
+silently writes a second, unrelated copy at the repo root and leaves
+the stale `cosmosis-models/`-relative dump the test actually reads
+untouched, which is what made the fix look broken on a first,
+naively-invoked re-test).
+
+Independent live-pipeline confirmation (`ShearPrjFrozenPhysics` and
+`ShearPrjFrozenGpu` both run fresh in the same `cosmosis` process, no
+dump involved -- see `cosmosis-models/des_y3_shear_prj_frozen_gpu_cost.ini`):
+on the full 180-point production wall, all three channels now agree
+between CPU and GPU to machine precision --
+`vals`: max rel diff 9.3e-11, `rnd`: 1.2e-11, `cl`: 8.8e-11 (medians
+all ~4.6e-12). No NaN, no denormal, no outliers.
+
+**Impact**: `ShearPrjFrozenGpu` is no longer broken. It is a faithful,
+verified GPU acceleration of `ShearPrjFrozenPhysics` (the frozen
+production CPU path) across the full `vals`/`rnd`/`cl` triple, at
+~16 ms/sample vs ~82 ms/sample CPU on the same wall. The "frozen
+`rnd`/`vals`" caveat under "Impact" above (signed-kernel cancellation
+making frozen `rnd` untrustworthy relative to the *exact* evaluator)
+is unrelated to this GPU-specific bug and still applies to both the
+CPU and GPU frozen backends equally.
