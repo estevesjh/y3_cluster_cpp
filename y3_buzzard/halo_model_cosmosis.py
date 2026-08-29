@@ -135,6 +135,25 @@ def setup(options):
     except Exception:
         c_amp = 1.0
 
+    # concentration_fixed: bypass Child18 c(M, z_halo) entirely and use this
+    # single mass-independent value for the 1-HALO TERM ONLY (published
+    # concentration and Sigma_nfw/dSigma_nfw). Default NaN = disabled
+    # (Child18 + concentration_amplitude, as above). shearPrj/Costanzi-2026
+    # keeps the concentration-mass relation regardless -- this knob only
+    # touches lensModel.c ahead of first_halo_term. Mutually exclusive with
+    # concentration_amplitude (ambiguous which one the fixed value already
+    # includes).
+    try:
+        c_fixed = float(options.get_double(section, "concentration_fixed",
+                                           default=np.nan))
+    except Exception:
+        c_fixed = np.nan
+    if np.isfinite(c_fixed) and c_amp != 1.0:
+        raise ValueError(
+            "halo_model: concentration_fixed and concentration_amplitude "
+            "are mutually exclusive -- concentration_fixed already IS the "
+            "final 1-halo concentration value")
+
     # one_halo_z_density: redshift at which the 1-halo DENSITY normalisation is
     # evaluated. Default 0.0 = the frozen COMOVING rho_m0 (the pipeline default;
     # first_halo_term(z=0)). Set >0 to use the PHYSICAL mean density
@@ -179,7 +198,7 @@ def setup(options):
                   Radii_min, Radii_max, Radii_bins,
                   M_min, M_max, M_bins,
                   compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
-                  z_density, physical_density)
+                  z_density, physical_density, c_fixed)
     return params_out
     
 
@@ -190,7 +209,7 @@ def execute(block, config):
      Radii_min, Radii_max, Radii_bins,
      M_min, M_max, M_bins,
      compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
-     z_density, physical_density) = config
+     z_density, physical_density, c_fixed) = config
 
     # cosmo parameters
     omega_m = block[cosmo_names, "omega_m"]
@@ -306,20 +325,26 @@ def execute(block, config):
         block[section_name, "k"] = k_h
 
     if compute_lensing_1h:
-        # one_halo_z enters ONLY the Child18 concentration (the issue-#3
-        # defect). The density normalisation must stay the COMOVING
-        # rho_m0: first_halo_term scales rho by (1+z)^3 (physical), and
-        # the published tables are consumed as comoving -- evaluating the
-        # whole term at z>0 would inflate DSigma by up to (1+z)^2
-        # (measured +65% at the innermost radius for z=0.46). Setting
-        # self.c first makes first_halo_term skip its own z=0 recompute.
-        lensModel.concentration_at_M(M, z=one_halo_z,
-                                     model_name="Child18")
-        # Buzzard concentration boost: scale c BEFORE first_halo_term (which
-        # reuses the pre-set lensModel.c) so the factor lands on the 1-halo
-        # term and the published concentration alike.  c_amp=1.0 => Child18.
-        if c_amp != 1.0:
-            lensModel.c = lensModel.c * c_amp
+        if np.isfinite(c_fixed):
+            # concentration_fixed: mass-independent 1-halo concentration,
+            # bypassing Child18 entirely. Pre-setting self.c makes
+            # first_halo_term skip its own concentration_at_M call.
+            lensModel.c = c_fixed * np.ones_like(M)
+        else:
+            # one_halo_z enters ONLY the Child18 concentration (the issue-#3
+            # defect). The density normalisation must stay the COMOVING
+            # rho_m0: first_halo_term scales rho by (1+z)^3 (physical), and
+            # the published tables are consumed as comoving -- evaluating the
+            # whole term at z>0 would inflate DSigma by up to (1+z)^2
+            # (measured +65% at the innermost radius for z=0.46). Setting
+            # self.c first makes first_halo_term skip its own z=0 recompute.
+            lensModel.concentration_at_M(M, z=one_halo_z,
+                                         model_name="Child18")
+            # Buzzard concentration boost: scale c BEFORE first_halo_term (which
+            # reuses the pre-set lensModel.c) so the factor lands on the 1-halo
+            # term and the published concentration alike.  c_amp=1.0 => Child18.
+            if c_amp != 1.0:
+                lensModel.c = lensModel.c * c_amp
         # z_density=0 -> comoving rho_m0 (default); z_density>0 -> physical
         # rho_m(z)=rho_m0(1+z)^3 (concentration stays fixed, pre-set above).
         lensModel.first_halo_term(M, z=z_density, conc_model_name="Child18")

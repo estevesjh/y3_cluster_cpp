@@ -449,20 +449,23 @@ projected-ΔΣ correction still open). See
 handling is exercised by
 `test/halo_model.test.py::TestFirstHaloTermRedshiftHandling`.
 
-### Known model defect: radial_series raw ΔΣ disagrees with full_ltmz by 56-86%
+### RESOLVED: radial_series raw ΔΣ disagreed with full_ltmz by 56-86% (issue #5, closed 2026-08-27)
 
 `nfw_profile_family.py` hardcodes `CONC = 4.0` for both the profile
 shape and its amplitude normalization (`y_of_lnM`, `A0_of_y`), instead
 of the per-sample Child18 concentration full_ltmz/fast_mass/production
-interpolate from `haloModel/dSigma_nfw`. This is a genuine amplitude
-offset (already 56-86% at the innermost radius, growing with richness
-bin/mass — real concentration moves further from 4 as mass increases),
-not just a shape/curvature difference — a further ~10% shape residual
-remains on top once the amplitude offset is normalized out (the number
-`validate_radial_series.py`'s own "check 4" already reported). See
+interpolate from `haloModel/dSigma_nfw`. The dominant 56-86% offset was
+a density-convention mismatch (rho_crit/200c vs rho_m0/200m), fixed by
+the 2026-08-24 unified `rho_m_ref` convention. The residual
+(-10.6%..+3.9%, concentration-shape signature) is the fixed-c=4-family
+vs Child18 c(M) mismatch — owner-decided (2026-08-27) as an accepted,
+permanent approximation: the project's 1-halo direction is fixed
+concentration, not Child18 c(M) (see the `concentration_fixed` knob in
+`halo_model.py`/`halo_model_cosmosis.py`). See
 `docs/known_issues/radial_series_vs_full_ltmz_defect.md`. Pinned by
 `test/shear1h_cross_backend.test.py::test_cpp_radial_series_matches_cpp_full_ltmz`
-(kept at the project's default 1e-3 tolerance).
+(kept at the project's default 1e-3 tolerance; tolerance/red-pin wording
+is a follow-up, not yet updated).
 
 ### Known model defect: NFW_DSIGMA_MIS misses one cluster_toolkit point by ~0.5%
 
