@@ -81,31 +81,47 @@ one is missing (`ModuleNotFoundError`) if you skip this.
 
 ## 3. The compiler-override gotcha — read this first
 
-`c-compiler`/`cxx-compiler`/`fortran-compiler` install `clang`/`clang++`/
-`gfortran` **into the conda env** (`$CONDA_PREFIX/bin/clang`, matching the
-compilers GSL/fftw/mpich were themselves built with), but on this
-platform/channel combination **no `activate.d` script exports `CC`/`CXX`/
-`FC` to point at them**. If your shell profile already exports
-`CC=/opt/homebrew/opt/llvm/bin/clang` (a common Homebrew-llvm habit), that
-leaks straight through `conda activate` and you silently build everything
-against the wrong compiler — defeating the entire point of matching
-conda-forge's own toolchain (risk: ABI/`libgfortran` mismatches between
-Homebrew-built and conda-forge-built objects).
+```{admonition} The compiler-override gotcha
+:class: warning
 
-**Always set these explicitly, in every shell, before building anything:**
+**What happens:** `c-compiler`/`cxx-compiler`/`fortran-compiler` install
+`clang`/`clang++`/`gfortran` **into the conda env**
+(`$CONDA_PREFIX/bin/clang`) — matching the compilers GSL/fftw/mpich were
+themselves built with. But on this platform/channel combination, **no
+`activate.d` script exports `CC`/`CXX`/`FC`** to point at them.
 
+**Why that's a problem:** if your shell profile already exports something
+like `CC=/opt/homebrew/opt/llvm/bin/clang` (a common Homebrew-llvm habit),
+that value leaks straight through `conda activate` — unlike `PATH`, `CC`
+isn't reset on activation. You'll silently build against the wrong
+compiler, defeating the entire point of matching conda-forge's own
+toolchain.
+
+**The risk:** ABI / `libgfortran` mismatches between Homebrew-built and
+conda-forge-built objects — the build won't necessarily fail loudly, it
+can just produce subtly wrong results.
+
+**The fix — set these explicitly, in every shell, before building
+anything:**
+```
 ```bash
 export CC="${CONDA_PREFIX}/bin/clang"
 export CXX="${CONDA_PREFIX}/bin/clang++"
 export FC="${CONDA_PREFIX}/bin/gfortran"
 ```
 
+
 ## 4. Clone cosmosis / CSL / cuba / cubacpp at pinned commits
 
 ```bash
-export TOP_DIR="$HOME/cosmosis_y3"
+export TOP_DIR="$HOME/cosmosis_y3"   # change to wherever you'd rather keep the pipeline repos
 export INTEGRATION_TOOLS_DIR="${TOP_DIR}/y3_pipe_under"
 mkdir -p "$TOP_DIR" "$INTEGRATION_TOOLS_DIR"
+
+# Point this at the y3_cluster_cpp working tree you already have checked
+# out (see the warning below) — needed starting in the next step, for the
+# CSL patch.
+export Y3_CLUSTER_CPP_DIR="/path/to/this/working/tree"
 
 git clone https://github.com/annis/cosmosis.git "${TOP_DIR}/cosmosis"
 git -C "${TOP_DIR}/cosmosis" checkout bba5bed52ea8830f82cdcca0108b584bb368d8c5
@@ -136,7 +152,7 @@ A small, vendored patch to `boltzmann/camb/camb_interface.py` (drops a
 in this repo:
 
 ```bash
-CSL_DIR="${TOP_DIR}/cosmosis-standard-library"
+export CSL_DIR="${TOP_DIR}/cosmosis-standard-library"
 git -C "$CSL_DIR" apply "$Y3_CLUSTER_CPP_DIR/docs/patches/csl_camb_interface.patch"
 ```
 
@@ -146,7 +162,7 @@ this pipeline's `cp_camb` CosmoPower-emulator path doesn't touch it.
 ## 6. Build CUBA
 
 ```bash
-CUBA_DIR="${INTEGRATION_TOOLS_DIR}/cuba"
+export CUBA_DIR="${INTEGRATION_TOOLS_DIR}/cuba"
 cd "$CUBA_DIR"
 CC="$CC" ./configure
 make
@@ -186,19 +202,16 @@ export OMP_NUM_THREADS=4
 export USER_FFLAGS="-fallow-argument-mismatch"   # see below
 ```
 
-`USER_FFLAGS` is the hook `config/compilers.mk` reads for exactly this
-kind of situation, but it isn't enough on its own: the bundled multinest
-Fortran source has a genuine bug (not a compiler-strictness false
-positive) that gfortran ≥ 10 refuses to compile at all. In
-`cosmosis/cosmosis/samplers/multinest/multinest_src/nested.f90`, `ic_n`
-is declared `integer ic_n(1)` (a rank-1 array), and one `MPI_BCAST` call
-passes the raw array expression `ic_n+1` where a scalar `INTEGER` count
-is required:
+`USER_FFLAGS` alone won't fix this: the bundled multinest Fortran source
+has a real bug that gfortran >= 10 rejects outright. To fix it:
 
+Open `${TOP_DIR}/cosmosis/cosmosis/samplers/multinest/multinest_src/nested.f90`,
+find the line:
 ```fortran
-! before (rejected by gfortran >= 10's stricter generic-interface check):
 call MPI_BCAST(ic_done(0:ic_n(1)),ic_n+1,MPI_LOGICAL,0,MPI_COMM_WORLD,errcode)
-! after (the clearly-intended scalar):
+```
+and change it to:
+```fortran
 call MPI_BCAST(ic_done(0:ic_n(1)),ic_n(1)+1,MPI_LOGICAL,0,MPI_COMM_WORLD,errcode)
 ```
 
@@ -223,7 +236,8 @@ Only build what your `.ini` actually loads — building the entire CSL is
 unnecessary and more likely to fail on modules you don't need.
 
 ```bash
-CSL_DIR="${TOP_DIR}/cosmosis-standard-library"
+export CSL_DIR="${TOP_DIR}/cosmosis-standard-library"
+cd $CSL_DIR
 for mod in utility/consistency mass_function/mf_tinker structure/growth_factor; do
   make -C "${CSL_DIR}/${mod}"
 done
@@ -234,7 +248,7 @@ fine. Add `boltzmann/camb`, `utility/sample_sigma8`, `boltzmann/sigma_cpp`
 too if your pipeline uses CAMB directly instead of `cp_camb`'s CosmoPower
 emulator.)
 
-## 9. Configure + build y3_cluster_cpp
+## 9. Configure + build y3_cluster_cpp (See my comments)
 
 ```bash
 export CUBA_CPP_DIR="${INTEGRATION_TOOLS_DIR}/cubacpp"
@@ -264,7 +278,7 @@ cmake -DPython3_EXECUTABLE="${CONDA_PREFIX}/bin/python3.9" .
 ```
 ````
 
-## 10. ctest
+## 10. ctest (See my comments)
 
 ```bash
 export COSMOSIS_SRC_DIR="${TOP_DIR}/cosmosis/cosmosis"
@@ -282,7 +296,7 @@ see on any platform, not macOS-specific).
 
 ```bash
 cat > "${TOP_DIR}/cosmosis_init_macos.sh" <<'EOF'
-export TOP_DIR=$HOME/cosmosis_y3
+export TOP_DIR=$HOME/cosmosis_y3  # change to wherever you'd rather keep the pipeline repos 
 export COSMOSIS_REPO_DIR=${TOP_DIR}/cosmosis
 export CSL_DIR=${TOP_DIR}/cosmosis-standard-library
 export COSMOSIS_STANDARD_LIBRARY=${CSL_DIR}
@@ -314,31 +328,23 @@ EOF
 Source it in every new shell: `source ~/cosmosis_y3/cosmosis_init_macos.sh`.
 
 ## Known gaps
-
-- **No CUDA, no PAGANI.** All `*Gpu.so` modules and the `gpuintegration`
-  reference backends are unavailable — expected, not a bug. The
-  `fast_mass` C++ path (this project's actual production speed target)
-  never needed them.
-- **CosmoSIS `.ini` pipelines live in sibling repos**, not this tree (see
-  the top-level `CLAUDE.md`). Running an actual pipeline additionally
-  needs `DES_CLUSTER_NERSC_DIR` (or whichever sibling repo's values/data
-  files the `.ini` references) and `Y3_CLUSTER_CPP_DIR` on `PYTHONPATH`
-  (for `y3_buzzard.*` imports).
 - **Legacy Y1-era modules** (`gt_card_cpu`, `mass_y1`, `y1_analysis`) had
   a pre-existing undefined-symbol bug (`INT_LC_LT_DES_t`'s static lookup
   tables were never wired into the `models` library) that Linux's laxer
   `.so` linking silently tolerated. Already fixed upstream in this repo
   (`src/models/CMakeLists.txt`) — nothing to do on a current clone.
 
+
 ## Fetching data files that aren't in git
 
-Some sibling repos deliberately keep large trained artifacts out of git
-(e.g. `camb-emulator`'s CosmoPower `.npz` emulator weights — see that
-repo's own `.gitignore`/commit messages). If a pipeline module fails to
-find one of these, it needs pulling from wherever it's actually stored
-(NERSC `$PSCRATCH` in this project's case) via `rsync`/`scp` over your
-existing NERSC SSH config — there's nothing macOS-specific here beyond
-"this file lives on a remote filesystem, go get it."
+Some sibling repos keep large files out of git (e.g. camb-emulator's
+CosmoPower `.npz` weights). If a module can't find one, pull it from
+where it's actually stored — in this project, NERSC `$PSCRATCH`. For
+example, to run the pipeline with the camb-emulator:
+
+```bash
+rsync -avz <nersc_user>@perlmutter.nersc.gov:$PSCRATCH/path/to/emulator_weights.npz ./local/path/
+```
 
 ## Troubleshooting
 

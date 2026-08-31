@@ -7,26 +7,6 @@ emulator of the linear matter power spectrum, and publishes background
 distances via astropy — no downstream module needs CAMB at all. One
 emulator forward pass per sample.
 
-## Script
-
-- CosmoSIS interface: [`src/modules/cp_camb/cp_camb.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/modules/cp_camb/cp_camb.py)
-  (`y3_cluster_cpp` @ `d7feb75`), loaded by CosmoSIS as a Python module.
-- **The emulator code itself lives in the external
-  [estevesjh/camb-emulator](https://github.com/estevesjh/camb-emulator)
-  repository** (active pipeline under
-  [`camb-for-cp/`](https://github.com/estevesjh/camb-emulator/tree/42f20382e619161b214add3961ce5c7a325b4401/camb-for-cp)
-  @ `42f2038`):
-  - [`cp_numpy.py`](https://github.com/estevesjh/camb-emulator/blob/42f20382e619161b214add3961ce5c7a325b4401/camb-for-cp/cp_numpy.py)
-    — the numpy-only inference wrapper `cp_camb.py` imports at runtime
-    (no TensorFlow dependency inside CosmoSIS);
-  - `models/` — the trained CosmoPower artifacts (`.pkl` + exported
-    `.npz`, produced by
-    [`export_cosmopower_numpy.py`](https://github.com/estevesjh/camb-emulator/blob/42f20382e619161b214add3961ce5c7a325b4401/camb-for-cp/export_cosmopower_numpy.py));
-  - `configs/`, `scripts/`, `slurm/` — the CAMB training-set generation
-    (Latin-hypercube sampling, CAMB runs, cleaning) and GPU training;
-  - [`PIPELINE.md`](https://github.com/estevesjh/camb-emulator/blob/42f20382e619161b214add3961ce5c7a325b4401/camb-for-cp/PIPELINE.md)
-    — the step-by-step instructions to run CAMB and retrain the
-    emulators on Perlmutter, end to end.
 
 ## Numerical framework
 
@@ -55,6 +35,27 @@ percentile $\lesssim 1.5\%$, on both networks. Downstream validation —
 residuals propagated to the number counts —
 in [emulator_validation.tex](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/emulator_validation.tex)
 and `camb-for-cp/hmf_report/`.
+
+## Script
+
+- CosmoSIS interface: [`src/modules/cp_camb/cp_camb.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/modules/cp_camb/cp_camb.py)
+  (`y3_cluster_cpp` @ `d7feb75`), loaded by CosmoSIS as a Python module.
+- **The emulator code itself lives in the external
+  [estevesjh/camb-emulator](https://github.com/estevesjh/camb-emulator)
+  repository** (active pipeline under
+  [`camb-for-cp/`](https://github.com/estevesjh/camb-emulator/tree/42f20382e619161b214add3961ce5c7a325b4401/camb-for-cp)
+  @ `42f2038`):
+  - [`cp_numpy.py`](https://github.com/estevesjh/camb-emulator/blob/42f20382e619161b214add3961ce5c7a325b4401/camb-for-cp/cp_numpy.py)
+    — the numpy-only inference wrapper `cp_camb.py` imports at runtime
+    (no TensorFlow dependency inside CosmoSIS);
+  - `models/` — the trained CosmoPower artifacts (`.pkl` + exported
+    `.npz`, produced by
+    [`export_cosmopower_numpy.py`](https://github.com/estevesjh/camb-emulator/blob/42f20382e619161b214add3961ce5c7a325b4401/camb-for-cp/export_cosmopower_numpy.py));
+  - `configs/`, `scripts/`, `slurm/` — the CAMB training-set generation
+    (Latin-hypercube sampling, CAMB runs, cleaning) and GPU training;
+  - [`PIPELINE.md`](https://github.com/estevesjh/camb-emulator/blob/42f20382e619161b214add3961ce5c7a325b4401/camb-for-cp/PIPELINE.md)
+    — the step-by-step instructions to run CAMB and retrain the
+    emulators on Perlmutter, end to end.
 
 ## CosmoSIS setup
 

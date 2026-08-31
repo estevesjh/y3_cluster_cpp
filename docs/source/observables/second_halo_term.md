@@ -1,7 +1,5 @@
 # Second Halo Term
 
-`Python` (producer) · `y3_cluster_cpp` (`y3_buzzard/`) · `Lensing`
-
 The conventional two-halo term — correlated matter around the cluster,
 scaled by its plain halo bias — is, in the paper's language, the
 **unselected-bias limit** of the selection-affected two-halo term
@@ -22,13 +20,6 @@ tables. Skipping the branch saves 200–300 ms per sample. The
 conventional $1h{+}2h$ **max-model composition is available as a
 documented model option**, `Shear1h2hMax` — see {doc}`../variants`.
 ```
-
-## Script
-
-- Producer: [`y3_buzzard/halo_model_cosmosis.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/y3_buzzard/halo_model_cosmosis.py)
-  with the Hankel-transform backend in `y3_buzzard/haloModel.py`
-  (class `ct_2hTerm`, driving the `cluster_toolkit`
-  $P \to \xi \to \Sigma \to \Delta\Sigma$ chain).
 
 ## Numerical framework
 
@@ -117,6 +108,14 @@ the term from `BiasWeightedSel` + `xi_nl` directly, or use
 
 Full derivation and the composition comparison:
 {doc}`../math/index`.
+
+
+## Script
+
+- Producer: [`y3_buzzard/halo_model_cosmosis.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/y3_buzzard/halo_model_cosmosis.py)
+  with the Hankel-transform backend in `y3_buzzard/haloModel.py`
+  (class `ct_2hTerm`, driving the `cluster_toolkit`
+  $P \to \xi \to \Sigma \to \Delta\Sigma$ chain).
 
 ## CosmoSIS setup
 

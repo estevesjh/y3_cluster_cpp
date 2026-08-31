@@ -1,28 +1,50 @@
 # One-Halo Lensing
 
-`C++` · `y3_cluster_cpp` (`src/pipelines/des_y3`) · `Cluster observable` · module `Shear1hFastMass` · `~28 ms/sample`
-
 Computes the population-integrated one-halo tangential shear
 $N_i[\gamma_t^{1h,\rm full}](R)$ — the centred + miscentred NFW profile
 weighted by the same halo population as the number counts. The likelihood
 divides by `numcounts_fast_mass/vals` to form the stacked per-cluster
 profile and adds the projection term.
 
-## Script
+## Numerical framework
 
-- Model: [`src/models/n_operator_sel_gl_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/models/n_operator_sel_gl_t.hh)
-  (`nosel_gl_detail::SelGLCore`, shared with {doc}`number_counts`) +
-  [`src/modules/num_counts_sel/lensing_weights.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/modules/num_counts_sel/lensing_weights.hh)
-  (unchanged production model, immutable dependency).
-- Module driver: [`src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc)
-  (`DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE`) — bitwise-equivalent to
-  DES Y1's `Shear1hMisSel.so` ({doc}`../variants`), own module label
-  and output section.
-- Compiled library loaded by CosmoSIS:
-  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_fast_mass_cpp/Shear1hFastMass.so`.
-- Disk tables: `data/nfw_off_center/*gamma*` — $1000 \times 1000$ log-log
-  grids of the gamma-kernel miscentred NFW in
-  $(R/r_s, R_{\rm mis}/r_s)$, loaded once at module construction.
+**The operator: ** The full integral — the population operator $N_i[f]$
+({doc}`number_counts`) with the miscentering-mixture shear weight:
+
+$$N_i[\gamma_t^{1h,\rm full}](R) = \int d\ln M \int dz\;
+\Omega(z)\,\frac{dV}{d\Omega\,dz}\,\frac{dn}{d\ln M}(M,z)\,
+S_{ij}(\ln M, z)\;\gamma_t^{1h,\rm full}(R; M, z),$$
+
+$$\gamma_t^{1h,\rm full}(R; M, z) =
+\Big[(1 - f_{\rm mis})\,\Delta\Sigma_{\rm NFW}(R, M)
++ f_{\rm mis}\,\Delta\Sigma_{\rm mis}\big(R, M;\, \tau_{\rm mis} R_\lambda\big)\Big]\,
+\langle\Sigma_{\rm crit}^{-1}\rangle(z),$$
+
+**Source and calibration: ** The count-weighted lensing operator follows
+[DES Cluster et al. 2023](https://ui.adsabs.harvard.edu/abs/2023arXiv230906593A/abstract)
+(arXiv:[2309.06593](https://arxiv.org/abs/2309.06593)), the reference
+paper for this software suite, using the DES Y3 redMaPPer miscentring
+calibration of Kelly et al. 2024 (an updated analysis of Zhang et al.
+2019). Full citations and the gamma offset kernel derivation:
+{doc}`../math/index`, §"One-halo lensing and miscentering".
+
+**Target-cluster vs. neighbouring-halo miscentering: ** This module uses
+**target-cluster miscentering** — the assigned redMaPPer centre offset
+from the true halo centre, with $(f_{\rm mis}, \tau_{\rm mis})$ as
+nuisance parameters — distinct from the parameter-free neighbouring-halo
+offset inside the two-halo term ({doc}`shear_projection`). Both mixture
+pieces are linear in $\Delta\Sigma$, so the one-halo + projection sum in
+the likelihood is exact (tangential shear, not reduced shear —
+{doc}`../math/index`).
+
+**Performance: ** Evaluation is fixed Gauss–Legendre with the redshift
+axis contracted once per sample into mass weights $W_{ij}(\ln M)$; each
+of the 180 wall points is then one 1-D mass sum ($\sim 16\times$ faster
+than the retired per-(bin, $R$) Cuhre path, deterministic cost). The
+complete step-by-step recipe lives in {doc}`../numerics/index`,
+§"The number-counts and one-halo lensing recipe, step by step". Setting
+`miscentering/f_mis = 0` recovers the centred-only `Shear1hSel` result
+({doc}`../variants`).
 
 ## DES Y3 implementations
 
@@ -44,52 +66,22 @@ loaded, never regenerated, during sampling. The `full_ltmz` cells are the
 accuracy references; the fast and series paths retain their own documented
 physics and interpolation approximations.
 
-## Numerical framework
 
-The full integral — the population operator $N_i[f]$
-({doc}`number_counts`) with the miscentering-mixture shear weight:
+## Script
 
-$$N_i[\gamma_t^{1h,\rm full}](R) = \int d\ln M \int dz\;
-\Omega(z)\,\frac{dV}{d\Omega\,dz}\,\frac{dn}{d\ln M}(M,z)\,
-S_{ij}(\ln M, z)\;\gamma_t^{1h,\rm full}(R; M, z),$$
-
-$$\gamma_t^{1h,\rm full}(R; M, z) =
-\Big[(1 - f_{\rm mis})\,\Delta\Sigma_{\rm NFW}(R, M)
-+ f_{\rm mis}\,\Delta\Sigma_{\rm mis}\big(R, M;\, \tau_{\rm mis} R_\lambda\big)\Big]\,
-\langle\Sigma_{\rm crit}^{-1}\rangle(z),$$
-
-The count-weighted lensing operator and its miscentering treatment
-follow
-[DES Cluster et al. 2023](https://ui.adsabs.harvard.edu/abs/2023arXiv230906593A/abstract)
-(arXiv:[2309.06593](https://arxiv.org/abs/2309.06593)), the reference
-paper for this software suite, using the DES Y3 redMaPPer miscentring
-calibration of
-[Kelly et al. 2024, MNRAS 533, 572](https://ui.adsabs.harvard.edu/abs/2024MNRAS.533..572K/abstract)
-(arXiv:[2310.13207](https://arxiv.org/abs/2310.13207)) — the Gamma
-offset kernel, an updated analysis of the DES Y1 calibration of
-[Zhang et al. 2019, MNRAS 487, 2578](https://ui.adsabs.harvard.edu/abs/2019MNRAS.487.2578Z/abstract)
-(arXiv:[1901.07119](https://arxiv.org/abs/1901.07119)) —
-
-with $R_\lambda = (\lambda/100)^{0.2}\,h^{-1}$Mpc per richness bin.
-This is **target-cluster miscentering** — the assigned redMaPPer centre
-offset from the true halo centre, with $(f_{\rm mis}, \tau_{\rm mis})$
-as nuisance parameters — distinct from the parameter-free
-neighbouring-halo offset inside the two-halo term
-({doc}`shear_projection`). Both mixture pieces are linear in
-$\Delta\Sigma$, so the one-halo + projection sum in the likelihood is
-exact (tangential shear, not reduced shear —
-{doc}`../math/index`).
-
-Evaluation is fixed Gauss–Legendre with the redshift axis contracted
-once per sample into mass weights $W_{ij}(\ln M)$; each of the 180 wall
-points is then one 1-D mass sum ($\sim 16\times$ faster than the
-retired per-(bin, $R$) Cuhre path, deterministic cost). **The complete
-step-by-step recipe lives in {doc}`../numerics/index`,
-§"The number-counts and one-halo lensing recipe, step by step".**
-
-Setting `miscentering/f_mis = 0` recovers the centred-only `Shear1hSel`
-result ({doc}`../variants`). Model derivation: {doc}`../math/index`;
-miscentering model: {doc}`../math/index`.
+- Model: [`src/models/n_operator_sel_gl_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/models/n_operator_sel_gl_t.hh)
+  (`nosel_gl_detail::SelGLCore`, shared with {doc}`number_counts`) +
+  [`src/modules/num_counts_sel/lensing_weights.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/modules/num_counts_sel/lensing_weights.hh)
+  (unchanged production model, immutable dependency).
+- Module driver: [`src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/cpp/Shear1hFastMass.cc)
+  (`DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE`) — bitwise-equivalent to
+  DES Y1's `Shear1hMisSel.so` ({doc}`../variants`), own module label
+  and output section.
+- Compiled library loaded by CosmoSIS:
+  `${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear_fast_mass_cpp/Shear1hFastMass.so`.
+- Disk tables: `data/nfw_off_center/*gamma*` — $1000 \times 1000$ log-log
+  grids of the gamma-kernel miscentred NFW in
+  $(R/r_s, R_{\rm mis}/r_s)$, loaded once at module construction.
 
 ## CosmoSIS setup
 

@@ -8,13 +8,6 @@ $\Omega_\Lambda$, $\omega_b h^2$, …) and verifies the relations are
 consistent. Every downstream module reads the completed
 `cosmological_parameters` section it produces.
 
-## Script
-
-- Source: [`utility/consistency/consistency_interface.py`](https://github.com/joezuntz/cosmosis-standard-library/blob/main/utility/consistency/consistency_interface.py)
-  (CosmoSIS Standard Library; version pinned by your local
-  `${COSMOSIS_STANDARD_LIBRARY}` checkout).
-- Loaded by CosmoSIS as a Python module (no compiled library).
-
 ## Numerical framework
 
 Pure algebraic closure of the Friedmann-parameter relations (e.g.
@@ -22,6 +15,12 @@ $\Omega_\Lambda = 1 - \Omega_m - \Omega_k$,
 $\omega_i = \Omega_i h^2$); no integration. It fails loudly if the sampled
 set over-constrains the relations.
 
+## Script
+
+- Source: [`utility/consistency/consistency_interface.py`](https://github.com/joezuntz/cosmosis-standard-library/blob/main/utility/consistency/consistency_interface.py)
+  (CosmoSIS Standard Library; version pinned by your local
+  `${COSMOSIS_STANDARD_LIBRARY}` checkout).
+- Loaded by CosmoSIS as a Python module (no compiled library).
 ## CosmoSIS setup
 
 ```ini

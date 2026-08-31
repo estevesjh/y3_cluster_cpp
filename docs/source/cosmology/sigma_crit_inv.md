@@ -7,15 +7,6 @@ $\langle\Sigma_{\rm crit}^{-1}\rangle(z_l)$ — the geometric factor that
 converts $\Delta\Sigma$ into tangential shear. Both shear modules
 (`Shear1hMisSel`, `shear_prj_frozen_physics`) multiply by it.
 
-## Script
-
-- Source: [`src/modules/average_sigma_crit_inv/average_sigma_crit_inv.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/modules/average_sigma_crit_inv/average_sigma_crit_inv.py)
-  (`y3_cluster_cpp` @ `d7feb75`).
-- Source $n(z)$ read at setup from
-  `${Y3_CLUSTER_CPP_DIR}/data/test_cluster_Y1.fits` (HDU 6, columns
-  `z_mid`, `bin1`).
-- Loaded by CosmoSIS as a Python module.
-
 ## Numerical framework
 
 $$\langle \Sigma_{\rm crit}^{-1} \rangle(z_l)
@@ -27,6 +18,15 @@ clipped at zero for sources in front of the lens. Per lens redshift:
 1-D interpolation of $D_A$ from `distances`, source $p(z_s)$ shifted by
 `delta_z`, trapezoidal integration over the source grid
 ($G = 4.517 \times 10^{-48}\,\mathrm{Mpc^3\,M_\odot^{-1}\,s^{-2}}$).
+
+## Script
+
+- Source: [`src/modules/average_sigma_crit_inv/average_sigma_crit_inv.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/modules/average_sigma_crit_inv/average_sigma_crit_inv.py)
+  (`y3_cluster_cpp` @ `d7feb75`).
+- Source $n(z)$ read at setup from
+  `${Y3_CLUSTER_CPP_DIR}/data/test_cluster_Y1.fits` (HDU 6, columns
+  `z_mid`, `bin1`).
+- Loaded by CosmoSIS as a Python module.
 
 ## CosmoSIS setup
 

@@ -8,15 +8,6 @@ correlation function $\xi_{\rm NL}(r,z)$, and the NFW one-halo lensing
 tables $\Sigma_{\rm NFW}$, $\Delta\Sigma_{\rm NFW}$ read by
 `Shear1hMisSel`.
 
-## Script
-
-- Source: [`y3_buzzard/halo_model_cosmosis.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/y3_buzzard/halo_model_cosmosis.py)
-  (`y3_cluster_cpp` @ `d7feb75`).
-- Helpers: `y3_buzzard/haloModel.py` (classes `biasModel`, `lensingModel`,
-  `ct_2hTerm`, `scaleShiftCosmo`) and `y3_buzzard/nfwModel.py` (analytic
-  NFW $\Sigma/\Delta\Sigma$); numerical backend `cluster_toolkit`.
-- Loaded by CosmoSIS as a Python module.
-
 ## Numerical framework
 
 The single most multi-product module in the pipeline: one `execute`
@@ -25,11 +16,23 @@ call computes up to **four families of quantities**, all backed by
 [BUILDING.md](https://github.com/estevesjh/y3_cluster_cpp/blob/master/BUILDING.md)).
 The governing expressions, in the order they are evaluated:
 
-**1. Halo bias** — Tinker 2010 at the growth-rescaled $z{=}0$ peak
-height ($\Delta = 200\bar\rho_m$):
+**1. Halo bias** — Tinker et al. (2010) fitting function of the peak
+height, evaluated at the growth-rescaled $z{=}0$ peak height
+($\Delta = 200\bar\rho_m$):
 
-$$b(M, z) = b_{\rm Tinker}\!\left(\frac{\nu(M)}{D(z)/D(0)}\right),
-\qquad \nu(M) = \frac{\delta_c}{\sigma(M, z{=}0)} .$$
+$$b(\nu) = 1 - A\frac{\nu^a}{\nu^a + \delta_c^a} + B\nu^b + C\nu^c ,
+\qquad \nu(M) = \frac{\delta_c}{\sigma(M, z{=}0)} ,$$
+
+evaluated at $\nu(M) / [D(z)/D(0)]$ (the $D(0)$ renormalisation below).
+Consumers:
+
+- `b_sel_marg` weights the correlated-structure operators $I_1$, $J$ by
+  $b(M,z)$ ({doc}`../selection/bsel`);
+- `bsel` builds the mass-averaged effective bias $b_{\rm eff}$ per bin
+  ({doc}`../selection/bsel`);
+- `shear_prj_frozen_physics` multiplies the clustered channel by
+  $b(M,z)\, b_{\rm sel}(\theta)\, \xi_{\rm NL}$
+  ({doc}`../observables/shear_projection`).
 
 **2. Nonlinear matter correlation** — per redshift slice, the Fourier
 transform of the (nonlinear, or fallback linear) power spectrum:
@@ -74,11 +77,22 @@ Two load-bearing details:
   the reference pipeline reads its outputs, so `compute_lensing_2h = F`
   is a pure skip.
 
-Model details: {doc}`halo_bias` (bias), {doc}`../observables/second_halo_term`
+Model details: {doc}`../observables/second_halo_term`
 (lensing branches); algorithm source:
 [pipeline_modules.tex](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex)
 §halo_model.
 
+## Script
+
+- Source: [`y3_buzzard/halo_model_cosmosis.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/y3_buzzard/halo_model_cosmosis.py)
+  (`y3_cluster_cpp` @ `d7feb75`).
+- Helpers: `y3_buzzard/haloModel.py` (classes `biasModel`, `lensingModel`,
+  `ct_2hTerm`, `scaleShiftCosmo`) and `y3_buzzard/nfwModel.py` (analytic
+  NFW $\Sigma/\Delta\Sigma$); numerical backend `cluster_toolkit`.
+- Loaded by CosmoSIS as a Python module.
+- The retired C++ halo-bias type `HMB_t` (and the `tinker_bias` module) no
+  longer exist; every C++ consumer reads the bias grid through `Interp2D`.
+  
 ## CosmoSIS setup
 
 ```ini
@@ -131,7 +145,7 @@ compute_lensing_2h = F
 |---|---|---|---|
 | `haloModel/lnM`, `m_h` | mass grid | $\ln M_\odot/h$, `(100,)` | `b_sel_marg`, `shear_prj_frozen_physics`, `bsel`, `Shear1hMisSel` |
 | `haloModel/z` | redshift grid | `(50,)` | same |
-| `haloModel/bias` | Tinker-2010 halo bias $b(M,z)$ | `(50, 100)` | `b_sel_marg`, `shear_prj_frozen_physics`, `bsel` — see {doc}`halo_bias` |
+| `haloModel/bias` | Tinker-2010 halo bias $b(M,z)$ | `(50, 100)` | `b_sel_marg`, `shear_prj_frozen_physics`, `bsel` |
 | `haloModel/rhoc` | critical density $\rho_c(z)$ | `(50,)` | diagnostics |
 | `xi_nl/{r, z, xi_nl}` | nonlinear matter correlation function | $r$: `(128,)` cMpc/$h$; `(50, 128)` | `b_sel_marg`, `shear_prj_frozen_physics` |
 | `haloModel/{r_sigma, Sigma_nfw, dSigma_nfw, concentration, scale_shift, hubble_shift, k}` | NFW 1h lensing tables (`compute_lensing_1h = T`) | `r_sigma`: `(128,)` cMpc/$h$; tables `(100, 128)` | `Shear1hMisSel` |

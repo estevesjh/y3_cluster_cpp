@@ -7,13 +7,6 @@ cosmology. `cp_camb` uses $D(z)$ to reconstruct the redshift evolution of
 its $z{=}0$-only emulated power spectrum, and `halo_model` uses it to
 redshift-scale the Tinker peak height.
 
-## Script
-
-- Source: [`structure/growth_factor/`](https://github.com/joezuntz/cosmosis-standard-library/tree/main/structure/growth_factor)
-  — `growthfactor.c` + `interface.c` (C, verified; the `.so` is not
-  Fortran).
-- Compiled library loaded by CosmoSIS:
-  `${COSMOSIS_STANDARD_LIBRARY}/structure/growth_factor/interface.so`.
 
 ## Numerical framework
 
@@ -23,6 +16,14 @@ renormalise by $D(0)$: CosmoSIS growth is matter-domination-normalised, so a
 raw $D(z)$ ratio without the $D(0)$ division inflates the Tinker peak height
 by $\sim 1.3\times$ (a historical bug documented in
 {doc}`halo_model <halo_model>`).
+
+## Script
+
+- Source: [`structure/growth_factor/`](https://github.com/joezuntz/cosmosis-standard-library/tree/main/structure/growth_factor)
+  — `growthfactor.c` + `interface.c` (C, verified; the `.so` is not
+  Fortran).
+- Compiled library loaded by CosmoSIS:
+  `${COSMOSIS_STANDARD_LIBRARY}/structure/growth_factor/interface.so`.
 
 ## CosmoSIS setup
 

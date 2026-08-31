@@ -7,13 +7,6 @@ matter power spectrum. Every cluster-population integral downstream
 (number counts, halo shear, selection-bias operators, projection lensing)
 weights by its `dndlnmh` output.
 
-## Script
-
-- Source: [`mass_function/mf_tinker/`](https://github.com/joezuntz/cosmosis-standard-library/tree/main/mass_function/mf_tinker)
-  — `tinker_module.F90`, `compute_mf_tinker.f90`, `mf_tinker.f90` and
-  supporting Fortran-90 sources (based on Komatsu's CRL).
-- Compiled library loaded by CosmoSIS:
-  `${COSMOSIS_STANDARD_LIBRARY}/mass_function/mf_tinker/tinker_mf_module.so`.
 
 ## Numerical framework
 
@@ -35,6 +28,14 @@ consumers (`bsel.py`) rescale the axis explicitly.
 ```
 
 Longer discussion: {doc}`../numerics/index` (unit and convention traps).
+
+## Script
+
+- Source: [`mass_function/mf_tinker/`](https://github.com/joezuntz/cosmosis-standard-library/tree/main/mass_function/mf_tinker)
+  — `tinker_module.F90`, `compute_mf_tinker.f90`, `mf_tinker.f90` and
+  supporting Fortran-90 sources (based on Komatsu's CRL).
+- Compiled library loaded by CosmoSIS:
+  `${COSMOSIS_STANDARD_LIBRARY}/mass_function/mf_tinker/tinker_mf_module.so`.
 
 ## CosmoSIS setup
 
