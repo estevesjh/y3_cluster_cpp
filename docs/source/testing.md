@@ -34,3 +34,12 @@ Status labels mean:
   including a known numerical defect, rather than declaring that behavior
   scientifically correct.
 - **Disabled/diagnostic** — not part of the configured CTest suite.
+
+## External validations
+
+Cross-code comparisons, reference benchmarks, and production diagnostics
+live in the sibling [`scratchReports`](https://github.com/estevesjh/scratchReports)
+repository under `y3_cluster_cpp/`. These are not unit tests — they validate
+against independent reference implementations (cluster_toolkit, CLensPy, pyccl,
+clmm) and produce LaTeX validation reports. See the repo's README for setup
+and execution.
