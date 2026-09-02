@@ -146,6 +146,16 @@ note). Status: **model option** — and the wired production
 ({doc}`modules/historical`), which is why `Shear1h2hMax` reads
 `haloModel/dSigma_hh` directly rather than through them.
 
+Likelihood wiring: `y3_buzzard/likelihood_cp.py` consumes the max model
+with `shear_max_section = shear1h2h_max` (theory =
+`shear1h2h_max/vals` / $N_i$, no projection term). Setting
+`is_b_proj_costanzi26 = T` multiplies that theory by the Costanzi-2026
+$\mathcal{B}_{\rm prj}(R)$ selection-bias correction
+(`src/pipelines/systematics/costanzi_bprj/`, App. C of arXiv:2604.05833),
+with its parameters read from the values-file section `[costanzi_bprj]`
+and the per-bin $(R, \lambda, z)$ from `shear_r_perp`,
+`shear_lob_centers`, `shear_zbin_reps`.
+
 ## Population diagnostics
 
 `MassWeightedSel` ($f = M$) and `BiasWeightedSel` ($f = b(M,z)$) are

@@ -84,4 +84,7 @@ y3_cluster::CostanziBprj_t const bprj(sample);  // [costanzi_bprj] from the valu
 double const sigma_corr = bprj(R, lob, zob) * sigma_max;
 ```
 
-Not yet wired into a consumer stage. Tests: `test/costanzi_bprj.test.{py,cc}`.
+Consumer: `y3_buzzard/likelihood_cp.py` (`shear_max_section = shear1h2h_max`
++ `is_b_proj_costanzi26 = T`) multiplies the max-model shear theory by
+`B(R, lob, z_bin)`, parameters from the values-file section `[costanzi_bprj]`.
+Tests: `test/costanzi_bprj.test.{py,cc}`, `test/likelihood_cp.test.py`.

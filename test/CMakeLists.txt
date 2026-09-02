@@ -474,6 +474,13 @@ add_test(
   NAME costanzi_bprj_python_test
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/costanzi_bprj.test.py
   )
+# likelihood_cp.py max-model mode (shear_max_section) and the Costanzi-2026
+# B_prj(R) option (is_b_proj_costanzi26) on a synthetic DataBlock + DV file.
+# Dump-free.
+add_test(
+  NAME likelihood_cp_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/likelihood_cp.test.py
+  )
 
 # S_ij-tabulated fixed-GL C++ backend, number_counts (src/pipelines/des_y3,
 # 0d): the reference pipeline's production counts backend.  Pins

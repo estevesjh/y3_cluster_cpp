@@ -21,6 +21,26 @@ per-(lambda_bin, zob) shear ready to add in.
 Diagonal invcov is the default (1-D array per observable); a dense
 invcov (2-D array) is also accepted and used as a matmul.
 
+Max-model mode (shear_max_section = shear1h2h_max in the ini section)
+--------------------------------------------------------------------
+Replaces the 1h + prj composition by the traditional max model
+(Shear1h2hMax, docs/source/variants.md):
+
+    gamma_t^theory(R) = shear1h2h_max/vals / numcounts/vals
+
+no projection term. With is_b_proj_costanzi26 = T the max-model theory
+is multiplied by the Costanzi-2026 selection-bias correction
+(arXiv:2604.05833 App. C, src/pipelines/systematics/costanzi_bprj):
+
+    gamma_t^theory(R) *= B_prj(R | lob_i, z_j),   R0 = R_lambda(lob) (1+z)
+
+with A/alpha/beta/gamma read per sample from the values-file section
+[costanzi_bprj]. The per-bin (lob, z) come from shear_lob_centers /
+shear_zbin_reps and the radii from shear_r_perp (comoving Mpc/h, the
+Shear1h2hMax r_perp grid). B_prj only makes sense on the max model
+(the 1h + prj path already carries the selection bias through b_sel),
+so the flag without shear_max_section is a configuration error.
+
 logL = -0.5 * sum_obs delta^T C^-1 delta, summed over NC and Shear.
 
 Writes block["likelihoods", "likelihoods_like"].
@@ -54,6 +74,9 @@ once in setup().
 """
 
 from __future__ import annotations
+
+from pathlib import Path
+import sys
 
 import numpy as np
 from cosmosis.datablock import option_section
@@ -108,6 +131,10 @@ def setup(options):
               "shear_n_r": data_shear.size // _NC_N_BINS,
               "verbose": bool(options.get_bool(option_section, "verbose",
                                                 default=False))}
+    # Max-model mode: theory = shear_max_section/vals / NC, no projection
+    # term (see module docstring). Empty (default) keeps 1h + prj.
+    config["shear_max_section"] = options.get_string(
+        option_section, "shear_max_section", default="")
 
     # Optional shear scale cut (the Buzzard scale-split runs): keep only
     # radii with shear_r_min <= r_perp <= shear_r_max [cMpc/h]. The full
@@ -122,8 +149,10 @@ def setup(options):
                                            default=0.0))
     shear_r_max = float(options.get_double(option_section, "shear_r_max",
                                            default=np.inf))
-    r_grid = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
-                       1.19581, 1.70998, 2.44521, 3.49658, 5.00000])
+    r_grid = np.array([float(x) for x in options.get_string(
+        option_section, "shear_r_perp",
+        default="0.20000 0.28599 0.40896 0.58480 0.83625 "
+                "1.19581 1.70998 2.44521 3.49658 5.00000").split()])
     keep_r = (r_grid >= shear_r_min) & (r_grid <= shear_r_max)
     config["shear_cut_active"] = not keep_r.all()
     if config["shear_cut_active"] and config["shear_n_r"] != r_grid.size:
@@ -153,11 +182,11 @@ def setup(options):
                                        default="0.275 0.435 0.575")
     except Exception:
         zreps_str = "0.275 0.435 0.575"
+    zreps = np.array([float(x) for x in zreps_str.split()])
+    if zreps.size != _NC_N_BINS // 4:
+        raise ValueError("likelihood_cp: shear_zbin_reps needs "
+                         f"{_NC_N_BINS // 4} redshifts, got {zreps.size}")
     if z_power != 0.0:
-        zreps = np.array([float(x) for x in zreps_str.split()])
-        if zreps.size != _NC_N_BINS // 4:
-            raise ValueError("likelihood_cp: shear_zbin_reps needs "
-                             f"{_NC_N_BINS // 4} redshifts, got {zreps.size}")
         fac_bin = (1.0 + np.repeat(zreps, 4)) ** z_power      # (12,)
         config["shear_1pz_factor"] = np.repeat(
             fac_bin, config["shear_n_r"])                     # (shear,)
@@ -165,6 +194,43 @@ def setup(options):
               f"with z_bins={zreps.tolist()}")
     else:
         config["shear_1pz_factor"] = np.ones(data_shear.size)
+
+    # Costanzi-2026 B_prj(R) on the max model (module docstring): the
+    # per-element (R, lob, z) grid is fixed here; A/alpha/beta/gamma are
+    # read per sample from [costanzi_bprj] in execute.
+    config["is_b_proj_costanzi26"] = bool(options.get_bool(
+        option_section, "is_b_proj_costanzi26", default=False))
+    if config["is_b_proj_costanzi26"]:
+        if not config["shear_max_section"]:
+            raise ValueError(
+                "likelihood_cp: is_b_proj_costanzi26 requires "
+                "shear_max_section (B_prj corrects the max model only)")
+        if r_grid.size != config["shear_n_r"]:
+            raise ValueError(
+                f"likelihood_cp: shear_r_perp has {r_grid.size} radii but "
+                f"data_Shear implies {config['shear_n_r']} per bin")
+        lob_centers = np.array([float(x) for x in options.get_string(
+            option_section, "shear_lob_centers",
+            default="25.0 37.5 52.5 130.0").split()])
+        if lob_centers.size != 4:
+            raise ValueError("likelihood_cp: shear_lob_centers needs 4 "
+                             f"richness centres, got {lob_centers.size}")
+        pipelines_dir = str(Path(__file__).resolve().parents[1]
+                            / "src" / "pipelines")
+        if pipelines_dir not in sys.path:
+            sys.path.insert(0, pipelines_dir)
+        from systematics.costanzi_bprj.python.costanzi_bprj import \
+            CostanziBprj
+        n_r = config["shear_n_r"]
+        config["bprj_model"] = CostanziBprj
+        # bins z-major (index = z*4 + lambda), radius fastest
+        config["bprj_lob"] = np.repeat(np.tile(lob_centers, _NC_N_BINS // 4),
+                                       n_r)
+        config["bprj_z"] = np.repeat(np.repeat(zreps, 4), n_r)
+        config["bprj_R"] = np.tile(r_grid, _NC_N_BINS)
+        print("[likelihood_cp] Costanzi-2026 B_prj(R) on "
+              f"{config['shear_max_section']}: params from [costanzi_bprj], "
+              f"lob={lob_centers.tolist()}, z={zreps.tolist()}")
     expected = [("NC", _NC_N_BINS), ("Shear", data_shear.size)]
     for name, expected_n in expected:
         d = np.asarray(vec[f"data_{name}"]).ravel()
@@ -204,16 +270,33 @@ def setup(options):
 
 
 def _shear_theory(block, config) -> np.ndarray:
-    """Build the summed tangential-shear theory vector.
+    """Build the tangential-shear theory vector.
 
-    gamma_t^theory(R | i,j) = <gamma_t^1h>_i(R) + gamma_t^prj(R | i,j)
+    Default:   gamma_t^theory(R | i,j) = <gamma_t^1h>_i(R) + gamma_t^prj(R | i,j)
+    Max model: gamma_t^theory(R | i,j) = <gamma_t^max>_i(R)   (shear_max_section)
 
-    shear1hsel/vals is N_i-weighted; divide entry-wise by the
-    number-count integral (shape 12, broadcast across the R
-    points per bin) to get the per-cluster average, then add the
-    projection piece.
+    shear1hsel/vals and shear1h2h_max/vals are N_i-weighted; divide
+    entry-wise by the number-count integral (shape 12, broadcast across
+    the R points per bin) to get the per-cluster average, then (default
+    only) add the projection piece.
     """
     NC = np.asarray(block[config["num_counts_section"], "vals"]).ravel()
+    if NC.size != _NC_N_BINS:
+        raise ValueError(
+            f"likelihood_cp: numcountssel/vals size {NC.size} != "
+            f"{_NC_N_BINS}")
+    shear_n = _NC_N_BINS * config["shear_n_r"]
+    NC_tile = np.repeat(NC, config["shear_n_r"])
+    bad = NC_tile <= 0.0
+    if config["shear_max_section"]:
+        Smax_Ni = np.asarray(
+            block[config["shear_max_section"], "vals"]).ravel()
+        if Smax_Ni.size != shear_n:
+            raise ValueError(
+                f"likelihood_cp: {config['shear_max_section']}/vals size "
+                f"{Smax_Ni.size} != {shear_n}")
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(bad, 0.0, Smax_Ni / NC_tile)
     S1h_Ni = np.asarray(block[config["shear_1h_section"], "vals"]).ravel()
     # DeltaSigma_prj: use the CLUSTERED component only. shear_prj/vals = rnd + cl,
     # but for a *differential* DeltaSigma the mean-field (rnd) term must cancel to
@@ -225,11 +308,6 @@ def _shear_theory(block, config) -> np.ndarray:
         Sprj = np.asarray(block[prj_sec, "cl"]).ravel()
     else:
         Sprj = np.asarray(block[prj_sec, "vals"]).ravel()
-    if NC.size != _NC_N_BINS:
-        raise ValueError(
-            f"likelihood_cp: numcountssel/vals size {NC.size} != "
-            f"{_NC_N_BINS}")
-    shear_n = _NC_N_BINS * config["shear_n_r"]
     if S1h_Ni.size != shear_n:
         raise ValueError(
             f"likelihood_cp: shear1h/vals size {S1h_Ni.size} != "
@@ -242,8 +320,6 @@ def _shear_theory(block, config) -> np.ndarray:
     # product; NumCountsSel wall is just bin_index.  The two module
     # outputs share the same 12-bin ordering, so we can tile NC across
     # the configured R-per-bin axis.
-    NC_tile = np.repeat(NC, config["shear_n_r"])
-    bad = NC_tile <= 0.0
     with np.errstate(divide="ignore", invalid="ignore"):
         S1h_avg = np.where(bad, 0.0, S1h_Ni / NC_tile)
     return S1h_avg + Sprj
@@ -277,6 +353,11 @@ def execute(block, config):
     # Shear — theory = <gamma_t^1h> + gamma_t^prj,
     # scale-cut to match the data when shear_r_min/max is set.
     Shear_theory = _shear_theory(block, config)
+    if config["is_b_proj_costanzi26"]:
+        # Costanzi-2026 B_prj(R | lob, z), params from [costanzi_bprj]
+        bprj = config["bprj_model"].from_datablock(block)
+        Shear_theory = Shear_theory * bprj(
+            config["bprj_R"], config["bprj_lob"], config["bprj_z"])
     Shear_theory = Shear_theory * config["shear_1pz_factor"]   # rho_m(z) (1+z)^p
     if config["shear_cut_active"]:
         Shear_theory = Shear_theory[config["shear_mask"]]

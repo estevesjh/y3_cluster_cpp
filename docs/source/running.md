@@ -148,4 +148,7 @@ reference pipeline — see {doc}`variants`.
 the number counts, one-halo shear, and projected shear. `des_y3.ini` points
 those options at `numcounts_sij_gl`, `shear1h_gl`, and
 `shear_prj_gl`, so the fast-mass modules can coexist with the legacy
-DES-Y1 modules without relying on DataBlock overwrites.
+DES-Y1 modules without relying on DataBlock overwrites. The optional
+`shear_max_section` switches the shear theory to the traditional max model
+(`shear1h2h_max`), and `is_b_proj_costanzi26 = T` applies the Costanzi-2026
+$\mathcal{B}_{\rm prj}(R)$ correction to it (see {doc}`variants`).
