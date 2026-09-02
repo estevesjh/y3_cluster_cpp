@@ -52,8 +52,8 @@ against a different baseline, the baseline is stated.
 | `3d` | [Cuhre C++](#the-3d-backends) | 3.1 s | 1.1e-4 direct vs the 3d Python reference (re-measured 2026-08-26, same fiducial point as `real_pipeline_extract_output`; supersedes the older 4.9e-4 proxy-via-0d-Python figure) |
 | `3d` | [PAGANI CUDA/A100](#the-3d-backends) | 2.0 s | 1.2e-4 direct vs the 3d Python reference (re-measured 2026-08-26); CUDA vs C++ twin 2.1e-5 (separate baseline, shared A100) |
 | `0d` | [explicit Python (3-dim GL)](#explicit-fixed-gl-python-reference) | 83 ms | 3.5e-5 |
-| `0d` | [fast path Python (2-dim GL, S_ij tab)](#redshift-contracted-fast-path) | 5 ms | 7.6e-4; also 2.4e-15 vs production (separate baseline) |
-| `0d` | [fast path C++ (2-dim GL, S_ij tab)](#redshift-contracted-fast-path) | 6 ms | 7.6e-4; also identity with production (separate baseline) |
+| `0d` | [fast path Python (2-dim GL, S_ij tab)](#redshift-contracted-fast-path) | 5 ms | 7.6e-4; also 2.4e-15 vs production (separate baseline); 1.1e-3 direct vs cuda-3d (re-measured 2026-08-26, identical to the C++ row -- numerically identical output) |
+| `0d` | [fast path C++ (2-dim GL, S_ij tab)](#redshift-contracted-fast-path) | 6 ms | 7.6e-4; also identity with production (separate baseline); 1.1e-3 direct vs cuda-3d (re-measured 2026-08-26) |
 
 ## The 0d backends
 

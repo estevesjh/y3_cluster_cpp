@@ -1712,9 +1712,12 @@ namespace y3_cluster {
     // b_sel(theta) (that is applied in the outer theta loop, matching
     // the Python sigma_prj.py convention).
     // The inner integrand is
-    //   rnd_z_M = dV(z) * om(z) * wz(z, zob) * n(M,z) * Sigma_mis(R|M,z,theta*D_A_o)
+    //   rnd_z_M = dV(z) * wz(z, zob) * n(M,z) * Sigma_mis(R|M,z,theta*D_A_o)
     //   cl_z_M  = rnd_z_M * b(M,z) * xi_NL(|dr|, zob) * 1[theta > theta_excl(z)]
-    // integrated over (z, lnM).
+    // integrated over (z, lnM). Omega(z) (survey solid angle) must NOT
+    // appear here: for the Sigma_prj/DSigma_prj surface densities it
+    // cancels between numerator and normalisation, same convention as
+    // sp_detail::ShearPrjCore above and the Python sigma_prj.py reference.
     std::array<double, 4>
     inner_2d_integral(double theta, double chi_o, double D_A_o,
                       double R_excl, double zob, double R, double cos_th) const
@@ -1740,7 +1743,7 @@ namespace y3_cluster {
         double const Smis = (*sigma_mis_)(R, R_th, lnM);
         double const DSmis = (*dsigma_mis_)(R, R_th, lnM);
 
-        double const base = zf.dV * zf.om * wz * nM;
+        double const base = zf.dV * wz * nM;
         double const cl_w = bM * xi_val;
         // Output: {sigma_rnd, sigma_cl, dsigma_rnd, dsigma_cl}
         return {

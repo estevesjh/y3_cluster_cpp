@@ -123,8 +123,8 @@ includes no production operator headers); the Python twin is
 
 | Dims | Backend | Cost | Precision vs 3d |
 | --- | --- | ---: | --- |
-| `0d` | One-halo Python (1-dim GL, z contracted) | 74 ms/sample | $8.4\times10^{-4}$; also $3.1\times10^{-15}$ vs production (separate baseline) |
-| `0d` | One-halo C++ (1-dim GL, z contracted) | 9 ms/sample | $8.4\times10^{-4}$; also production identity (separate baseline) |
+| `0d` | One-halo Python (1-dim GL, z contracted) | 74 ms/sample | $8.4\times10^{-4}$; also $3.1\times10^{-15}$ vs production (separate baseline); $2.3\times10^{-4}$ direct vs cuda-3d on the reduced 6-pt corner wall (re-measured 2026-08-26, numerically identical to the C++ row below) |
+| `0d` | One-halo C++ (1-dim GL, z contracted) | 9 ms/sample | $8.4\times10^{-4}$; also production identity (separate baseline); $2.3\times10^{-4}$ direct vs cuda-3d on the reduced 6-pt corner wall (re-measured 2026-08-26) |
 
 ### Traditional 1h+2h max model, z-resolved GL
 
