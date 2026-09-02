@@ -37,6 +37,11 @@ file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/systematics/selection_richness/python
 
 [bsel]
 file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/systematics/selection_bias/python/bsel.py
+
+[costanzi_bprj]
+file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/systematics/costanzi_bprj/python/costanzi_bprj.py
+lob_centers = 25.0 37.5 52.5 130.0
+zob_centers = 0.275 0.425 0.575
 ```
 
 `prj_params.py` is loaded explicitly by configurations that need to publish
@@ -57,7 +62,12 @@ R0            = R_lambda(lob) (1 + z)         [comoving Mpc/h; R in the same uni
 The same form fits the bias on DeltaSigma(R) with different values. Both
 implementations evaluate `B(R, lob, z)` and read the four parameters from a
 values-file section of the driving pipeline (default `costanzi_bprj`; pass
-another section name to keep a Sigma and a DeltaSigma set in one pipeline):
+another section name to keep a Sigma and a DeltaSigma set in one pipeline).
+The same datablock section also carries the stacked-bin grid,
+`lob_centers` (n_lambda) and `zob_centers` (n_z), published by the
+`costanzi_bprj` CosmoSIS module stage (ini above); `bprj_wall(block, R)`
+evaluates B on the (bin, R) wall from it -- z-major, richness fastest,
+radius fastest -- so a consumer supplies only the radii:
 
 ```ini
 [costanzi_bprj]
@@ -73,9 +83,10 @@ version of App. C quotes `alpha = 0.92` for Sigma; `0.1` above is the owner's
 spec (2026-09-01) -- confirm against the published version before sampling.
 
 ```python
-from systematics.costanzi_bprj.python.costanzi_bprj import CostanziBprj
+from systematics.costanzi_bprj.python.costanzi_bprj import CostanziBprj, bprj_wall
+shear_theory *= bprj_wall(block, r_perp)        # whole wall, from the datablock
 bprj = CostanziBprj.from_datablock(block)       # or CostanziBprj.sigma()
-sigma_corr = bprj(R, lob, zob) * sigma_max
+sigma_corr = bprj(R, lob, zob) * sigma_max      # pointwise
 ```
 
 ```cpp
@@ -86,5 +97,6 @@ double const sigma_corr = bprj(R, lob, zob) * sigma_max;
 
 Consumer: `y3_buzzard/likelihood_cp.py` (`shear_max_section = shear1h2h_max`
 + `is_b_proj_costanzi26 = T`) multiplies the max-model shear theory by
-`B(R, lob, z_bin)`, parameters from the values-file section `[costanzi_bprj]`.
+`bprj_wall(block, shear_r_perp)`; the pipeline must run the `costanzi_bprj`
+module stage so the section carries `lob_centers`/`zob_centers`.
 Tests: `test/costanzi_bprj.test.{py,cc}`, `test/likelihood_cp.test.py`.

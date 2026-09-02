@@ -152,9 +152,9 @@ with `shear_max_section = shear1h2h_max` (theory =
 `is_b_proj_costanzi26 = T` multiplies that theory by the Costanzi-2026
 $\mathcal{B}_{\rm prj}(R)$ selection-bias correction
 (`src/pipelines/systematics/costanzi_bprj/`, App. C of arXiv:2604.05833),
-with its parameters read from the values-file section `[costanzi_bprj]`
-and the per-bin $(R, \lambda, z)$ from `shear_r_perp`,
-`shear_lob_centers`, `shear_zbin_reps`.
+with its parameters read from the values-file section `[costanzi_bprj]`,
+the bin centres `lob_centers`/`zob_centers` published into that section by
+the `costanzi_bprj` module stage, and the radii from `shear_r_perp`.
 
 ## Population diagnostics
 

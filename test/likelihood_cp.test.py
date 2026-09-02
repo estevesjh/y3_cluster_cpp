@@ -4,10 +4,10 @@ Costanzi-2026 B_prj(R) option (is_b_proj_costanzi26).
 
 Synthetic DataBlock + DV file, dump-free. Pins: the max model closes at
 data (logL = 0), the B_prj-multiplied theory reproduces an independent
-CostanziBprj evaluation on the (R, lob, z_bin) grid, [costanzi_bprj] is
-read per sample (A = 0 -> B = 1 -> closure), the flag without a max
-section is a configuration error, and the default 1h + prj path still
-closes.
+CostanziBprj evaluation on the wall the costanzi_bprj section defines,
+[costanzi_bprj] is read per sample (A = 0 -> B = 1 -> closure), the flag
+without a max section or without the wall grid is an error, and the
+default 1h + prj path still closes.
 """
 from __future__ import annotations
 
@@ -22,13 +22,16 @@ from cosmosis.datablock import DataBlock, option_section
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "pipelines"))
-from systematics.costanzi_bprj.python.costanzi_bprj import CostanziBprj  # noqa: E402
+from systematics.costanzi_bprj.python.costanzi_bprj import (  # noqa: E402
+    PARAM_NAMES,
+    CostanziBprj,
+)
 
 N_BINS, N_R = 12, 10
 R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,
                    1.19581, 1.70998, 2.44521, 3.49658, 5.00000])
 LOB_CENTERS = np.array([25.0, 37.5, 52.5, 130.0])
-Z_REPS = np.array([0.275, 0.435, 0.575])
+ZOB_CENTERS = np.array([0.275, 0.425, 0.575])
 
 
 def _load_likelihood_cp():
@@ -64,14 +67,17 @@ class TestLikelihoodCpMaxModel(unittest.TestCase):
             o[option_section, k] = v
         return o
 
-    def _block(self, bprj=None):
+    def _block(self, bprj=None, wall=True):
         b = DataBlock()
         b["numcounts", "vals"] = self.NC
         # the module publishes the N_i-weighted integral
         b["shear1h2h_max", "vals"] = self.shear * np.repeat(self.NC, N_R)
         if bprj is not None:
-            for k in ("A", "alpha", "beta", "gamma"):
+            for k in PARAM_NAMES:
                 b["costanzi_bprj", k] = getattr(bprj, k)
+            if wall:  # what the costanzi_bprj module stage publishes
+                b["costanzi_bprj", "lob_centers"] = LOB_CENTERS
+                b["costanzi_bprj", "zob_centers"] = ZOB_CENTERS
         return b
 
     def test_max_model_closes_at_data(self):
@@ -87,11 +93,10 @@ class TestLikelihoodCpMaxModel(unittest.TestCase):
                                           is_b_proj_costanzi26=True))
         b = self._block(bprj)
         self.lk.execute(b, cfg)
-        # independent evaluation: bins z-major (lambda fast), radius fastest
-        lob = np.repeat(np.tile(LOB_CENTERS, 3), N_R)
-        z = np.repeat(np.repeat(Z_REPS, 4), N_R)
-        R = np.tile(R_PERP, N_BINS)
-        theory = self.shear * bprj(R, lob, z)
+        # independent evaluation: bins z-major (richness fast), radius fastest
+        B = np.array([bprj(r, lob, z) for z in ZOB_CENTERS
+                      for lob in LOB_CENTERS for r in R_PERP])
+        theory = self.shear * B
         want = -0.5 * np.sum((self.shear - theory) ** 2 * 1.0e4)
         self.assertLess(want, -1.0)  # B != 1: the correction actually bites
         np.testing.assert_allclose(b["likelihoods", "likelihoods_like"], want,
@@ -103,6 +108,12 @@ class TestLikelihoodCpMaxModel(unittest.TestCase):
         b = self._block(CostanziBprj(A=0.0, alpha=4.11, beta=0.18, gamma=1.82))
         self.lk.execute(b, cfg)  # A = 0 -> B = 1 -> closure
         self.assertAlmostEqual(b["likelihoods", "likelihoods_like"], 0.0, places=8)
+
+    def test_b_proj_requires_wall_grid_in_block(self):
+        cfg = self.lk.setup(self._options(shear_max_section="shear1h2h_max",
+                                          is_b_proj_costanzi26=True))
+        with self.assertRaises(Exception):  # costanzi_bprj module not run
+            self.lk.execute(self._block(CostanziBprj.dsigma(), wall=False), cfg)
 
     def test_b_proj_requires_max_model(self):
         with self.assertRaises(ValueError):
