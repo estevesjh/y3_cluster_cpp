@@ -86,6 +86,9 @@ add_subdirectory(
   ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/cpp/2d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_2d_cpp)
 add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/cpp/3d
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_3d_cpp)
+add_subdirectory(
   ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_projection/cuda/3d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear_prj_3d_cuda)
 

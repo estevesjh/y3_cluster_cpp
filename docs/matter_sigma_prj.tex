@@ -1,0 +1,179 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1.0in]{geometry} %per settare i margini
+\usepackage{amssymb} %mathematical stuff
+\usepackage{mathrsfs} %simboli matematici
+\usepackage{multirow} %per accorpare righe sulle tabelle
+\usepackage{subfig} %per mettere più immagini in un unico ambiente
+\usepackage{bm} %grassetto per simboli matematici
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsmath}
+%\usepackage{natbib}
+\usepackage{amsfonts}
+
+
+% Nuovi comandi %%%%%%%%%%%%%%%%%%%%%%%%%%%5
+\newcommand{\rtwo}{\rm{r}_{200}}
+\newcommand{\Mtwo}{\rm{M}_{200}}
+\newcommand{\vtwo}{\rm{v}_{200}}
+\newcommand{\stwo}{\sigma_{200}}
+\newcommand{\slos}{\sigma_{\rm{los}}}
+\newcommand{\soneD}{\sigma_{\rm{1D}}}
+\newcommand{\Msun}{\rm{M}_\odot}
+\newcommand{\vel}{\,{\rm km\,s^{-1}}}
+\newcommand{\de}{\text{d}}
+\newcommand{\mnu}{\sum m_\nu}
+\newcommand{\0}{\textup{0}}
+\newcommand{\Mpc}{\rm{Mpc}}
+\newcommand{\scd}{\rm{s}}
+\newcommand{\km}{\rm{km}}
+\newcommand{\all}{ALL }
+\newcommand{\redns}{RED }
+\newcommand{\blue}{BLUE }
+\newcommand{\eff}{\text{eff}}
+\newcommand{\ob}{^{\rm ob}}
+\newcommand{\true}{^{\rm true}}
+
+\newcommand{\ncl}[0]{\bar{n}_{cl}}
+\newcommand{\nn}{\nonumber}
+\newcommand{\avgN}{\langle N|m \rangle}
+\newcommand{\NNm}{\langle N(N-1)|m \rangle}
+\newcommand{\NNNm}{\langle N(N-1)(N-2)|m \rangle}
+\newcommand{\avgn}{\langle \bar n \rangle}
+
+\newcommand{\avgNa}{\langle \bar N_a \rangle}
+
+\newcommand{\eval}[0]{\mbox{\Large $\vert$\normalsize}}
+
+\newcommand{\na}{\bar n_a}
+\newcommand{\nap}{\bar n_{a'}}
+\newcommand{\ba}{b_a}
+\newcommand{\bap}{b_{a'}}
+\newcommand{\psia}{\psi_a}
+\newcommand{\psiap}{\psi_{a'}}
+\newcommand{\tpsia}{\tilde\psi_a}
+\newcommand{\avgpsia}{\langle \psia|m \rangle}
+\newcommand{\avgpsiap}{\langle \psiap|m' \rangle}
+\newcommand{\avgsbcga}{\langle\sigma_{BCG}^2|a \rangle}
+\newcommand{\Na}{N_a}
+\newcommand{\Nap}{N_{a'}}
+\newcommand{\sbcg}{\sigma_{BCG}^2}
+\newcommand{\zetabcg}{\zeta_{BCG}}
+\newcommand{\zetasat}{\zeta_{sat}}
+\newcommand{\cs}{c_{s^2}}
+\newcommand{\poa}{p^0_a}
+\newcommand{\pa}{p_a}
+\newcommand{\pap}{p_{a'}}
+\newcommand{\pgala}{p^{gal}_a}
+\newcommand{\fa}{f_{a,a'}}
+\newcommand{\nm}{ \frac{d\avgn}{dm}}
+\newcommand{\nmp}{\frac{d\avgn}{dm'}}
+\newcommand{\avgna}{\langle \na \rangle}
+\newcommand{\avgnap}{\langle \nap \rangle}
+\newcommand{\sa}{s_a^2}
+\newcommand{\sap}{s_{a'}^2}
+\newcommand{\avgsa}{\langle s_a^2 \rangle}
+\newcommand{\avgsigma}{\langle \sigma^2|m\rangle}
+\newcommand{\ssat}{\sigma_{sat}^2}
+\newcommand{\fsat}{f_{sat}}
+\newcommand{\Nt}{N_{t}}
+\newcommand{\Ng}{N_{\rm gals}}
+\newcommand{\Nobs}{N_{obs}}
+\newcommand{\Nmin}{N_{min}}
+\newcommand{\mmin}{m_{min}}
+\newcommand{\Nsat}{N_{sat}}
+\newcommand{\om}{\Omega_m}
+\newcommand{\ode}{\Omega_{DE}}
+\newcommand{\Ob}{\Omega_b}
+\newcommand{\sA}{\sigma_{15}^2}
+\newcommand{\NA}{R_{15}}
+\newcommand{\aN}{{\alpha_N}}
+\newcommand{\as}{{\alpha_\sigma}}
+\newcommand{\avg}[1]{\left\langle #1 \right\rangle}
+\newcommand{\Pchi}{P_{\chi^2}}
+\newcommand{\pnn}{P(\Nobs|\Nt)}
+\newcommand{\ps}{P_s(\Nobs|\Nt)}
+\newcommand{\pn}{P_n(\Nobs|\Nt)}
+
+\newcommand{\lk}{{\cal{L}}}
+\newcommand{\zh}{z_h}
+\newcommand{\zhp}{{z_h'}}
+\newcommand{\zc}{z_c}
+\newcommand{\bz}{b_z}
+\newcommand{\zmin}{z_{min}}
+\newcommand{\zmax}{z_{max}}
+\newcommand{\rhob}{\rho_b}
+\newcommand{\chip}{{\chi'}}
+\newcommand{\hatn}{\bm{\hat n}}
+\newcommand{\hatnp}{\bm{\hat{n}'}}
+\newcommand{\gaa}{g_a}
+\newcommand{\gaap}{g_{a'}}
+\newcommand{\lmin}{L_{min}}
+\newcommand{\Ns}{N_s}
+\newcommand{\bn}{\hat{ \bm{n}}}
+\newcommand{\LCDM}{\Lambda\mbox{CDM}}
+
+\newcommand{\beqa}{\begin{equation}\begin{aligned}}
+\newcommand{\eeqa}{\end{aligned}\end{equation}}
+
+\title{Weak Lensing Selection Bias}
+\author{Matteo, DES Cluster Folks ++ }
+\date{June 2023}
+
+\begin{document}
+
+\maketitle
+
+\subsection{Shear profile projection effects}
+The number of DM halos expected to fall inside the light cone defined by an infinitesimal annulus of angular radius $\theta$ is given by:
+%
+\begin{equation}
+ \langle N _{\theta}  \rangle =  \int_0^{\infty} \de z\ \frac{\de V}{\de z \de \Omega}
+ 2 \pi \theta \int_0^{\infty} \de M\ n(M,z)\, ,
+\end{equation}
+%
+
+If we center the annulus at the position of a DM halo of richness $\lambda\ob$ and redshift $z\ob$, the number of objects in projection is increased by a factor determined by the halo-halo correlation function bias:
+%
+\begin{equation}
+ \langle N _{\theta}  \rangle =  \int_0^{\infty} \de z\ \frac{\de V}{\de z \de \Omega}
+ 2 \pi \theta \int_0^{\infty} \de M\ n(M,z) [1 + b(M,z) \langle b (\lambda\ob, z\ob) \rangle \xi_{\rm NL}(|\bm{r}(z)-\bm{r}(z\true)|,\bar{z})]\, ,
+\end{equation}
+%
+where $b(M,z)$ represent the halo bias and $\xi_{\rm NL}$ is the non-linear matter correlation function at the mean redshift $\bar{z}=(z+z\true)/2$ and co-moving distance from the main halo center:
+\begin{equation}
+    |\bm{r}(z)-\bm{r}(z\true)| = \sqrt{\chi(z)^2+\chi(z\true)^2 - 2\chi(z)\chi(z\true)\cos (\theta) } \, .
+\end{equation}
+
+To account for exclusion effects we can remove from the redshift integral the portion of space occupied by the main halo -- e.g. $z\true \pm \Delta z[R(\lambda\true)(1+z\true)]$; also, we are interested to structures along the line of sight that can contribute to the lensing signal, so we can set the upper limit of the integral to $z_{\rm source}$. In practice, the main contribution to $\Sigma$ comes from correlated structures around the main halo, so we can further shrink the integral to the redshift range $z\true \pm \Delta z(150 {\rm Mpc})$.
+
+% or include the condition:
+% \begin{equation*}
+%  b(M,z) \langle b (\lambda\ob, z\ob) \rangle \xi_{\rm NL}(|r(z)-r(z\true)|,\bar{z}))=0
+% \end{equation*}
+% %
+% if $|r(z)-r(z\true)| < R(\lambda\true)(1+z\true)$.
+
+Assuming the DM halos in projection to be uniformly distributed behind/in front of the main halo, the contribution to the projected density profile, due to projection effects, $\langle \Sigma^{\rm prj} \rangle$, can be estimated by weighing the previous equation by the azimuthally averaged profile of a population of halos misplaced by a distance $R_s$ from the main halo center, that is:
+
+\begin{multline}
+    \langle \Sigma^{\rm prj} (R|\lambda^{\rm ob},z^{\rm ob}) \rangle = \int_0^{\infty} d z\ \int_0^{\theta_{\rm mis, max}} d \theta_{\rm mis}  \frac{d V}{d z d \Omega}
+ 2 \pi \sin(\theta_{\rm mis})  \int_0^{\infty} d M\ n(M,z) \times \\ [1 + b(M,z) b_{\rm sel}(\lambda^{\rm ob}, z^{\rm ob},\theta_{\rm mis}) \xi_{\rm NL}(|r(z)-r(z^{\rm ob})|,\bar{z})] \Sigma_{\rm mis} (R |M,z, R(\theta_{\rm mis})) \, ,
+\end{multline}
+
+where:
+\begin{eqnarray}
+ \Sigma_{\rm mis} (R |M,z,\theta_{\rm mis}) = \frac 1 {2 \pi} \int_0^{2 \pi} \Sigma^{\rm 1h}\left(R_h| M,z \right) \, {\rm d} \varphi, \\
+ R_h = \frac{\sqrt{\theta_R^2+\theta_{\rm mis}^2-2\theta_{\rm mis}\theta_{R}\cos\varphi}}{D_A(z)} \, ; \quad \theta_R=\frac{R}{D_A(z^{\rm ob})} \nonumber
+\end{eqnarray}
+
+The effective bias term for a cluster with observed richness $\lambda\ob$ and redshift $z\ob$, reads:
+\begin{equation}
+\langle b (\lambda\ob, z\ob) \rangle = \frac{1}{N(\lambda\ob,z\ob)} \int_0^{\infty}  \de z\true\
+  {\Omega_{\rm mask}} \frac{\de V}{\de z\true \de \Omega}  P(z\ob|z\true)_{\Delta\lambda\ob_i}
+  \int \de M b(M,z)\, n(M,z) P(\lambda\ob | M,z)
+\end{equation}
+However, the optical selection lead to a biased cluster sample with a boosted halo bias, i.e. $b_{\rm sel} \neq \langle b (\lambda\ob, z\ob) \rangle$.
+
+\end{document}

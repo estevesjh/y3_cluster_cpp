@@ -233,10 +233,53 @@ $\Delta\Sigma$.*
 
 ### Projection lensing: $\Sigma_{\rm prj}$ and $\Delta\Sigma_{\rm prj}$
 
-#### The full two-halo model
+#### The full two-halo model with exclusion
 
-The master equation (Costanzi 2026 Eq. 13) for the two-halo projected
-surface density around a richness-selected cluster is
+The two-halo term is the correlated excess *above* the mean matter
+column — it carries no background. This is the `cluster_toolkit`
+$\Sigma_{2h}$ convention, and it is what a random-point-subtracted
+measurement contains. Everything below is written in a single
+convention: comoving distances, comoving $dV/(dz\,d\Omega)$ and
+$n(M,z)$, comoving surface densities, and the comoving offset
+$R_{\rm off} = \theta\,\chi_{\rm c}$ with
+$\chi_{\rm c} \equiv \chi(z^{\rm ob})$; mixing in a physical
+$\theta\,D_A$ offset or a physical $\Sigma_{\rm NFW}$ is a silent
+$(1+z)$-power error.
+
+The adopted halo–halo correlation model between the selected cluster
+and a neighbour of mass $M$ at 3-D comoving separation $r$ is
+
+$$
+\xi_{hh}^{\rm model}(r, \theta, M)
+= b(M, z)\, b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})\,
+  \xi_{\rm NL}(r, z^{\rm ob}),
+\qquad
+r^2(\theta, z) = \chi^2(z) + \chi_{\rm c}^2
+  - 2\,\chi(z)\,\chi_{\rm c}\cos\theta
+$$
+
+(the exact chord; the $\Delta\chi$-only approximation errs by 35% at
+$\theta=0.1\,\theta_\lambda$ and $>1000\%$ at $2\,\theta_\lambda$,
+because near the exclusion ring the transverse term dominates). Halo
+exclusion acts on the **complete pair distribution** — the probability
+of finding a distinct halo centre — not on the correlated piece alone.
+With the hard-sphere kernel $E(r) = \Theta[r - R_{\rm excl}]$, the
+total pair distribution is $g_{hh}^{\rm excl} = (1 + \xi_{hh}^{\rm
+model})\,E$, and the pair weight of a random-point-subtracted,
+excess-density observable is
+
+$$
+\mathcal{K}_{\rm exc}(r, \theta, M)
+\equiv g_{hh}^{\rm excl} - 1
+= \bigl(1 + \xi_{hh}^{\rm model}\bigr)\,E(r) - 1
+= \begin{cases}
+    \xi_{hh}^{\rm model}, & r \ge R_{\rm excl},\\[2pt]
+    -1, & r < R_{\rm excl}.
+  \end{cases}
+$$
+
+The master equation (Costanzi 2026 Eq. 13) for the projected excess
+surface density around a richness-selected cluster is then
 
 $$
 \begin{aligned}
@@ -245,29 +288,67 @@ $$
   \int dz\,\frac{dV}{dz\,d\Omega}(z)\, w_z(z, z^{\rm ob})
   \int dM\, n(M, z) \\
 &\quad\times
-  \bigl[\, 1 + b(M, z)\, b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})\,
-  \xi_{\rm NL}(|\Delta r|, z^{\rm ob}) \,\bigr]\,
-  \Sigma_{\rm mis}\bigl(R \mid M, z, R_{\rm mis}=\theta\,D_A(z^{\rm ob})\bigr),
+  \mathcal{K}_{\rm exc}\bigl(r(\theta,z), \theta, M\bigr)\,
+  \Sigma_{\rm mis}\bigl(R \mid M, z, R_{\rm off}=\theta\,\chi_{\rm c}\bigr).
 \end{aligned}
 $$
 
-where the 3-D comoving separation is the **exact chord**
-$|\Delta r|^2 = \chi(z)^2 + \chi(z^{\rm ob})^2 -
-2\,\chi(z)\,\chi(z^{\rm ob})\cos\theta$ (the $\Delta\chi$-only
-approximation errs by 35% at $\theta=0.1\,\theta_\lambda$ and $>1000\%$ at
-$2\,\theta_\lambda$, because near the ring the transverse term dominates),
-and exclusion is a **line-of-sight slab**, $\xi_{\rm NL}\to 0$ for
-$\theta\le\theta_{\rm excl}(z)$ with
-$\cos\theta_{\rm excl}(z) =
-[\chi(z)^2+\chi(z^{\rm ob})^2-R_{\rm excl}^2]/[2\chi(z)\chi(z^{\rm ob})]$ —
-not a 3-D ball mask on $|\Delta r|$. The kernel $\Sigma_{\rm mis}$ is the
-azimuth-averaged miscentered NFW surface density of the neighbour,
+Splitting $\mathcal{K}_{\rm exc}$ into its two limits separates a
+surviving correlated term and an exclusion counterterm,
+$\langle\Sigma^{\rm prj}\rangle = \Sigma_{\rm corr}^{\rm surv} +
+\Sigma_{\rm ex}^{\rm ct}$, with the same measure
+$d\mu \equiv 2\pi\sin\theta\,d\theta\; \tfrac{dV}{dz\,d\Omega}\,
+w_z\,dz\; n(M,z)\,dM$ in both:
 
 $$
-\Sigma_{\rm mis}(R'\mid M,z,R_{\rm mis})
-= \int_0^{2\pi}\!d\varphi\;
-  \Sigma_{\rm NFW}\!\Bigl(\sqrt{R'^{\,2}+R_{\rm mis}^2-2R'R_{\rm mis}\cos\varphi}\,\Big|\,M,z\Bigr).
+\Sigma_{\rm corr}^{\rm surv}(R)
+= \int d\mu\;
+  \xi_{hh}^{\rm model}\, E(r)\,
+  \Sigma_{\rm mis}(R \mid M, z, R_{\rm off}),
+\qquad
+\Sigma_{\rm ex}^{\rm ct}(R)
+= -\int d\mu\;
+  \bigl[1 - E(r)\bigr]\,
+  \Sigma_{\rm mis}(R \mid M, z, R_{\rm off}).
 $$
+
+The counterterm is **not optional**: dropping it (keeping only the
+$b\,b_{\rm sel}\,\xi_{\rm NL}$ integrand with $E$ zeroing $\xi$) is a
+model without halo exclusion in the pair distribution — the total
+density of distinct neighbours must vanish inside the forbidden
+region, and relative to random points that region contributes $-1$,
+not $0$. Note the counterterm carries no bias and no $b_{\rm sel}$
+(certainty of absence, not clustering), and it is dressed by the same
+$\Sigma_{\rm mis}$ kernel as everything else — an excluded centre
+removes its entire profile, wings included. The `1` of the halo-model
+bracket does **not** appear in the master equation: it integrates to
+the near-uniform background column $\Sigma_{\rm bkg}$ defined next
+(writing it inside invites comparing a background-carrying model
+against a background-free measured quantity — the pure-bookkeeping
+factor-of-$\sim$2 offset the CLensPy mock validation of 2026-08-28
+chased and eliminated).
+
+At fixed $z$, the ball indicator $E$ is evaluated as an **angular
+cap**: if $|\chi(z) - \chi_{\rm c}| < R_{\rm excl}$, then $E = 0$ for
+$\theta < \theta_{\rm excl}(z)$ with
+$\cos\theta_{\rm excl}(z) =
+[\chi^2(z)+\chi_{\rm c}^2-R_{\rm excl}^2]/[2\chi(z)\chi_{\rm c}]$;
+otherwise $E = 1$ at every $\theta$. This is the angular slicing of
+the three-dimensional exclusion ball on the exact chord $r(\theta,z)$
+— not a separate line-of-sight prescription. The kernel
+$\Sigma_{\rm mis}$ is the azimuth-**averaged** (normalized) offset NFW
+surface density of the neighbour,
+
+$$
+\Sigma_{\rm mis}(R'\mid M,z,R_{\rm off})
+= \frac{1}{2\pi}\int_0^{2\pi}\!d\varphi\;
+  \Sigma_{\rm NFW}\!\Bigl(\sqrt{R'^{\,2}+R_{\rm off}^2-2R'R_{\rm off}\cos\varphi}\,\Big|\,M,z\Bigr);
+$$
+
+the $1/(2\pi)$ is required because the outer measure
+$2\pi\sin\theta\,d\theta$ already carries the neighbour's azimuthal
+factor — keeping both azimuthal integrals unnormalized overcounts by
+$2\pi$.
 
 This is the cylindrical specialisation of the Cooray–Sheth two-halo term
 (Eqs. 86–87 of the halo-model review): starting from $\xi_{2h}$ built from
@@ -277,32 +358,76 @@ $\xi_{hh}$, fix the cluster at the origin, drop its own profile (the
 $(\mathbf{R}_\perp,\chi_\parallel)\to(\theta,z)$ with volume element
 $d^2R_\perp\,d\chi_\parallel = 2\pi\sin\theta\,d\theta\cdot
 (dV/dz\,d\Omega)\,dz$; the azimuth average around the neighbour's offset
-$R_{\rm mis}=\theta\,\chi(z_{\rm cls})$ produces $\Sigma_{\rm mis}$.
+$R_{\rm off}=\theta\,\chi_{\rm c}$ produces $\Sigma_{\rm mis}$.
 Linear deterministic bias,
 $\xi_{hh}(r\mid M_{\rm cls},M)\approx b_{\rm cls}\,b(M,z)\,\xi_{\rm lin}(r)$,
 is then upgraded in three steps for a richness-selected target: (i)
 $\xi_{\rm lin}\to\xi_{\rm NL}$ (halofit), because the 1h–2h transition at
-$\sim R_{\rm excl}$ is nonlinear; (ii) the LoS-slab exclusion above; (iii)
+$\sim R_{\rm excl}$ is nonlinear; (ii) exclusion applied to the complete
+pair distribution, $\xi_{hh} \to (1+\xi_{hh})E - 1$; (iii)
 $b_{\rm cls}\to b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})$ (see
-{doc}`../math/index`), plus the uncorrelated cosmological
-mean as the $+1$ inside the bracket.
+{doc}`../math/index`).
 
-#### The channel split: $\Sigma_{\rm rnd}$ vs $\Sigma_{\rm cl+LSS}$
+Two named approximations in the exclusion kernel, both inherited from
+the Costanzi convention: $R_{\rm excl} =
+R_\lambda(\lambda^{\rm ob})(1+z^{\rm ob})$ comoving is the richness
+aperture — independent of the neighbour's mass, where the physical
+hard-sphere scale is $R_\Delta(M_{\rm cls}) + R_\Delta(M)$ (García et
+al. 2021) — and it is evaluated at a single effective central mass
+rather than averaged over $p(M_{\rm cls}\mid\lambda^{\rm ob},z^{\rm
+ob})$, which neglects the covariance between central mass, bias, and
+exclusion scale. Both are calibration refinements for percent-level
+work near the 1h–2h transition, along with the soft (rather than
+hard-sphere) exclusion boundary.
 
-The `1` term integrates to the *mean cosmological* projected surface
-density in the photo-$z$ window, $\Sigma_{\rm rnd}(R)$ — spatially
-near-uniform; the $b\,b_{\rm sel}\,\xi_{\rm NL}$ term is the
-*correlation-excess* two-halo contribution $\Sigma_{\rm cl+LSS}(R)$. In
-$\Delta\Sigma = \bar\Sigma(<R) - \Sigma(R)$ a uniform field satisfies
-$\bar\Sigma(<R)\equiv\Sigma_{\rm rnd}$, so $\Delta\Sigma_{\rm rnd}(R)=0$:
-the mean photo-$z$-window surface density cancels from the measured excess
-(the classical Sheldon 2009 / Zu 2014 / Melchior 2017
-random-point-subtraction statement). Numerically, with $\theta$ truncated
-at $\theta_{\max}=R_{\max}/\chi(z_{\rm cls})$, $\Delta\Sigma_{\rm rnd}$ is
-not exactly zero but a truncation-dependent boundary term (the rnd piece
-grows $\sim 15\%$ going $R_{\max}=30\to 60\,h^{-1}\mathrm{Mpc}$ while
-cl+LSS changes $<1\%$). The pipeline therefore returns the cl+LSS piece by
-default for both observables.
+#### The background $\Sigma_{\rm bkg}$ (the `rnd` channel)
+
+A raw projected *mass map* — a stack that has not been random-point
+subtracted, e.g. the Costanzi mock's per-halo columns — additionally
+contains the mean cosmological projected surface density in the
+photo-$z$ window,
+
+$$
+\Sigma_{\rm bkg}(R)
+= 2\pi \int d\theta\,\sin\theta
+  \int dz\,\frac{dV}{dz\,d\Omega}(z)\, w_z(z, z^{\rm ob})
+  \int dM\, n(M, z)\,
+  \Sigma_{\rm mis}\bigl(R \mid M, z, R_{\rm off}=\theta\,\chi_{\rm c}\bigr),
+$$
+
+spatially near-uniform and blind to the selection; such a map is the
+sum $\Sigma_{\rm bkg} + \Sigma^{\rm prj}$. Two cancellation statements
+justify keeping it out of the observable. For $\Sigma$: the
+random-point subtraction of the measurement removes exactly this term
+(the classical Sheldon 2009 / Zu 2014 / Melchior 2017 statement). For
+$\Delta\Sigma = \bar\Sigma(<R) - \Sigma(R)$: a uniform field satisfies
+$\bar\Sigma(<R)\equiv\Sigma_{\rm bkg}$, so
+$\Delta\Sigma_{\rm bkg}(R)=0$ — exactly for an infinite,
+translationally complete projection, by mass conservation of the
+azimuthal average, $\int d^2s\,\Delta\Sigma_{\rm mis}(R,s)=0$. A
+finite angular cutoff, survey mask, or redshift-dependent boundary
+makes the computed background weakly $R$-dependent (verified at the
+0.05–0.2% level; the residual is a pure $\theta$-truncation boundary
+term: the bkg piece grows $\sim 15\%$ going $R_{\max}=30\to
+60\,h^{-1}\mathrm{Mpc}$ while $\Sigma^{\rm prj}$ changes $<1\%$) — the
+same random-point subtraction and geometric window used for the data
+must then be applied to the model. The pipeline returns
+$\Sigma^{\rm prj}$ (the cl+LSS channel) for both observables — with
+the master equation written as the excess, the equation and the
+pipeline default say the same thing.
+
+Adding the two components gives the raw density contributed by
+distinct neighbours, $\Sigma^{\rm raw}_{\rm prj} = \Sigma_{\rm bkg} +
+\Sigma^{\rm prj}$, whose integrand is $(1 + \xi_{hh}^{\rm
+model})\,E\,\Sigma_{\rm mis}$: it vanishes locally for forbidden
+neighbour centres because $E = 0$ there, while $\Sigma_{\rm bkg}$
+stays the strictly uniform random-point expectation and the exclusion
+hole resides in $\Sigma^{\rm prj}$ through the counterterm — where a
+random-point-subtracted measurement keeps it. A legacy "slab" form
+that merely zeroes $\xi_{\rm NL}$ inside the cap (i.e. drops
+$\Sigma_{\rm ex}^{\rm ct}$) differs by a $\lesssim 0.6\%$ suppression
+of the raw profile at $R\to 0$, gone by $R\approx 2\,$cMpc (CLensPy
+mock validation).
 
 #### $\Delta\Sigma_{\rm prj}$ and the integration limit
 
@@ -316,15 +441,18 @@ $$
 \frac{2}{R'^{\,2}}\int_0^{R'}\! s\,\langle\Sigma^{\rm prj}(s)\rangle\,ds .
 $$
 
-The excess functional acts only on the radial argument and therefore
-commutes with the outer $(\theta, z, M)$ integrals: the
-$\Delta\Sigma^{\rm prj}$ prediction is the $\Sigma^{\rm prj}$ machinery
-with the kernel swap
+The excess functional acts only on the radial argument, and the pair
+weight $\mathcal{K}_{\rm exc}$ is independent of the evaluation radius
+$R'$, so the operator commutes with the outer $(\theta, z, M)$
+integrals: the $\Delta\Sigma^{\rm prj}$ prediction is the
+$\Sigma^{\rm prj}$ machinery with the **same** weight
+$\mathcal{K}_{\rm exc}$ (counterterm included) and the kernel swap
 $\Sigma_{\rm mis} \to \Delta\Sigma_{\rm mis} \equiv
 \bar\Sigma_{\rm mis}(<R') - \Sigma_{\rm mis}(R')$ — a different lookup
-against the same offset-NFW tables. Because
-$\Delta\Sigma_{\rm mis}(R' \mid R_{\rm mis})$ has compact support around
-$R_{\rm mis} \sim R'$, the line-of-sight truncation is adaptive,
+against the same offset-NFW tables, never a numerical reconstruction
+from a tabulated $\Sigma^{\rm prj}$. Because
+$\Delta\Sigma_{\rm mis}(R' \mid R_{\rm off})$ has compact support around
+$R_{\rm off} \sim R'$, the line-of-sight truncation is adaptive,
 
 $$
 \theta_{\max}^{\Delta\Sigma}
@@ -379,18 +507,19 @@ from the $N_i[f]$ operator:
 - **No $\Omega(z)$.** The survey-area factor cancels between
   $\Sigma^{\rm prj}$ and its normalisation, so it is not applied.
 - **Off-centred NFW $\Sigma_{\rm mis}$ with the single kernel.** The
-  1-halo density uses a single-offset miscentered NFW (offset
-  $R_{\rm mis} = \theta D_A(z^{\rm ob})$), not the centred
+  1-halo density uses a single-offset miscentered NFW (comoving offset
+  $R_{\rm off} = \theta\,\chi_{\rm c}$), not the centred
   $\Sigma_{\rm NFW}$ nor the gamma-kernel mixture used by
   `Shear1hMisSel`. Here the offset *is* the $\theta$-integration
-  variable, so a $\delta$-kernel in $R_{\rm mis}$ is the right physics
-  and a gamma kernel would double-integrate over $R_{\rm mis}$.
+  variable, so a $\delta$-kernel in $R_{\rm off}$ is the right physics
+  and a gamma kernel would double-integrate over $R_{\rm off}$.
 
 The two branches therefore integrate different kernels (centred NFW vs
 miscentered $\Sigma_{\rm mis}$) against different weights ($S_{ij}$ vs
 $w_z$): only the $N_i$-weighted 1-halo branch needs the $N_i[1]$ division,
-while $\gamma_t^{\rm prj}$ enters the sum directly. Both the $[1]$ term
-(`rnd`) and the $[b\,b_{\rm sel}\,\xi_{\rm NL}]$ term (`cl`) are
+while $\gamma_t^{\rm prj}$ enters the sum directly. Both the background
+$\Sigma_{\rm bkg}$ (`rnd`) and the correlated
+$b\,b_{\rm sel}\,\xi_{\rm NL}$ term (`cl`) are
 accumulated separately, and the same kernel construction produces
 $\Delta\Sigma^{\rm prj}$ and
 $\gamma_t^{\rm prj} = \Delta\Sigma^{\rm prj}\,\Sigma_{\rm crit}^{-1}$ in
