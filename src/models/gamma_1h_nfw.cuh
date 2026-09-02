@@ -65,6 +65,7 @@ namespace y3_cuda {
     // Wall-grid point-constant (set from the bin edges, not an
     // integration variable) -- see set_lob_centre().
     double r_mis_ = 0.17 * gamma_1h_detail::R_lambda(25.0);
+    double omega_m_ = 1.0;
 
   public:
     size_t
