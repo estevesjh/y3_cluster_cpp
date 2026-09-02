@@ -136,4 +136,4 @@ dumps to `validation-data/`, leaving stale `.out` copies here.
 
 | Path | Quantity | Class | Used by | Notes |
 |---|---|---|---|---|
-| `data/mock/mock_dv_cp_camb.npz` | mock data vector (counts + 1h shear + projected shear) with covariance | pipeline input | `[likelihoods]` → `y3_buzzard/likelihood_cp.py` | **`data/mock/` is not present in the current tree**; the `.npz` is built by the mock-DV scripts in `$PSCRATCH/github/des-cluster-nersc` and must exist before an MCMC run |
+| `data/mock/mock_dv_cp_camb.npz` | mock data vector (counts + 1h shear + projected shear) with covariance | pipeline input | `[likelihoods]` → `src/pipelines/buzzard/likelihoods/likelihood_cp.py` | **`data/mock/` is not present in the current tree**; the `.npz` is built by the mock-DV scripts in `$PSCRATCH/github/des-cluster-nersc` and must exist before an MCMC run |

@@ -2,9 +2,10 @@
 
 New DES Y3 observable implementations live under `src/pipelines/des_y3`.
 This namespace complements the production CosmoSIS modules under
-`src/modules`; it does not replace them. The reference
-`mock_mcmc_buzzard.ini` configuration therefore continues to load the
-existing production paths documented in {doc}`running`.
+`src/modules`; it does not replace them. The reference `des_y3.ini`
+({doc}`running`) loads the `0d` C++ backends from here; the DES Y1
+`mock_mcmc_buzzard.ini` continues to load the `src/modules` paths
+({doc}`variants`).
 
 ```{admonition} Compatibility boundary
 :class: important
@@ -28,11 +29,14 @@ The implemented tree is:
 src/pipelines/
 ├── shared/                         # reusable numerical/datablock layer
 ├── cosmology/                      # halo-model physics
-├── systematics/                    # canonical selection-systematics layer
-│   ├── selection_richness/python/
-│   ├── selection_bias/{python,cpp}/
-│   ├── selection_function/python/
-│   └── shear_prj/cpp/
+├── systematics/                    # canonical systematics layer
+│   ├── selection_richness/python/  # sel_function, sel_kernels
+│   ├── selection_bias/{python,cpp,cuda/3d}/  # bsel, BSelBins, PAGANI b_sel_marg
+│   ├── selection_function/         # prj_params (EMG coefficients)
+│   ├── costanzi_bprj/{python,cpp}/ # B_prj(R) max-model correction
+│   ├── boost_factor/               # McClintock+19 B(R) (published, unconsumed)
+│   └── shear_prj/cpp/              # ShearPrjCore + frozen twins
+├── buzzard/likelihoods/            # likelihood_cp.py
 └── des_y3/                         # survey observable compositions
     ├── number_counts/
     │   ├── cpp/{0d,3d}/
@@ -153,19 +157,19 @@ are described in {doc}`numerics/index`.
 
 ## What remains under `src/modules`
 
-The reference ini continues to load the production selection, counts,
+The DES Y1 ini continues to load the production selection, counts,
 one-halo shear, selection-bias, and projection entry points from their stable
 locations:
 
 | Stage | Stable production source |
 |---|---|
-| Selection tensor | `src/modules/sel_function/sel_function.py` |
-| Number counts | `src/modules/num_counts_sel/NumCounts.cc` |
-| One-halo miscentred shear | `src/modules/num_counts_sel/Shear1hMis.cc` |
-| Selection-bias marginalization | `src/modules/b_sel_marg_cpu/BSelMargIntegrand.cc` |
+| Selection tensor | `src/modules/sel_function/sel_function.py` (shim over `systematics/selection_richness`) |
+| Number counts | `src/modules/num_counts_sel/NumCounts.cc` (`NumCountsSel`) |
+| One-halo miscentred shear | `src/modules/num_counts_sel/Shear1hMis.cc` (`Shear1hMisSel`) |
+| Selection-bias marginalization | `src/modules/b_sel_marg_cpu/BSelMargIntegrand.cc` (also used by `des_y3.ini`) |
 | Projection shear | `src/modules/sigma_prj_cpu/ShearPrjFrozenPhysics.cc` |
 
-The path-stable support stages `cp_camb`, `halo_model`,
-`average_sigma_crit_inv`, and `likelihoods` also remain outside the new
-observable tree. Shared C++ models stay under `src/models` and infrastructure
+The path-stable support stages `cp_camb`, `halo_model`, and
+`average_sigma_crit_inv` also remain outside the new observable tree;
+the likelihood lives in `src/pipelines/buzzard/likelihoods/`. Shared C++ models stay under `src/models` and infrastructure
 under `src/utils`; the new layout does not reorganize either layer.

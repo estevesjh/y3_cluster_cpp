@@ -293,7 +293,7 @@ CPU/GPU experiments, diagnostic backends, and examples — see the
 | One-halo lensing | `Shear1hMisSel` (reference) / `Shear1hSel` (centered-only) | $N_{ij}[\gamma_t^{1h}](R)$ |
 | Selection-bias operators | `b_sel_marg`, `bsel` | $P_1$, $I_1$, $J$, and scale-dependent $b_{\rm sel}$ |
 | Projection lensing | `shear_prj_frozen_physics` (`ShearPrjFrozenPhysics`; `ShearPrjEvaluator` is the validation backend) | $\Delta\Sigma_{\rm prj}$, $\gamma_t^{\rm prj}$ (aliased to `shear_prj/*`) |
-| Likelihood | `y3_buzzard/likelihood_cp.py` | final log-likelihood |
+| Likelihood | `src/pipelines/buzzard/likelihoods/likelihood_cp.py` | final log-likelihood |
 
 ## Repository architecture
 

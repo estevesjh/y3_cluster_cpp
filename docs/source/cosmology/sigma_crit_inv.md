@@ -5,12 +5,14 @@
 Computes the source-averaged inverse critical surface density
 $\langle\Sigma_{\rm crit}^{-1}\rangle(z_l)$ — the geometric factor that
 converts $\Delta\Sigma$ into tangential shear. Both shear modules
-(`Shear1hMisSel`, `shear_prj_frozen_physics`) multiply by it.
+(`Shear1hGl`, `ShearPrjGl`; also `Shear1h2hMax`) multiply by it.
 
 ## Script
 
-- Source: [`src/modules/average_sigma_crit_inv/average_sigma_crit_inv.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/modules/average_sigma_crit_inv/average_sigma_crit_inv.py)
-  (`y3_cluster_cpp` @ `d7feb75`).
+- CosmoSIS module: [`src/modules/average_sigma_crit_inv/average_sigma_crit_inv.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/modules/average_sigma_crit_inv/average_sigma_crit_inv.py).
+- Physics library: [`src/pipelines/cosmology/sigma_crit_inv.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/cosmology/sigma_crit_inv.py)
+  (survey-agnostic $\langle\Sigma_{\rm crit}^{-1}\rangle$ with the beta lookup
+  table and cosmology shift; pinned by `test/cosmology_package.test.py`).
 - Source $n(z)$ read at setup from
   `${Y3_CLUSTER_CPP_DIR}/data/test_cluster_Y1.fits` (HDU 6, columns
   `z_mid`, `bin1`).
@@ -68,6 +70,6 @@ z_bins = 50
 
 | DataBlock output | Meaning | Units / shape | Consumed by |
 |---|---|---|---|
-| `average_sigma_crit_inv/zlense` | lens-redshift grid | `(50,)` | `Shear1hMisSel`, `shear_prj_frozen_physics` |
+| `average_sigma_crit_inv/zlense` | lens-redshift grid | `(50,)` | `Shear1hGl`, `ShearPrjGl`, `Shear1h2hMax` |
 | `average_sigma_crit_inv/sci_average` | $\langle\Sigma_{\rm crit}^{-1}\rangle(z_l)$ | inverse surface density, in the convention matching the $10^{-12}$-scaled NFW $\Delta\Sigma$ tables ($M_\odot/(h\,\mathrm{pc}^2)$) so $\gamma_t$ is dimensionless; `(50,)` | same |
 

@@ -95,7 +95,7 @@ y3_cluster::CostanziBprj_t const bprj(sample);  // [costanzi_bprj] from the valu
 double const sigma_corr = bprj(R, lob, zob) * sigma_max;
 ```
 
-Consumer: `y3_buzzard/likelihood_cp.py` (`shear_max_section = shear1h2h_max`
+Consumer: `src/pipelines/buzzard/likelihoods/likelihood_cp.py` (`shear_max_section = shear1h2h_max`
 + `is_b_proj_costanzi26 = T`) multiplies the max-model shear theory by
 `bprj_wall(block, shear_r_perp)`; the pipeline must run the `costanzi_bprj`
 module stage so the section carries `lob_centers`/`zob_centers`.

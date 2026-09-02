@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""y3_buzzard/likelihood_cp.py: max-model mode (shear_max_section) and the
+"""src/pipelines/buzzard/likelihoods/likelihood_cp.py: max-model mode (shear_max_section) and the
 Costanzi-2026 B_prj(R) option (is_b_proj_costanzi26).
 
 Synthetic DataBlock + DV file, dump-free. Pins: the max model closes at
@@ -36,7 +36,7 @@ ZOB_CENTERS = np.array([0.275, 0.425, 0.575])
 
 def _load_likelihood_cp():
     spec = importlib.util.spec_from_file_location(
-        "likelihood_cp", REPO / "y3_buzzard" / "likelihood_cp.py")
+        "likelihood_cp", REPO / "src" / "pipelines" / "buzzard" / "likelihoods" / "likelihood_cp.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

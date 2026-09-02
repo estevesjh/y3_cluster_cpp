@@ -20,7 +20,7 @@ Further source material: [`RichnessSelection/docs/richness_selection_function.te
 (selection functions and richness–mass models),
 [`RichnessSelection/docs/richness_selection.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection.tex) and
 [`delta_sigma_prj_derivation.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/delta_sigma_prj_derivation.tex) (projection lensing),
-[`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) and [`docs/projection_lensing_paper.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/projection_lensing_paper.tex) in this
+[`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex) and [`docs/projection_lensing_paper.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/projection_lensing_paper.tex) in this
 repository.
 
 ## Number counts
@@ -85,7 +85,7 @@ $N_{\rm grid} = N_{z^{\rm ob}}\cdot N_{\lambda^{\rm ob}}\cdot N_R$; the
 smoke setups use $N_{\rm grid}=12$ for scalar observables and $120$ for
 radial ones ($N_R = 10$).
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear
+*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex) §Observables and the shear
 composition / The $N_i[f]$ operator.*
 
 ## Cluster lensing
@@ -207,10 +207,10 @@ number-count integral at the same wall point:
 $$
 \langle\gamma_t^{1h,\rm full}\rangle_i(R)
  = \frac{N_i[\gamma_t^{1h,\rm full}](R)}{N_i[1]}
- = \frac{\mathtt{shear1hmissel/vals}}{\mathtt{numcountssel/vals}}.
+ = \frac{\mathtt{shear1h\_gl/vals}}{\mathtt{numcounts\_sij\_gl/vals}}.
 $$
 
-This division lives in the likelihood (`y3_buzzard/likelihood_cp.py`), not
+This division lives in the likelihood (`src/pipelines/buzzard/likelihoods/likelihood_cp.py`), not
 inside a single module. Because $f_{\rm mis}$ and $\tau_{\rm mis}$ are
 scalars (no $M$ or $z$ dependence in the fiducial parameterisation), the
 integral remains linear in the two pieces,
@@ -228,58 +228,23 @@ centred branch. At the fiducial parameters the small-$R$
 $\langle\gamma_t^{1h}\rangle$ is suppressed by $\sim 30\%$ at
 $R \lesssim 0.3\,h^{-1}\,\mathrm{Mpc}$ relative to the centred profile.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Miscentering selection on
+*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex) §Miscentering selection on
 $\Delta\Sigma$.*
 
 ### Projection lensing: $\Sigma_{\rm prj}$ and $\Delta\Sigma_{\rm prj}$
 
-#### The full two-halo model with exclusion
+#### Definition of $\Sigma^{\rm prj}$
 
-The two-halo term is the correlated excess *above* the mean matter
-column — it carries no background. This is the `cluster_toolkit`
-$\Sigma_{2h}$ convention, and it is what a random-point-subtracted
-measurement contains. Everything below is written in a single
-convention: comoving distances, comoving $dV/(dz\,d\Omega)$ and
-$n(M,z)$, comoving surface densities, and the comoving offset
-$R_{\rm off} = \theta\,\chi_{\rm c}$ with
-$\chi_{\rm c} \equiv \chi(z^{\rm ob})$; mixing in a physical
-$\theta\,D_A$ offset or a physical $\Sigma_{\rm NFW}$ is a silent
-$(1+z)$-power error.
-
-The adopted halo–halo correlation model between the selected cluster
-and a neighbour of mass $M$ at 3-D comoving separation $r$ is
-
-$$
-\xi_{hh}^{\rm model}(r, \theta, M)
-= b(M, z)\, b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})\,
-  \xi_{\rm NL}(r, z^{\rm ob}),
-\qquad
-r^2(\theta, z) = \chi^2(z) + \chi_{\rm c}^2
-  - 2\,\chi(z)\,\chi_{\rm c}\cos\theta
-$$
-
-(the exact chord; the $\Delta\chi$-only approximation errs by 35% at
-$\theta=0.1\,\theta_\lambda$ and $>1000\%$ at $2\,\theta_\lambda$,
-because near the exclusion ring the transverse term dominates). Halo
-exclusion acts on the **complete pair distribution** — the probability
-of finding a distinct halo centre — not on the correlated piece alone.
-With the hard-sphere kernel $E(r) = \Theta[r - R_{\rm excl}]$, the
-total pair distribution is $g_{hh}^{\rm excl} = (1 + \xi_{hh}^{\rm
-model})\,E$, and the pair weight of a random-point-subtracted,
-excess-density observable is
-
-$$
-\mathcal{K}_{\rm exc}(r, \theta, M)
-\equiv g_{hh}^{\rm excl} - 1
-= \bigl(1 + \xi_{hh}^{\rm model}\bigr)\,E(r) - 1
-= \begin{cases}
-    \xi_{hh}^{\rm model}, & r \ge R_{\rm excl},\\[2pt]
-    -1, & r < R_{\rm excl}.
-  \end{cases}
-$$
-
-The master equation (Costanzi 2026 Eq. 13) for the projected excess
-surface density around a richness-selected cluster is then
+$\Sigma^{\rm prj}$ is **the two-halo term sourced by correlated
+line-of-sight structure** around a richness-selected cluster: the
+projected mass of the distinct neighbouring haloes whose presence is
+correlated with the target — and, through projection effects, with its
+*selection*. It carries the selection-affected bias $b_{\rm sel}$ in
+place of the plain halo bias; the conventional two-halo term
+({doc}`../observables/second_halo_term`) is its unselected-bias limit.
+The master equation (Costanzi et al. 2026, Eq. 13) for the projected
+excess surface density around a cluster of observed richness
+$\lambda^{\rm ob}$ and photometric redshift $z^{\rm ob}$ is
 
 $$
 \begin{aligned}
@@ -288,97 +253,114 @@ $$
   \int dz\,\frac{dV}{dz\,d\Omega}(z)\, w_z(z, z^{\rm ob})
   \int dM\, n(M, z) \\
 &\quad\times
-  \mathcal{K}_{\rm exc}\bigl(r(\theta,z), \theta, M\bigr)\,
-  \Sigma_{\rm mis}\bigl(R \mid M, z, R_{\rm off}=\theta\,\chi_{\rm c}\bigr).
+  \xi_{hh}^{\rm model}\bigl(r(\theta,z), \theta, M\bigr)\,
+  \Sigma_{\rm mis}\bigl(R \mid M, z, R_{\rm off}=\theta\,\chi_{\rm c}\bigr),
 \end{aligned}
 $$
 
-Splitting $\mathcal{K}_{\rm exc}$ into its two limits separates a
-surviving correlated term and an exclusion counterterm,
-$\langle\Sigma^{\rm prj}\rangle = \Sigma_{\rm corr}^{\rm surv} +
-\Sigma_{\rm ex}^{\rm ct}$, with the same measure
-$d\mu \equiv 2\pi\sin\theta\,d\theta\; \tfrac{dV}{dz\,d\Omega}\,
-w_z\,dz\; n(M,z)\,dM$ in both:
+with the halo–halo correlation between the selected cluster and a
+neighbour of mass $M$ at 3-D comoving separation $r$ modelled as
 
 $$
-\Sigma_{\rm corr}^{\rm surv}(R)
-= \int d\mu\;
-  \xi_{hh}^{\rm model}\, E(r)\,
-  \Sigma_{\rm mis}(R \mid M, z, R_{\rm off}),
+\xi_{hh}^{\rm model}(r, \theta, M)
+= b(M, z)\, b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})\,
+  \xi_{\rm NL}(r, z^{\rm ob}),
 \qquad
-\Sigma_{\rm ex}^{\rm ct}(R)
-= -\int d\mu\;
-  \bigl[1 - E(r)\bigr]\,
-  \Sigma_{\rm mis}(R \mid M, z, R_{\rm off}).
+r^2(\theta, z) = \chi^2(z) + \chi_{\rm c}^2
+  - 2\,\chi(z)\,\chi_{\rm c}\cos\theta .
 $$
 
-The counterterm is **not optional**: dropping it (keeping only the
-$b\,b_{\rm sel}\,\xi_{\rm NL}$ integrand with $E$ zeroing $\xi$) is a
-model without halo exclusion in the pair distribution — the total
-density of distinct neighbours must vanish inside the forbidden
-region, and relative to random points that region contributes $-1$,
-not $0$. Note the counterterm carries no bias and no $b_{\rm sel}$
-(certainty of absence, not clustering), and it is dressed by the same
-$\Sigma_{\rm mis}$ kernel as everything else — an excluded centre
-removes its entire profile, wings included. The `1` of the halo-model
-bracket does **not** appear in the master equation: it integrates to
-the near-uniform background column $\Sigma_{\rm bkg}$ defined next
-(writing it inside invites comparing a background-carrying model
-against a background-free measured quantity — the pure-bookkeeping
-factor-of-$\sim$2 offset the CLensPy mock validation of 2026-08-28
-chased and eliminated).
+The neighbour sits at angular offset $\theta$ and redshift $z$; the
+integral runs over every position along the line of sight and over
+the neighbour mass function. Its ingredients, each supplied by one
+pipeline stage:
 
-At fixed $z$, the ball indicator $E$ is evaluated as an **angular
-cap**: if $|\chi(z) - \chi_{\rm c}| < R_{\rm excl}$, then $E = 0$ for
-$\theta < \theta_{\rm excl}(z)$ with
-$\cos\theta_{\rm excl}(z) =
-[\chi^2(z)+\chi_{\rm c}^2-R_{\rm excl}^2]/[2\chi(z)\chi_{\rm c}]$;
-otherwise $E = 1$ at every $\theta$. This is the angular slicing of
-the three-dimensional exclusion ball on the exact chord $r(\theta,z)$
-— not a separate line-of-sight prescription. The kernel
-$\Sigma_{\rm mis}$ is the azimuth-**averaged** (normalized) offset NFW
-surface density of the neighbour,
+- **$b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})$ — the
+  selection-affected bias**, the heart of the Costanzi-2026 model.
+  Optical selection prefers clusters with excess correlated structure
+  along the line of sight, so the effective bias of the *selected*
+  population is scale dependent: enhanced inside the richness aperture
+  $\theta_\lambda = R_\lambda(1+z^{\rm ob})/\chi_{\rm c}$, relaxing to
+  a large-scale value beyond it. The pipeline evaluates it
+  analytically as a sigmoid between two plateaus,
+  $b_{\rm sel}(\theta) = B_{\rm small} + (B_{\rm large} - B_{\rm small})\,
+  \sigma(\theta)$, with $(B_{\rm small}, B_{\rm large})$ closed per
+  richness/redshift bin from the $\mathcal P[X]$ population operators
+  ({doc}`../systematics/bsel`).
+- **$b(M,z)$** — the Tinker-2010 halo bias of the neighbour, read from
+  `haloModel/bias` ({doc}`../cosmology/halo_bias`).
+- **$\xi_{\rm NL}(r, z^{\rm ob})$** — the nonlinear matter correlation
+  function (`xi_nl`, {doc}`../cosmology/halo_model`), evaluated on the
+  exact chord $r(\theta,z)$ (the $\Delta\chi$-only approximation errs
+  by 35% at $\theta=0.1\,\theta_\lambda$ and $>1000\%$ at
+  $2\,\theta_\lambda$: near the exclusion ring the transverse term
+  dominates). The 1h–2h transition at $\sim R_{\rm excl}$ is
+  nonlinear, so the linear $\xi$ is not adequate there (the
+  `cp_camb` nonlinear emulator is still pending — issue #9).
+- **$n(M,z)$, $dV/(dz\,d\Omega)$** — halo mass function and comoving
+  volume element ({doc}`../cosmology/mf_tinker`, {doc}`../cosmology/cp_camb`).
+- **$w_z(z, z^{\rm ob}) = \max(0, 1-u^2)$, $u = (z - z^{\rm ob})/\sigma_z(z)$**
+  — the parabolic photo-$z$ window selecting which line-of-sight
+  neighbours are counted as projected onto the cluster
+  ({doc}`../modules/redshift_kernel`).
+- **$\Sigma_{\rm mis}(R \mid M, z, R_{\rm off})$** — the neighbour's
+  own profile, seen from the target's centre: the azimuth-**averaged**
+  offset NFW surface density,
 
-$$
-\Sigma_{\rm mis}(R'\mid M,z,R_{\rm off})
-= \frac{1}{2\pi}\int_0^{2\pi}\!d\varphi\;
-  \Sigma_{\rm NFW}\!\Bigl(\sqrt{R'^{\,2}+R_{\rm off}^2-2R'R_{\rm off}\cos\varphi}\,\Big|\,M,z\Bigr);
-$$
+  $$
+  \Sigma_{\rm mis}(R\mid M,z,R_{\rm off})
+  = \frac{1}{2\pi}\int_0^{2\pi}\!d\varphi\;
+    \Sigma_{\rm NFW}\!\Bigl(\sqrt{R^{2}+R_{\rm off}^2-2RR_{\rm off}\cos\varphi}\,\Big|\,M,z\Bigr),
+  $$
 
-the $1/(2\pi)$ is required because the outer measure
-$2\pi\sin\theta\,d\theta$ already carries the neighbour's azimuthal
-factor — keeping both azimuthal integrals unnormalized overcounts by
-$2\pi$.
+  at the comoving offset $R_{\rm off} = \theta\,\chi_{\rm c}$,
+  $\chi_{\rm c} \equiv \chi(z^{\rm ob})$. This is
+  **neighbouring-halo miscentering**: the offset *is* the projected
+  halo–halo separation, a geometric ingredient with no free
+  parameters (unlike the target-cluster gamma kernel of
+  {doc}`../observables/shear_halo`); a $\delta$-kernel in $R_{\rm off}$
+  is the right physics here, a gamma kernel would double-integrate.
+  The $1/(2\pi)$ is required because the outer measure
+  $2\pi\sin\theta\,d\theta$ already carries the neighbour's azimuthal
+  factor. The profile uses the concentration–mass relation
+  (`haloModel/concentration`), never a fixed $c$.
+- **Halo exclusion** — a neighbour centre cannot sit inside the
+  target's own halo. This is applied as a hard-sphere kernel of
+  comoving radius $R_{\rm excl} = R_\lambda(\lambda^{\rm ob})(1+z^{\rm ob})$
+  on the pair distribution; how it enters, and what the pipeline
+  implements, is collected in the last subsection below.
 
-This is the cylindrical specialisation of the Cooray–Sheth two-halo term
-(Eqs. 86–87 of the halo-model review): starting from $\xi_{2h}$ built from
-halo profiles $u(\cdot\mid M)$ around the halo-halo correlator
-$\xi_{hh}$, fix the cluster at the origin, drop its own profile (the
-1-halo term is separate), and change the neighbour's coordinates
-$(\mathbf{R}_\perp,\chi_\parallel)\to(\theta,z)$ with volume element
-$d^2R_\perp\,d\chi_\parallel = 2\pi\sin\theta\,d\theta\cdot
+Everything is written in one convention: comoving distances, comoving
+$dV/(dz\,d\Omega)$ and $n(M,z)$, comoving surface densities, and the
+comoving offset $\theta\,\chi_{\rm c}$; mixing in a physical
+$\theta\,D_A$ offset or a physical $\Sigma_{\rm NFW}$ is a silent
+$(1+z)$-power error. $\Sigma^{\rm prj}$ is the correlated excess
+*above* the mean matter column — it carries no background. This is the
+`cluster_toolkit` $\Sigma_{2h}$ convention and what a
+random-point-subtracted measurement contains.
+
+**Where it comes from.** This is the cylindrical specialisation of the
+Cooray–Sheth two-halo term (Eqs. 86–87 of the halo-model review):
+starting from $\xi_{2h}$ built from halo profiles $u(\cdot\mid M)$
+around the halo–halo correlator $\xi_{hh}$, fix the cluster at the
+origin, drop its own profile (the 1-halo term is separate), and change
+the neighbour's coordinates $(\mathbf{R}_\perp,\chi_\parallel)\to(\theta,z)$
+with volume element $d^2R_\perp\,d\chi_\parallel = 2\pi\sin\theta\,d\theta\cdot
 (dV/dz\,d\Omega)\,dz$; the azimuth average around the neighbour's offset
-$R_{\rm off}=\theta\,\chi_{\rm c}$ produces $\Sigma_{\rm mis}$.
-Linear deterministic bias,
+$R_{\rm off}=\theta\,\chi_{\rm c}$ produces $\Sigma_{\rm mis}$. Linear
+deterministic bias,
 $\xi_{hh}(r\mid M_{\rm cls},M)\approx b_{\rm cls}\,b(M,z)\,\xi_{\rm lin}(r)$,
 is then upgraded in three steps for a richness-selected target: (i)
-$\xi_{\rm lin}\to\xi_{\rm NL}$ (halofit), because the 1h–2h transition at
-$\sim R_{\rm excl}$ is nonlinear; (ii) exclusion applied to the complete
-pair distribution, $\xi_{hh} \to (1+\xi_{hh})E - 1$; (iii)
-$b_{\rm cls}\to b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})$ (see
-{doc}`../math/index`).
+$\xi_{\rm lin}\to\xi_{\rm NL}$; (ii) exclusion applied to the complete
+pair distribution (below); (iii)
+$b_{\rm cls}\to b_{\rm sel}(\theta;\lambda^{\rm ob},z^{\rm ob})$.
 
-Two named approximations in the exclusion kernel, both inherited from
-the Costanzi convention: $R_{\rm excl} =
-R_\lambda(\lambda^{\rm ob})(1+z^{\rm ob})$ comoving is the richness
-aperture — independent of the neighbour's mass, where the physical
-hard-sphere scale is $R_\Delta(M_{\rm cls}) + R_\Delta(M)$ (García et
-al. 2021) — and it is evaluated at a single effective central mass
-rather than averaged over $p(M_{\rm cls}\mid\lambda^{\rm ob},z^{\rm
-ob})$, which neglects the covariance between central mass, bias, and
-exclusion scale. Both are calibration refinements for percent-level
-work near the 1h–2h transition, along with the soft (rather than
-hard-sphere) exclusion boundary.
+**What the pipeline does not include, and why.** $\Sigma^{\rm prj}$ is
+evaluated per $(\lambda^{\rm ob}, z^{\rm ob})$ wall point, so it needs
+no richness-selection tensor $S_{ij}$ and no $N_i[1]$ normalisation;
+the survey area $\Omega(z)$ cancels between a surface density and its
+normalisation and is never applied. Both differ from the $N_i[f]$
+population operator of the counts and one-halo shear.
 
 #### The background $\Sigma_{\rm bkg}$ (the `rnd` channel)
 
@@ -395,8 +377,9 @@ $$
   \Sigma_{\rm mis}\bigl(R \mid M, z, R_{\rm off}=\theta\,\chi_{\rm c}\bigr),
 $$
 
-spatially near-uniform and blind to the selection; such a map is the
-sum $\Sigma_{\rm bkg} + \Sigma^{\rm prj}$. Two cancellation statements
+the "$1$" of the halo-model bracket $1 + \xi_{hh}$: spatially
+near-uniform and blind to the selection. Such a map is the sum
+$\Sigma_{\rm bkg} + \Sigma^{\rm prj}$. Two cancellation statements
 justify keeping it out of the observable. For $\Sigma$: the
 random-point subtraction of the measurement removes exactly this term
 (the classical Sheldon 2009 / Zu 2014 / Melchior 2017 statement). For
@@ -411,23 +394,16 @@ makes the computed background weakly $R$-dependent (verified at the
 term: the bkg piece grows $\sim 15\%$ going $R_{\max}=30\to
 60\,h^{-1}\mathrm{Mpc}$ while $\Sigma^{\rm prj}$ changes $<1\%$) — the
 same random-point subtraction and geometric window used for the data
-must then be applied to the model. The pipeline returns
-$\Sigma^{\rm prj}$ (the cl+LSS channel) for both observables — with
-the master equation written as the excess, the equation and the
-pipeline default say the same thing.
+must then be applied to the model.
 
-Adding the two components gives the raw density contributed by
-distinct neighbours, $\Sigma^{\rm raw}_{\rm prj} = \Sigma_{\rm bkg} +
-\Sigma^{\rm prj}$, whose integrand is $(1 + \xi_{hh}^{\rm
-model})\,E\,\Sigma_{\rm mis}$: it vanishes locally for forbidden
-neighbour centres because $E = 0$ there, while $\Sigma_{\rm bkg}$
-stays the strictly uniform random-point expectation and the exclusion
-hole resides in $\Sigma^{\rm prj}$ through the counterterm — where a
-random-point-subtracted measurement keeps it. A legacy "slab" form
-that merely zeroes $\xi_{\rm NL}$ inside the cap (i.e. drops
-$\Sigma_{\rm ex}^{\rm ct}$) differs by a $\lesssim 0.6\%$ suppression
-of the raw profile at $R\to 0$, gone by $R\approx 2\,$cMpc (CLensPy
-mock validation).
+The projection modules publish both: the `cl` channel is
+$\Sigma^{\rm prj}$ (the clustered excess entering the likelihood), the
+`rnd` channel is $\Sigma_{\rm bkg}$ (a diagnostic), and
+`vals = rnd + cl` is the raw column. Writing the "$1$" inside the
+master equation invites comparing a background-carrying model against
+a background-free measured quantity — the pure-bookkeeping
+factor-of-$\sim$2 offset the CLensPy mock validation of 2026-08-28
+chased and eliminated.
 
 #### $\Delta\Sigma_{\rm prj}$ and the integration limit
 
@@ -442,11 +418,10 @@ $$
 $$
 
 The excess functional acts only on the radial argument, and the pair
-weight $\mathcal{K}_{\rm exc}$ is independent of the evaluation radius
-$R'$, so the operator commutes with the outer $(\theta, z, M)$
-integrals: the $\Delta\Sigma^{\rm prj}$ prediction is the
-$\Sigma^{\rm prj}$ machinery with the **same** weight
-$\mathcal{K}_{\rm exc}$ (counterterm included) and the kernel swap
+weight is independent of the evaluation radius $R'$, so the operator
+commutes with the outer $(\theta, z, M)$ integrals: the
+$\Delta\Sigma^{\rm prj}$ prediction is the $\Sigma^{\rm prj}$ machinery
+with the **same** weight and the kernel swap
 $\Sigma_{\rm mis} \to \Delta\Sigma_{\rm mis} \equiv
 \bar\Sigma_{\rm mis}(<R') - \Sigma_{\rm mis}(R')$ — a different lookup
 against the same offset-NFW tables, never a numerical reconstruction
@@ -461,8 +436,73 @@ $$
 \ \ (\text{not below} \sim 2),
 $$
 
-replacing the fixed $R_{\max} = 30\,h^{-1}$Mpc cut. Full derivation:
+replacing the fixed $R_{\max} = 30\,h^{-1}$Mpc cut. The shear follows
+as $\gamma_t^{\rm prj} = \Delta\Sigma^{\rm prj}\,
+\langle\Sigma_{\rm crit}^{-1}\rangle(z^{\rm ob})$. Full derivation:
 [`delta_sigma_prj_derivation.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/delta_sigma_prj_derivation.tex) in `RichnessSelection`.
+
+#### Halo exclusion
+
+Two distinct halo centres cannot overlap. Exclusion acts on the
+**complete pair distribution** — the probability of finding a distinct
+halo centre — not on the correlated piece alone. With the hard-sphere
+kernel $E(r) = \Theta[r - R_{\rm excl}]$, the total pair distribution
+is $g_{hh}^{\rm excl} = (1 + \xi_{hh}^{\rm model})\,E$, and the pair
+weight of a random-point-subtracted, excess-density observable is
+
+$$
+\mathcal{K}_{\rm exc}(r, \theta, M)
+\equiv g_{hh}^{\rm excl} - 1
+= \begin{cases}
+    \xi_{hh}^{\rm model}, & r \ge R_{\rm excl},\\[2pt]
+    -1, & r < R_{\rm excl}.
+  \end{cases}
+$$
+
+Replacing $\xi_{hh}^{\rm model}$ by $\mathcal K_{\rm exc}$ in the
+master equation splits $\langle\Sigma^{\rm prj}\rangle$ into a
+surviving correlated term and an exclusion counterterm,
+$\Sigma_{\rm corr}^{\rm surv} = \int d\mu\; \xi_{hh}^{\rm model} E\,
+\Sigma_{\rm mis}$ and $\Sigma_{\rm ex}^{\rm ct} = -\int d\mu\;
+[1 - E]\,\Sigma_{\rm mis}$, with the common measure
+$d\mu \equiv 2\pi\sin\theta\,d\theta\; \tfrac{dV}{dz\,d\Omega}\,
+w_z\,dz\; n(M,z)\,dM$. The counterterm carries no bias and no
+$b_{\rm sel}$ (certainty of absence, not clustering) and is dressed by
+the same $\Sigma_{\rm mis}$ kernel — an excluded centre removes its
+entire profile, wings included.
+
+At fixed $z$ the ball indicator is an **angular cap**: if
+$|\chi(z) - \chi_{\rm c}| < R_{\rm excl}$, then $E = 0$ for
+$\theta < \theta_{\rm excl}(z)$ with
+$\cos\theta_{\rm excl}(z) =
+[\chi^2(z)+\chi_{\rm c}^2-R_{\rm excl}^2]/[2\chi(z)\chi_{\rm c}]$;
+otherwise $E = 1$ at every $\theta$. This is the angular slicing of
+the three-dimensional exclusion ball on the exact chord — it is what
+the code's "per-$z$ slab" mask evaluates (`theta_excl_at_z` in
+`sigma_prj_t.hh`).
+
+**What the pipeline implements.** `ShearPrjCore` and every backend
+descended from it apply $E$ to the clustered channel only: the `cl`
+channel is $\Sigma_{\rm corr}^{\rm surv}$ ($\xi_{\rm NL}$ zeroed
+inside the cap), the `rnd` channel is the unexcluded
+$\Sigma_{\rm bkg}$, and the counterterm $\Sigma_{\rm ex}^{\rm ct}$ is
+not evaluated. Relative to the full $\mathcal K_{\rm exc}$ weight this
+"zero-$\xi$" form suppresses the raw profile by $\lesssim 0.6\%$ at
+$R\to 0$, gone by $R\approx 2\,$cMpc (CLensPy mock validation,
+2026-08-28) — below the current model accuracy but a known,
+documented omission.
+
+Two named approximations in the exclusion kernel, both inherited from
+the Costanzi convention: $R_{\rm excl} = R_\lambda(\lambda^{\rm ob})(1+z^{\rm ob})$
+comoving is the richness aperture — independent of the neighbour's
+mass, where the physical hard-sphere scale is
+$R_\Delta(M_{\rm cls}) + R_\Delta(M)$ (García et al. 2021) — and it is
+evaluated at a single effective central mass rather than averaged over
+$p(M_{\rm cls}\mid\lambda^{\rm ob},z^{\rm ob})$, which neglects the
+covariance between central mass, bias, and exclusion scale. Both are
+calibration refinements for percent-level work near the 1h–2h
+transition, along with the soft (rather than hard-sphere) exclusion
+boundary.
 
 ### The shear composition
 
@@ -473,7 +513,7 @@ i.e. $12 \times 10\,R$ points):
 $$
 \gamma_t^{\rm theory}(R \,|\, i, j)
  = \langle\gamma_t^{1h}\rangle_i(R) + \gamma_t^{\rm prj}(R \,|\, \lambda^{\rm ob}, z^{\rm ob})
- = \frac{\mathtt{shear1hsel/vals}}{\mathtt{numcountssel/vals}} + \mathtt{shear\_prj/vals}.
+ = \frac{\mathtt{shear1h\_gl/vals}}{\mathtt{numcounts\_sij\_gl/vals}} + \mathtt{shear\_prj\_gl/cl}.
 $$
 
 In the language of the Costanzi-2026 paper:
@@ -526,7 +566,7 @@ $\gamma_t^{\rm prj} = \Delta\Sigma^{\rm prj}\,\Sigma_{\rm crit}^{-1}$ in
 one pass; `sigma_prj/vals`, `dsigma_prj/vals`, and the `rnd`/`cl`
 subfields are published for diagnostics.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §Observables and the shear
+*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex) §Observables and the shear
 composition.*
 
 ### The standard two-halo term (fiducial 1h+2h)
@@ -585,7 +625,7 @@ that build the fiducial 1h+2h shear must instead keep
 `compute_lensing_2h = T` so that `Sigma_hh`, `dSigma_hh`, and `Wp_hh` are
 available downstream.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/pipeline_modules.tex) §`halo_model`: bias $b(M,z)$ and
+*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex) §`halo_model`: bias $b(M,z)$ and
 $\xi_{\rm NL}(r,z)$.*
 
 ### Comparing the two compositions
@@ -600,7 +640,7 @@ That contradicts this project's own documented standard
 the **pointwise max**, $\Sigma_{\max} = \max(\Sigma_{\rm NFW},\,
 b\,\Sigma_{\rm hh})$ (Hayashi & White 2008, the DES Y1 prescription),
 implemented by
-[`shear1h2h_max.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py).
+[`shear1h2h_max.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py).
 Removed rather than left showing the wrong physics. Regenerating it
 needs a real fiducial pipeline dump with `compute_lensing_2h = T` — not
 available in this environment; see {doc}`../observables/second_halo_term`

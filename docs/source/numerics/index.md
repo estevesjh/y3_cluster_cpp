@@ -33,7 +33,7 @@ with the production DES Y1 module is recorded separately as an
 real pipeline, fiducial widePlanck point, pinned 12-bin wall, per-MCMC-
 sample timing. Full detail (all strategy/backend cells, caveats, validation
 records) is in
-[`src/pipelines/des_y3/README.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/README.md).
+[`src/pipelines/des_y3/README.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/README.md).
 
 **Number counts** (12 bins; DES Y1 `NumCountsSel.so` = 6 ms):
 

@@ -1,15 +1,15 @@
 # Selection Function
 
-`Python` · `y3_cluster_cpp` · `Selection` · module `sel_function` · `197 ms/sample`
+`Python` · `y3_cluster_cpp` (`src/pipelines/systematics/selection_richness/`) · `Systematics` · module `sel_function` · `197 ms/sample`
 
 Pre-tabulates, once per sample, the joint richness + photo-$z$ selection
 function $S_{ij}(\ln M, z)$ for all 12 observed bins on one shared grid.
-`NumCountsSel` and `Shear1hMisSel` slice their bin's plane from the packed
-tensor and interpolate it inside their population integrals.
+`NumCountsSijGl`, `Shear1hGl` (and `Shear1h2hMax`) slice their bin's plane
+from the packed tensor and contract it inside their population integrals.
 
 ## Script
 
-- Source: [`src/pipelines/systematics/selection_richness/python/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/main/src/pipelines/systematics/selection_richness/python/sel_function.py).
+- Source: [`src/pipelines/systematics/selection_richness/python/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/systematics/selection_richness/python/sel_function.py).
 - Loaded by CosmoSIS as a Python module.
 
 `src/modules/sel_function/sel_function.py` remains a thin compatibility shim.
@@ -140,7 +140,7 @@ N_q    = 32
 
 - Requires `Y3_CLUSTER_CPP_DIR`.
 - Ordering: after `consistency` (MOR parameters live in the sampled
-  sections); before `NumCountsSel` and `Shear1hMisSel`.
+  sections); before `NumCountsSijGl` and `Shear1hGl`.
 - The 12 array entries define the bin wall: 4 richness bins
   $\{[20,30), [30,45), [45,60), [60,200)\}$ × 3 photo-$z$ bins
   $\{[0.20,0.35), [0.35,0.50), [0.50,0.65)\}$, richness index fastest.
@@ -206,7 +206,7 @@ contains the baseline Git commit.
 
 | DataBlock output | Meaning | Units / shape | Consumed by |
 |---|---|---|---|
-| `sel_function/lnM` | shared mass grid | `(192,)` | `NumCountsSel`, `Shear1hMisSel` |
+| `sel_function/lnM` | shared mass grid | `(192,)` | `NumCountsSijGl`, `Shear1hGl`, `Shear1h2hMax` |
 | `sel_function/z` | shared redshift grid | `(64,)` | same |
 | `sel_function/S_stack` | packed selection tensor $S_{ij}(\ln M, z)$, layout `(bin, z, lnM)`, C-contiguous | `(12, 64, 192)` | same |
 | `sel_function/lambda_edges` | unique observed-richness bin edges used by the selection wall | `(5,)` | `bsel.py` |

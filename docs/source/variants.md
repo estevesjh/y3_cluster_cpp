@@ -21,9 +21,9 @@ the three observable stages:
 
 Everything else — `consistency`, `GrowthFactor`, `cp_camb`, `MfTinker`,
 `halo_model`, `average_sigma_crit_inv`, `sel_function`, `b_sel_marg`,
-`bsel`, `likelihoods` — is the same module in both pipelines. See
-{doc}`running`'s warning about `likelihood_cp.py` section-name
-compatibility before running `des_y3.ini` end-to-end.
+`bsel`, `likelihoods` — is the same module in both pipelines;
+`des_y3.ini` passes the des_y3 output-section names to the likelihood
+explicitly ({doc}`observables/likelihood`).
 
 | Variant | Modules changed | Observable changed | Status |
 |---|---|---|---|
@@ -128,7 +128,7 @@ b(\ln M, z)\,\Delta\Sigma_{\rm hh}(R, z)\big), \qquad
 N_i[\Delta\Sigma_{\max}](R)\,\langle\Sigma_{\rm crit}^{-1}\rangle / N_i[1].$$
 
 Implemented by
-[`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py)
+[`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py)
 (`shear1h2h_max.py`, C++ `Shear1h2hMax.cc`, CUDA
 `Shear1h2hMaxGpu.cu`) — a **model option**, not part of the reference
 pipeline ({doc}`../running`, {doc}`observables/second_halo_term`).
@@ -146,7 +146,7 @@ note). Status: **model option** — and the wired production
 ({doc}`modules/historical`), which is why `Shear1h2hMax` reads
 `haloModel/dSigma_hh` directly rather than through them.
 
-Likelihood wiring: `y3_buzzard/likelihood_cp.py` consumes the max model
+Likelihood wiring: `src/pipelines/buzzard/likelihoods/likelihood_cp.py` consumes the max model
 with `shear_max_section = shear1h2h_max` (theory =
 `shear1h2h_max/vals` / $N_i$, no projection term). Setting
 `is_b_proj_costanzi26 = T` multiplies that theory by the Costanzi-2026

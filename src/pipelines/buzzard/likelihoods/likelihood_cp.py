@@ -1,4 +1,4 @@
-"""Gaussian likelihood for the mock_mcmc_cp_camb.ini production pipeline.
+"""Gaussian likelihood for the DES Y3 / Buzzard CosmoSIS pipelines (des_y3.ini).
 
 Compares fiducial (data, invcov) against two observables from the
 Costanzi-2026 pipeline:
@@ -127,8 +127,7 @@ def _costanzi_bprj_wall(config, r_grid):
         raise ValueError(
             f"likelihood_cp: shear_r_perp has {r_grid.size} radii but "
             f"data_Shear implies {config['shear_n_r']} per bin")
-    pipelines_dir = str(Path(__file__).resolve().parents[1]
-                        / "src" / "pipelines")
+    pipelines_dir = str(Path(__file__).resolve().parents[2])  # src/pipelines
     if pipelines_dir not in sys.path:
         sys.path.insert(0, pipelines_dir)
     

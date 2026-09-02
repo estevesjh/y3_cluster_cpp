@@ -10,19 +10,19 @@ $\sigma_z(z)$ and the line-of-sight weight $w_z$.
 
 ## Script
 
-- Compiled scatter table: [`src/models/z_kernel_data.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/models/z_kernel_data.hh)
+- Compiled scatter table: [`src/models/z_kernel_data.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/models/z_kernel_data.hh)
   — `z_kernel_z()` / `z_kernel_sigma()`, the calibrated $\sigma_z(z)$
   arrays baked into the binary (**not** read from the DataBlock).
 - Bin kernel (C++): `richness_zkernel` in
-  [`src/models/richness_kernel_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/models/richness_kernel_t.hh)
+  [`src/models/richness_kernel_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/models/richness_kernel_t.hh)
   — the Gaussian CDF difference $\mathcal S_j$.
 - Python mirror: `_K_j` in
-  [`src/modules/sel_function/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/modules/sel_function/sel_function.py)
+  [`src/modules/sel_function/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/modules/sel_function/sel_function.py)
   (uses the per-bin ini `sigma_z`).
 - Line-of-sight weight: `build_z_grid_` in
-  [`src/models/sigma_prj_frozen_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/models/sigma_prj_frozen_t.hh)
+  [`src/models/sigma_prj_frozen_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/models/sigma_prj_frozen_t.hh)
   / `sigma_prj_t.hh` and the $z$-grid builder of
-  [`src/models/p_operator_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/models/p_operator_t.hh).
+  [`src/models/p_operator_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/models/p_operator_t.hh).
 
 ## Numerical framework
 
@@ -54,9 +54,9 @@ scatter sources are in use:
 
 | Consumer | What it uses | Where |
 |---|---|---|
-| `sel_function` | $\mathcal S_j$ with ini `sigma_z` | the $S_{ij}$ tensor ({doc}`../selection/sel_function`) |
+| `sel_function` | $\mathcal S_j$ with ini `sigma_z` | the $S_{ij}$ tensor ({doc}`../systematics/sel_function`) |
 | `NumCountsSel`, `Shear1hMisSel` | $\mathcal S_j$ folded inside `S_stack` | {doc}`../observables/number_counts`, {doc}`../observables/shear_halo` |
-| `b_sel_marg` | $\sigma_z(z)$ table for the ring band | {doc}`../selection/bsel` |
+| `b_sel_marg` | $\sigma_z(z)$ table for the ring band | {doc}`../systematics/bsel` |
 | `shear_prj_frozen_physics` | $\sigma_z(z)$ table + parabolic $w_z$ | {doc}`../observables/shear_projection` |
 
 ```{note}

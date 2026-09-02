@@ -9,8 +9,8 @@ emulator forward pass per sample.
 
 ## Script
 
-- CosmoSIS interface: [`src/modules/cp_camb/cp_camb.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/modules/cp_camb/cp_camb.py)
-  (`y3_cluster_cpp` @ `d7feb75`), loaded by CosmoSIS as a Python module.
+- CosmoSIS interface: [`src/modules/cp_camb/cp_camb.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/modules/cp_camb/cp_camb.py)
+  loaded by CosmoSIS as a Python module.
 - **The emulator code itself lives in the external
   [estevesjh/camb-emulator](https://github.com/estevesjh/camb-emulator)
   repository** (active pipeline under
@@ -101,7 +101,7 @@ nz = 50
 | `matter_power_lin/{z, k_h, p_k}` | total-matter linear $P(k,z)$ | $h/\mathrm{Mpc}$, $(\mathrm{Mpc}/h)^3$; `(50, 506)` | `halo_model` |
 | `cdm_baryon_power_lin/{z, k_h, p_k}` | CDM+baryon linear $P(k,z)$ | same grid | `MfTinker` (`matter_power_lin_version = 2`) |
 | `matter_power_nl/{z, k_h, p_k}` | nonlinear $P(k,z)$ — only if a nonlinear emulator is loaded | same | `halo_model` (optional) |
-| `distances/{z, a, d_a, d_m, d_l, d_c, h, mu, nz}` | astropy background distances; Mpc (CAMB convention, no $h$); `d_c = d_m` (flat); `h = H(z)/c` in Mpc⁻¹ | `(50,)` each | `average_sigma_crit_inv`, `NumCountsSel`, `Shear1hMisSel`, `b_sel_marg`, `bsel`, `shear_prj_frozen_physics` |
+| `distances/{z, a, d_a, d_m, d_l, d_c, h, mu, nz}` | astropy background distances; Mpc (CAMB convention, no $h$); `d_c = d_m` (flat); `h = H(z)/c` in Mpc⁻¹ | `(50,)` each | `average_sigma_crit_inv`, `NumCountsSijGl`, `Shear1hGl`, `b_sel_marg`, `bsel`, `ShearPrjGl` |
 | `cosmological_parameters/cp_camb_invalid_reason` | rejection reason string (only on rejected draws, with module status 1 → $\log L = -\infty$) | — | diagnostics |
 
 

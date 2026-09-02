@@ -7,14 +7,14 @@ test covers, and its current status.
 Run the configured suite with:
 
 ```bash
-ctest -j 6 --output-on-failure
+ctest -j 10 --output-on-failure
 ```
 
 Use `ctest -N` for the exact target list. Default relative tolerance is
 `1e-3`. Two known-failing tests are deliberate (real defects, not test
 bugs):
-[`radial_series_vs_full_ltmz_defect.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/known_issues/radial_series_vs_full_ltmz_defect.md),
-[`nfw_dsigma_mis_defect.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/nfw_dsigma_mis_defect.md).
+[`radial_series_vs_full_ltmz_defect.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/known_issues/radial_series_vs_full_ltmz_defect.md),
+[`nfw_dsigma_mis_defect.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/nfw_dsigma_mis_defect.md).
 
 ## Folder inventories
 

@@ -1,6 +1,6 @@
 # One-Halo Lensing
 
-`C++` · `y3_cluster_cpp` (`src/pipelines/des_y3`) · `Cluster observable` · module `Shear1hGl` · `~28 ms/sample`
+`C++` · `y3_cluster_cpp` (`src/pipelines/des_y3`) · `Cluster observable` · module `Shear1hGl` · `~9 ms/sample`
 
 Computes the population-integrated one-halo tangential shear
 $N_i[\gamma_t^{1h,\rm full}](R)$ — the centred + miscentred NFW profile
@@ -10,13 +10,13 @@ profile and adds the projection term.
 
 ## Script
 
-- Model: [`src/pipelines/shared/sel_gl_weights.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/shared/sel_gl_weights.hh)
+- Model: [`src/pipelines/shared/sel_gl_weights.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/shared/sel_gl_weights.hh)
   (`y3_pipelines::SelGlWeights`, shared with {doc}`number_counts` and
   identity-certified against the production `SelGLCore`) +
-  [`src/pipelines/shared/lensing_helpers.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/shared/lensing_helpers.hh)
+  [`src/pipelines/shared/lensing_helpers.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/shared/lensing_helpers.hh)
   (pipeline-owned lensing helpers; production `Shear1hMisSel.so` keeps
   its own `SelGLCore` + `lensing_weights.hh` pair, untouched).
-- Module driver: [`src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hGl.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hGl.cc)
+- Module driver: [`src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hGl.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hGl.cc)
   (`DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE`) — bitwise-equivalent to
   DES Y1's `Shear1hMisSel.so` ({doc}`../variants`), own module label
   and output section.
@@ -28,27 +28,6 @@ profile and adds the projection term.
   at a single **frozen $\rho_{\rm ref}=\rho_{m,0}$** — see "Evaluating the
   frozen table at any redshift" below for how a per-sample $z$ is folded
   in without rebuilding it.
-
-## DES Y3 implementations
-
-This module is the `0d` $z$-contracted cell (formerly `fast_mass`; zero adaptive dimensions) — the reference pipeline's choice
-per `src/pipelines/des_y3/README.md`'s own "Reference pipeline choices"
-table. Other implementations below
-`src/pipelines/des_y3/shear_1h2h` provide the reference and
-alternative cells described in {doc}`../pipeline_organization`:
-
-| Dims | Backends | Implementation and status | Precision vs 3d |
-|---|---|---|---|
-| `3d` | C++, CUDA | Explicit $(\lambda_{\rm true},\ln M,z)$ adaptive one-halo miscentred references | 3.3e-4 / 3.4e-4 (vs the adaptive certifier) |
-| `0d` | Python | Explicit fixed-GL 3-dim grid | 4.9e-5 |
-| `0d` | **C++ (this page)**, Python | Exact redshift contraction, 1-dim GL mass sum; `Shear1hGl.so` is bitwise-equivalent to `Shear1hMisSel.so` (identity recorded separately) | 8.4e-4 |
-| `0d` | Python, C++ | Offline $U_\ell$ radial-series tables plus per-sample population moments; a review comment flags a possible double-counted miscentering term here — see {doc}`../variants` | 3.7e-3 truncation vs same-profile fiducial; raw vs-3d amplitude is the open c=4 defect |
-| `0d` | Python, C++, CUDA | `Shear1h2hMax` — traditional $\max(1h,b\,2h)$ model, $z$-resolved 2-dim GL sum, not part of this reference pipeline — see {doc}`../variants` | 8.3e-4 (through the Python max chain) |
-
-The radial-series tables are versioned under `data/radial_series` and are
-loaded, never regenerated, during sampling. The `3d` cells are the
-accuracy references; the fast and series paths retain their own documented
-physics and interpolation approximations.
 
 ## Numerical framework
 
@@ -186,8 +165,8 @@ Everything {doc}`NumCountsSijGl <number_counts>` reads, plus:
 |---|---|---|---|
 | `haloModel/{r_sigma, lnM, dSigma_nfw}` | centred NFW $\Delta\Sigma(R, M)$ spline | cMpc/$h$; `(100, 128)` | `halo_model` (`compute_lensing_1h = T`) |
 | `average_sigma_crit_inv/{zlense, sci_average}` | $\langle\Sigma_{\rm crit}^{-1}\rangle(z)$, folded into the $z$ weight | `(50,)` | `average_sigma_crit_inv` |
-| `miscentering/f_mis`, `miscentering/tau_mis` | miscentred fraction and offset scale | scalars | sampler if declared; in-code defaults 0.22 / 0.17 |
-| `cosmological_parameters/omega_m` | $\bar\rho_m$ multiplier of the miscentred table | scalar | `consistency` |
+| `miscentering/f_mis`, `miscentering/tau_mis` | miscentred fraction and offset scale | scalars | values file — **required**, no in-code fallback (Y3 fiducial 0.22 / 0.17) |
+| `haloModel/rho_m_ref` | reference density of the miscentred NFW boundary and amplitude (unified $\rho_m$ convention) | scalar | `halo_model` |
 
 ## DataBlock outputs
 
@@ -197,3 +176,34 @@ Everything {doc}`NumCountsSijGl <number_counts>` reads, plus:
 
 DES Y1's `Shear1hMisSel.so` writes `shear1hmissel/vals` instead — the
 two sections never collide ({doc}`../variants`).
+
+## DES Y3 implementations
+
+This module is the `0d` $z$-contracted cell (zero adaptive dimensions;
+formerly `fast_mass`) — the reference pipeline's choice per the
+"Recommended methods" table of `src/pipelines/des_y3/README.md`. The
+other cells under `src/pipelines/des_y3/shear_1h2h`
+({doc}`../pipeline_organization`); costs are per sample on the
+180-point wall (Perlmutter CPU, A100 for CUDA), precision is quoted
+against the adaptive `3d` Python reference (reported integration error
+$\le 10^{-6}$; the `3d` C++/CUDA rows were re-measured on the reduced
+6-point corner wall):
+
+| Dims | Backend | Implementation and status | Cost | Precision vs 3d |
+|---|---|---|---:|---|
+| `3d` | Python | `shear1h3d` — adaptive explicit $(\lambda_{\rm true},\ln M,z)$ one-halo miscentred reference | 35 s | reference |
+| `3d` | C++ | `Shear1h3d.so`; adaptive Cuhre | 51 s | 2.6e-4 |
+| `3d` | CUDA | `Shear1h3dGpu.so`; PAGANI on A100 | 32 s | 3.0e-4 (4.3e-5 vs the C++ twin) |
+| `0d` | Python | `shear1h_explicit_gl.py` — explicit fixed-GL 3-dim grid | 149 ms | 4.9e-5 |
+| `0d` | **C++ (this page)**, Python | `Shear1hGl.so` / `shear1h_gl.py` — exact redshift contraction, 1-dim GL mass sum; bitwise-equivalent to `Shear1hMisSel.so` | 9 ms (Python 74 ms) | 8.4e-4 (identity with production) |
+| `0d` | Python, C++ | `Shear1hRadialSeries.so` — offline $U_\ell$ radial-series tables plus per-sample population moments | 6–7 ms | 56–86% raw amplitude (open fixed-$c{=}4$ defect); 3.7e-3 internal fixed-profile consistency |
+| `0d` | Python, C++, CUDA | `Shear1h2hMax` — traditional $\max(1h,b\,2h)$ model, $z$-resolved 2-dim GL sum; a model option, not in the reference pipeline ({doc}`second_halo_term`) | 11 ms (CUDA 8 ms) | 8.3e-4 |
+
+The radial-series tables are versioned under `data/radial_series` and
+are loaded, never regenerated, during sampling; the family is not a
+validated replacement for the varying-concentration one-halo model
+(`docs/known_issues/radial_series_vs_full_ltmz_defect.md`). Validators:
+`validate_fast_vs_production.py`,
+`validate_explicit_vs_production.py`, `validate_radial_series.py`,
+`validate_shear1h2h_max.py`; tests in
+{doc}`../testing/src_pipelines_des_y3`.
