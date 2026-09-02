@@ -1034,3 +1034,4 @@ y1_rerun/*.tgz
 y1_rerun/*.txt
 y3_buzzard/*.txt
 y3_buzzard/datablock*
+cosmosis-models/output/
