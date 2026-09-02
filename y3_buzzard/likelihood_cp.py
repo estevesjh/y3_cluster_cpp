@@ -117,6 +117,8 @@ def _costanzi_bprj_wall(config, r_grid):
     zob_centers the costanzi_bprj module publishes), see
     src/pipelines/systematics/costanzi_bprj/python/costanzi_bprj.py.
     """
+    from systematics.costanzi_bprj.python.costanzi_bprj import bprj_wall
+    
     if not config["shear_max_section"]:
         raise ValueError(
             "likelihood_cp: is_b_proj_costanzi26 requires "
@@ -129,7 +131,7 @@ def _costanzi_bprj_wall(config, r_grid):
                         / "src" / "pipelines")
     if pipelines_dir not in sys.path:
         sys.path.insert(0, pipelines_dir)
-    from systematics.costanzi_bprj.python.costanzi_bprj import bprj_wall
+    
     n_shear = _NC_N_BINS * config["shear_n_r"]
 
     def wall(block):
