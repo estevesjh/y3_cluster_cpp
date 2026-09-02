@@ -291,6 +291,21 @@ target_include_directories(
   )
 add_test(bsel_bins_test bsel_bins_test)
 
+# Costanzi-2026 selection-bias correction B_prj(R)
+# (src/pipelines/systematics/costanzi_bprj/cpp/costanzi_bprj_t.hh): closed
+# form at R0, power-law limits, values-file DataBlock ctor, and the golden
+# values shared with costanzi_bprj.test.py.
+add_executable(costanzi_bprj_test costanzi_bprj.test.cc)
+target_link_libraries(
+  costanzi_bprj_test PRIVATE testmain utils cosmosis ${GSL_LIBRARIES}
+  )
+target_include_directories(
+  costanzi_bprj_test PRIVATE ${CMAKE_SOURCE_DIR}/src
+                             ${CMAKE_SOURCE_DIR}/externals
+                             ${GSL_INCLUDE_DIR}
+  )
+add_test(costanzi_bprj_test costanzi_bprj_test)
+
 # End-to-end driver test for the projection-shear 0d wrapper
 # (shear_projection/cpp/0d/shear_prj_gl_t.hh) and the sample-level half of
 # ShearPrjCore that shear_prj_gl_test cannot reach: set_sample, the
@@ -452,6 +467,12 @@ add_test(
 add_test(
   NAME signed_mis_table_test
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/signed_mis_table.test.py
+  )
+# Costanzi-2026 B_prj(R) Python twin (pydantic dataclass + values-file
+# loader); same golden values as costanzi_bprj_test. Dump-free.
+add_test(
+  NAME costanzi_bprj_python_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/costanzi_bprj.test.py
   )
 
 # S_ij-tabulated fixed-GL C++ backend, number_counts (src/pipelines/des_y3,
