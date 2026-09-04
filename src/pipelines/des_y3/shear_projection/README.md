@@ -135,9 +135,7 @@ run fresh in the same `cosmosis` process) shows all three channels
 agreeing with the CPU frozen module to ~1e-10 on the full 180-point
 wall (`vals` max rel diff 9.3e-11, `rnd` 1.2e-11, `cl` 8.8e-11). It is
 now a faithful, verified GPU acceleration of the frozen definition.
-See [issue #24](https://github.com/estevesjh/y3_cluster_cpp/issues/24)
-and
-[docs/known_issues/frozen_physics_signed_rnd_defect.md](../../../docs/known_issues/frozen_physics_signed_rnd_defect.md#resolved-2026-08-28-verified-on-perlmutter-gpu).
+See [issue #24](https://github.com/estevesjh/y3_cluster_cpp/issues/24).
 
 ### GL nodes and weights
 
@@ -222,8 +220,7 @@ backend, not a production entry point.
 
 (Formerly `full_ltmz`; three adaptive dimensions, CUDA only — unlike
 number counts and one-halo shear, there is no C++ or Python adaptive
-3d implementation to cross-check this one against; see
-[docs/known_issues/shear_prj_3d_reference_gap.md](../../../docs/known_issues/shear_prj_3d_reference_gap.md).)
+3d implementation to cross-check this one against.)
 The independent fully-coupled diagnostic,
 
 $$

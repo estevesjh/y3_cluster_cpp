@@ -67,7 +67,7 @@ baselines are stated in-cell.
 | `0d` | [explicit Python (3-dim GL)](#explicit-fixed-gl-python-references) | 149 ms | 4.9e-5 |
 | `0d` | [one-halo Python/C++ (1-dim GL, z contracted)](#one-halo-z-contracted-gl) | 74 / 9 ms | 8.4e-4; also identity with production (separate baseline) |
 | `0d` | [max C++/CUDA/A100 (2-dim GL, z-resolved)](#traditional-1h2h-max-model-z-resolved-gl) | 11 / 8 ms | 8.3e-4; CUDA agrees with C++ to 6.4e-15 (twin baseline) |
-| `0d` | [radial series Python/C++ (tables + moments)](#moment-expanded-radial-series) | 6--7 ms | 56--86% vs 3d (known fixed-c=4 defect, [docs/known_issues](../../../../docs/known_issues/radial_series_vs_full_ltmz_defect.md)); 3.7e-3 internal fixed-profile consistency |
+| `0d` | [radial series Python/C++ (tables + moments)](#moment-expanded-radial-series) | 6--7 ms | 56--86% vs 3d (known fixed-c=4 defect); 3.7e-3 internal fixed-profile consistency |
 
 The traditional max model is provisional because its two-halo input has
 a separate `haloModel/dSigma_hh` data defect. All backends read their
@@ -152,10 +152,8 @@ tabulation is still the fast-path hallmark.
 The explicit references this algorithm validates against are the
 [3d backends](#the-3d-backends) (`Shear1h2hMax3d` C++) and the
 [explicit fixed-GL section](#explicit-fixed-gl-python-references)
-(`shear1h2h_max_explicit_gl.py`). The max-model two-halo term has a
-separate known data defect; see
-[`docs/known_issues/dsigma_hh_debug_flag.md`](../../../../docs/known_issues/dsigma_hh_debug_flag.md)
-before using it as a scientific reference.
+(`shear1h2h_max_explicit_gl.py`). Treat the max-model two-halo term as
+provisional before using it as a scientific reference.
 
 ### Explicit fixed-GL Python references
 
@@ -264,14 +262,13 @@ $\mu_3$.
 
 | Dims | Backend | Cost | Precision vs 3d |
 | --- | --- | ---: | --- |
-| `0d` | Python (tables + moments) | 6--7 ms/sample | 56--86% (known fixed-c=4 defect; see link below); $3.7\times10^{-3}$ internal fixed-profile consistency (separate baseline) |
+| `0d` | Python (tables + moments) | 6--7 ms/sample | 56--86% (known fixed-c=4 defect); $3.7\times10^{-3}$ internal fixed-profile consistency (separate baseline) |
 | `0d` | C++ (tables + moments) | 7 ms/sample | Same vs-3d defect; $3.7\times10^{-3}$ plus $1.6\times10^{-4}$ interpolation difference vs Python (separate baselines) |
 
 These numbers measure internal consistency and the fixed-profile
 approximation; they do not certify agreement with the production
-profile. The known raw-$\Delta\Sigma$ mismatch is documented in
-[`docs/known_issues/radial_series_vs_full_ltmz_defect.md`](../../../../docs/known_issues/radial_series_vs_full_ltmz_defect.md);
-the table data are documented in
+profile (fixed $c=4$ vs the per-sample Child18 concentration used
+elsewhere). The table data are documented in
 [`data/radial_series/README.md`](../../../../data/radial_series/README.md).
 
 ## The 3d backends

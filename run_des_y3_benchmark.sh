@@ -11,15 +11,15 @@ source ~/cosmosis_init.sh
 export Y3_CLUSTER_CPP_DIR=/pscratch/sd/j/jesteves/github/y3_cluster_cpp_dev
 
 echo "==============================================="
-echo "Running fast cpp 0d benchmark..."
+echo "Running cpp+python benchmark (fast 0d + slow 3d)..."
 echo "==============================================="
-cosmosis cosmosis-models/des_y3_cpp0d_fast.ini
+cosmosis cosmosis-models/des_y3_cpp_python.ini
 
 echo ""
 echo "==============================================="
-echo "Running slow 3d reference benchmark..."
+echo "Running cpp+gpu benchmark (fast 0d + slow 3d)..."
 echo "==============================================="
-cosmosis cosmosis-models/des_y3_cpp3d_slow_reference.ini
+cosmosis cosmosis-models/des_y3_cpp_gpu.ini
 
 echo ""
 echo "==============================================="

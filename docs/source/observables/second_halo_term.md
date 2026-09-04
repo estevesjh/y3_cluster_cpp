@@ -231,7 +231,6 @@ is the fixture pipeline that exercises this branch.
 `haloModel/Wp_hh` (the chain's internal ξ under a misleading $W_p$ name)
 and its mislabeled `haloModel/Rp` axis are **no longer published**
 (2026-08: unsupported; their only reader was the legacy
-`wp_cluster.cuh` interpolation, which used the wrong radial axis — see
-`docs/known_issues/wp_hh_rp_axis_mismatch.md`). The internal ξ stage of
-the chain remains pinned by `test/halo_model.test.py`; consumers that
-need ξ read `xi_nl`.
+`wp_cluster.cuh` interpolation, which used the wrong radial axis). The
+internal ξ stage of the chain remains pinned by
+`test/halo_model.test.py`; consumers that need ξ read `xi_nl`.

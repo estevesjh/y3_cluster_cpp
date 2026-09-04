@@ -173,12 +173,14 @@ cosmosis cosmosis-models/des_y3.ini -p runtime.sampler=polychord runtime.resume=
 Other inis in `cosmosis-models/` (all read the same values file and are
 gitignored-output like `des_y3.ini`):
 
-- `des_y3_cpp0d_fast.ini`, `des_y3_python0d_fast.ini`,
-  `des_y3_cpp3d_slow_reference.ini`, `des_y3_cuda3d_reference.ini` —
-  run *every* backend of one strategy (fixed-GL `0d`; adaptive `3d`) in
-  one pipeline so the families can be timed and cross-checked. The `3d`
-  reference reduces the shear walls to a few corner points (minutes,
-  not hours, per sample). Results: "Precision and cost overview" in
+- `des_y3_cpp_python.ini`, `des_y3_cpp_gpu.ini` — run *every* backend of
+  both strategies (fixed-GL `0d`; adaptive `3d`) for cpp+python and
+  cpp+gpu respectively, all in one pipeline so the families share one
+  cosmology/halo-model sample and can be timed and cross-checked. The
+  `3d` legs reduce the shear walls to a few corner points (minutes, not
+  hours, per sample); `des_y3_cpp_gpu.ini` skips GPU number counts
+  entirely (no 0d CUDA number-counts module exists — see its header).
+  Results: "Precision and cost overview" in
   `src/pipelines/des_y3/README.md`.
 - `*_apriori.ini` — the same, over hundreds of prior draws, recording
   cost and success per draw (about 30% of draws are cheap, deliberate

@@ -14,6 +14,23 @@ $ CTEST_OUTPUT_ON_FAILURE=1 ctest
 
 And ctest will tell you what checks failed, where.
 
+## Running Python Tests
+
+Python tests live alongside the C++ ones as `<name>.test.py`, mirroring
+the `.test.cc` convention. Run them with pytest **from this directory**
+(`pytest.ini` lives here, not the repo root, so pytest only picks up its
+`*.test.py` discovery pattern and `--import-mode=importlib` setting when
+invoked from here or a path under it):
+
+```
+$ cd test
+$ pytest
+```
+
+Some Python tests read a real-pipeline fixture dump and skip gracefully
+if it hasn't been generated yet — see the `cosmosis` run instructions in
+each test's own header comment.
+
 ## Adding Tests
 
 Please do add more tests! To do so is straightforward. Create a file in this directory named `your_test.test.cc`, and fill it with the following:

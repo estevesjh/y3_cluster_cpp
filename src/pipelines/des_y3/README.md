@@ -139,7 +139,7 @@ evaluator), the baseline is stated in the cell:
 | `2d` | Projection shear | [`2d`](shear_projection/README.md#the-2d-backend), `ShearPrjCuhre` C++ | ~72 s/pt (measured 2026-08-26, 3-pt sample; full 180-pt wall ≈ 3.6 h, not run interactively) | not yet measured |
 | `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), exact-z Python (3-dim region-split GL) | 270 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open); 1.6e-11 vs exact evaluator, 5.5e-5 vs frozen production (separate baselines) |
 | `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), exact-z C++ (3-dim region-split GL) | 154 ms | median 9.5e-4, max 2.2% vs the 3d diagnostic (its convergence is open); 1e-11 vs exact evaluator (separate baseline) |
-| `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), frozen GPU path | 16 ms (measured 2026-08-26, full 180-pt wall) | **FIXED, verified 2026-08-28 on Perlmutter GPU**: `vals`/`rnd`/`cl` all agree with the CPU frozen module to ~1e-10 (issue #24 closed) — [known defect writeup](../../../docs/known_issues/frozen_physics_signed_rnd_defect.md#resolved-2026-08-28-verified-on-perlmutter-gpu) |
+| `0d` | Projection shear | [`0d`](shear_projection/README.md#the-0d-backends), frozen GPU path | 16 ms (measured 2026-08-26, full 180-pt wall) | **FIXED, verified 2026-08-28 on Perlmutter GPU**: `vals`/`rnd`/`cl` all agree with the CPU frozen module to ~1e-10 (issue #24 closed) |
 
 The observable READMEs contain the complete backend tables, grid
 settings (including the "GL nodes and weights" quadrature sections),
@@ -258,9 +258,8 @@ variants.
   one-halo model.
 - The projection `3d` GPU calculation has unresolved wall-edge
   convergence; do not call its default result fully converged.
-- The traditional max model depends on the known `haloModel/dSigma_hh` data
-  defect and is provisional as a scientific result. See
-  [`docs/known_issues/dsigma_hh_debug_flag.md`](../../../docs/known_issues/dsigma_hh_debug_flag.md).
+- The traditional max model depends on `haloModel/dSigma_hh` and is
+  provisional as a scientific result.
 - The benchmark values are fiducial measurements. They are useful for method
   selection and regression detection, not as hardware-independent guarantees.
 

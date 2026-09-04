@@ -202,7 +202,8 @@ $\le 10^{-6}$; the `3d` C++/CUDA rows were re-measured on the reduced
 The radial-series tables are versioned under `data/radial_series` and
 are loaded, never regenerated, during sampling; the family is not a
 validated replacement for the varying-concentration one-halo model
-(`docs/known_issues/radial_series_vs_full_ltmz_defect.md`). Validators:
+(56–86% raw amplitude offset, open fixed-$c{=}4$ defect — see the row
+above). Validators:
 `validate_fast_vs_production.py`,
 `validate_explicit_vs_production.py`, `validate_radial_series.py`,
 `validate_shear1h2h_max.py`; tests in
