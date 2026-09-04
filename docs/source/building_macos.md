@@ -3,10 +3,11 @@
 ## Scope
 
 This is a from-scratch, **CPU-only** install path for Apple Silicon (arm64)
-macOS, verified end-to-end on macOS 26 / M-series. It mirrors
-{doc}`installation` (the Perlmutter recipe in `BUILDING.md`) but swaps the
-Cray/NERSC toolchain for Homebrew + a pinned `mamba` environment, and skips
-CUDA entirely.
+macOS, verified end-to-end on macOS 26 / M-series, M5. This installation
+was not tested in older mac versions. It mirrors {doc}`installation` 
+(the Perlmutter recipe in `BUILDING.md`) but swaps the Cray/NERSC toolchain
+for Homebrew + a pinned `mamba` environment, and skips CUDA entirely.
+
 
 ```{admonition} Why this exists
 :class: note

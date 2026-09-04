@@ -15,13 +15,6 @@ implementations relate to the path-stable production modules.
 
 ```{toctree}
 :maxdepth: 1
-:caption: Mathematical framework
-
-math/index
-```
-
-```{toctree}
-:maxdepth: 1
 :caption: Getting started
 
 running
@@ -71,6 +64,13 @@ modules/survey_area
 :caption: Modules
 
 modules/redshift_kernel
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Mathematical framework
+
+math/index
 ```
 
 ```{toctree}
