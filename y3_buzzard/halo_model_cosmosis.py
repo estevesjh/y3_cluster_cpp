@@ -283,7 +283,7 @@ def execute(block, config):
     # rho_m0 * (1+z_density)^3 (comoving at the default z_density = 0,
     # physical when one_halo_z_density is set). Unified-convention
     # decision 2026-08-24 (supersedes the 200c/rho_crit mis-profile
-    # hybrid); see docs/known_issues/radial_series_vs_full_ltmz_defect.md.
+    # hybrid).
     # h-unit convention: masses are Msun/h and radii Mpc/h, so rho_ref
     # must be the h-unit critical density (2.775e11 Msun h^2/Mpc^3) --
     # the SAME constant lensingModel.rhoc0 uses for the centred tables.
