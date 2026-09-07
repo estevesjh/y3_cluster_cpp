@@ -1,13 +1,30 @@
-// Sigma_prj integrand (Costanzi-2026 eq. Sprj), CosmoSIS scalar integrand.
+// Projected tangential shear integrand gamma_t^prj (Costanzi-2026 Eq. Sprj),
+// exposed through the CosmoSIS shear_prj scalar integrand.
 //
-// Mirrors richness_selection/sigma_prj.py line-for-line, with PAGANI
-// driving the 3-D outer (z, lnM, theta) integral. Reads b_sel_marginalised
-// from the datablock (written by y3_buzzard/bsel.py) and uses it as an
-// Interp1D in theta per (lob_idx, zob_idx) cell.
+// This model first integrates the projected excess surface density
+// DeltaSigma_prj from neighbouring, miscentred haloes and then converts it to
+// shear with
+//
+//   gamma_t^prj(R) = DeltaSigma_prj(R) * Sigma_crit^{-1}(z_ob).
+//
+// Sigma_crit^{-1} is read from average_sigma_crit_inv and evaluated at z_ob;
+// it is not set to unity.  The legacy SigmaPrj and DSigmaPrj wrappers remain
+// as compatibility/diagnostic outputs, but the physical observable is
+// shear_prj.
+//
+// This header contains several numerical paths, with different integration
+// variables: ShearPrjEvaluator uses fixed GL grids and an explicit redshift
+// reduction; ShearPrjGsl uses adaptive GSL QAGP only in z; and ShearPrjCuhre
+// uses Cuhre/Vegas for the inner (z, lnM) integral on a fixed angular GL grid.
+// The frozen Cuhre path is declared in sigma_prj_frozen_interp_t.hh and
+// instead integrates (ln(theta), lnM) after reducing z. All paths read
+// b_sel_marginalised from the datablock (written by cosmology/bsel.py). Each
+// wall row supplies b_small and b_large; the theta dependence is evaluated
+// from the shared sigmoid at the exact (lambda_bin, z_ob) key.
 //
 // The integrand body:
 //
-//   I(z, lnM, theta | lob_i, zob_j, R_k)
+//   I_DeltaSigma(z, lnM, theta | lob_i, zob_j, R_k)
 //     = dV/dzdOmega(z) * n(M, z) * [1 + b(M, z) * b_sel(theta) * xi_NL(Delta_chi)]
 //       * 2 pi sin(theta) * Sigma_mis(R_k, theta * D_A(zob), M, z)
 //       * w_z(z, zob) * (indicator: exclusion Delta_chi >= R_excl)
@@ -38,6 +55,7 @@
 #include "models/nfw_dsigma_mis.hh"
 #include "models/nfw_sigma_mis.hh"
 #include "models/omega_z_des.hh"
+#include "models/bsel_bins_t.hh"
 
 #include "utils/datablock_reader.hh"
 
@@ -289,6 +307,14 @@ namespace y3_cluster {
       sigma_mis_.emplace(4.0, 2.77533742639e+11, NFW_SIG_SINGLE);
       dsigma_mis_.emplace(4.0, 2.77533742639e+11, SINGLE);
 
+      // use_halo_model_conc = T (issue #13): per-mass concentration for
+      // the NFW lookups from haloModel/{lnM, concentration} (Child18 at
+      // one_halo_z), wired in set_sample(). Default F = legacy fixed
+      // c=4 (bit-identical outputs).
+      use_halo_model_conc_ =
+          cfg.has_val(section, "use_halo_model_conc") &&
+          cfg.view<bool>(section, "use_halo_model_conc");
+
       // Parse the wall-grid axes so we can pre-plan sample-level caches
       // keyed on unique (lam_bin, zob, R) tuples.  get_vector_double
       // coerces int-arrays (lambda_bin) to double on the fly.
@@ -381,49 +407,33 @@ namespace y3_cluster {
       ln_mass_shift_ = 0.0;
       h0_ = sample.view<double>("cosmological_parameters", "h0");
 
-      // Switch the NFW normalisation to rho_mean = Omega_m * rho_crit
-      // (matches Python richness_selection.nfw.NFWMiscentered which
-      // builds rho_s from rho_mean).  Affects every Sigma_mis / DSigma_mis
-      // call from here on for this sample.
-      sigma_mis_ ->set_rho_mult(omm);
-      dsigma_mis_->set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude of
+      // Sigma_mis / DSigma_mis on haloModel/rho_m_ref -- the density the
+      // centred tables are built with (Omega_m rho_crit,0 (1+z_density)^3).
+      // Replaces the 200c/rho_crit*Omega_m hybrid.
+      {
+        double const rho_ref = sample.view<double>("haloModel", "rho_m_ref");
+        sigma_mis_ ->set_rho_ref(rho_ref);
+        dsigma_mis_->set_rho_ref(rho_ref);
+      }
+
+      // Per-mass concentration (issue #13): the x = r/r_s lookup tables
+      // are c-universal, so feeding c(lnM) here changes only the
+      // analytic r_s / delta_c pieces. Requires compute_lensing_1h = T
+      // in [halo_model] (publisher of haloModel/concentration).
+      if (use_halo_model_conc_) {
+        sigma_mis_ ->set_concentration_table(
+            make_Interp1D(sample, "haloModel", "lnM", "concentration"));
+        dsigma_mis_->set_concentration_table(
+            make_Interp1D(sample, "haloModel", "lnM", "concentration"));
+      }
 
       // Sample-level zt-reference tables.
       // No zt_ref intermediate table: chi / dV / om / sigma_z / HMF /
       // HMB are read directly from their spline models at the adaptive
       // z-nodes inside the per-slice cache builder.
 
-      b_sel_lob_  = sample.view<std::vector<double>>("b_sel_marginalised", "lob");
-      b_sel_zob_  = sample.view<std::vector<double>>("b_sel_marginalised", "zob");
-      theta_grid_ = sample.view<std::vector<double>>("b_sel_marginalised", "theta");
-      n_lob_  = static_cast<int>(b_sel_lob_.size());
-      n_zob_  = static_cast<int>(b_sel_zob_.size());
-      n_th_b_ = static_cast<int>(theta_grid_.size());
-      auto const& nd = sample.view<cosmosis::ndarray<double>>(
-          "b_sel_marginalised", "vals");
-      b_sel_vals_.assign(nd.begin(), nd.end());
-
-      // Factorised b_sel asymptotes
-      //   b_sel(theta | lob, zob) = B_small + (B_large - B_small) * sigmoid(theta)
-      // published by the 2026-05 bsel.py.  Shape (n_zob, n_lob).  We
-      // evaluate the sigmoid analytically in C++ and linearly interpolate
-      // B_small / B_large in zob, sidestepping the spline-artefacts and
-      // nearest-zob tie-break issues of the older tabulated path.  If
-      // the fields are absent (older bsel.py), fall back to the spline.
-      b_sel_analytic_ = false;
-      if (sample.has_val("b_sel_marginalised", "b_small") &&
-          sample.has_val("b_sel_marginalised", "b_large")) {
-        auto const& nd_s = sample.view<cosmosis::ndarray<double>>(
-            "b_sel_marginalised", "b_small");
-        auto const& nd_l = sample.view<cosmosis::ndarray<double>>(
-            "b_sel_marginalised", "b_large");
-        b_small_vals_.assign(nd_s.begin(), nd_s.end());
-        b_large_vals_.assign(nd_l.begin(), nd_l.end());
-        if (static_cast<int>(b_small_vals_.size()) == n_zob_ * n_lob_ &&
-            static_cast<int>(b_large_vals_.size()) == n_zob_ * n_lob_) {
-          b_sel_analytic_ = true;
-        }
-      }
+      bsel_.emplace(sample);
 
       // ------------------------------------------------------------------
       // Per (lob, zob)-slice theta grid: log-GL on segments split at
@@ -439,7 +449,7 @@ namespace y3_cluster {
       for (std::size_t k = 0; k != lzob_lb_.size(); ++k) {
         int    const lb  = lzob_lb_[k];
         double const zob = lzob_zob_[k];
-        double const lobc = lob_centers_.at(lb);
+        double const lobc = bsel_->at(lb, zob).lob;
         lzob_chi_o_[k]  = (*chi_).clamp(zob) * h0_;
         lzob_R_excl_[k] = sp_detail::R_lambda(lobc) * (1.0 + zob);
         lzob_sci_[k]    = sci_ ? (*sci_).clamp(zob) : 0.0;
@@ -464,7 +474,8 @@ namespace y3_cluster {
         double const chi_o   = lzob_chi_o_[k];
         double const D_A_o   = chi_o / (1.0 + zob);
         double const R_excl  = lzob_R_excl_[k];
-        double const lobc    = lob_centers_.at(lob_bin);
+        auto const bsel_bin = bsel_->at(lob_bin, zob);
+        double const lobc    = bsel_bin.lob;
         auto const& Rs       = lzob_Rs_[k];
 
         auto const tg = sp_detail::build_theta_grid(lobc, zob, Rs,
@@ -487,40 +498,17 @@ namespace y3_cluster {
         // b_sel(theta) on this slice's theta grid.
         auto& bsel_k = lzob_bsel_[k];
         bsel_k.resize(Nth);
-        if (b_sel_analytic_) {
-          // Preferred path: read B_small, B_large per (zob, lob),
-          // linearly interpolate in zob, and evaluate the Costanzi-2026
-          // Eq.~6 sigmoid analytically at each theta node.
-          auto const [B_small, B_large] =
-              interp_b_asymptotes_(lob_bin, zob);
+        {
           double const theta_lam = sp_detail::R_lambda(lobc)
                                    * (1.0 + zob) / chi_o;
-          double const damping    = 2.5;
-          double const theta0_fr  = 0.5;
-          double const k_sig   = damping / theta_lam;
-          double const theta0  = theta0_fr * theta_lam;
-          double const delta_B = B_large - B_small;
+          double const k_sig   = 2.5 / theta_lam;
+          double const theta0  = 0.5 * theta_lam;
+          double const delta_B = bsel_bin.b_large - bsel_bin.b_small;
           for (std::size_t it = 0; it != Nth; ++it) {
             double const sgm =
                 1.0 / (1.0 + std::exp(-k_sig * (theta_k[it] - theta0)));
-            bsel_k[it] = B_small + delta_B * sgm;
+            bsel_k[it] = bsel_bin.b_small + delta_B * sgm;
           }
-        } else {
-          // Legacy path: spline-interpolate the 32-node tabulation.
-          // Kept for backward compat with older bsel.py that doesn't
-          // publish b_small / b_large.
-          int zob_idx = 0;
-          double best = 1.0e9;
-          for (int j = 0; j < n_zob_; ++j) {
-            double const d = std::abs(b_sel_zob_[j] - zob);
-            if (d < best) { best = d; zob_idx = j; }
-          }
-          int const off = (lob_bin * n_zob_ + zob_idx) * n_th_b_;
-          std::vector<double> bsel_slice(n_th_b_);
-          for (int j = 0; j < n_th_b_; ++j) bsel_slice[j] = b_sel_vals_[off + j];
-          Interp1D bsel_th(theta_grid_, bsel_slice);
-          for (std::size_t it = 0; it != Nth; ++it)
-            bsel_k[it] = bsel_th.clamp(theta_k[it]);
         }
 
         // Per-R NFW caches Smis(R | theta, M) and DSmis(R | theta, M).
@@ -826,32 +814,6 @@ namespace y3_cluster {
       return 0.5 * (lo + hi);
     }
 
-    // Read b_small and b_large from the datablock grid at the
-    // requested (lob_bin, zob) by bracketing zob in b_sel_zob_ and
-    // linearly interpolating.  Clamps at the table edges.  Assumes
-    // b_sel_analytic_ == true (caller checks).
-    std::pair<double, double>
-    interp_b_asymptotes_(int lob_bin, double zob) const
-    {
-      // Bracket zob in b_sel_zob_ (assumed monotone increasing).
-      int j = 0;
-      while (j + 1 < n_zob_ && b_sel_zob_[j + 1] < zob) ++j;
-      int const j0 = (j + 1 < n_zob_) ? j     : n_zob_ - 2;
-      int const j1 = (j + 1 < n_zob_) ? j + 1 : n_zob_ - 1;
-      double const z0 = b_sel_zob_[j0];
-      double const z1 = b_sel_zob_[j1];
-      double f = (z1 > z0) ? (zob - z0) / (z1 - z0) : 0.0;
-      if (f < 0.0) f = 0.0;
-      if (f > 1.0) f = 1.0;
-      int const off0 = j0 * n_lob_ + lob_bin;
-      int const off1 = j1 * n_lob_ + lob_bin;
-      double const Bs = (1.0 - f) * b_small_vals_[off0]
-                      + f         * b_small_vals_[off1];
-      double const Bl = (1.0 - f) * b_large_vals_[off0]
-                      + f         * b_large_vals_[off1];
-      return {Bs, Bl};
-    }
-
     static grid_t
     make_grid_points(cosmosis::DataBlock& cfg, char const* section)
     {
@@ -879,20 +841,12 @@ namespace y3_cluster {
     std::optional<Interp2D>                xi_nl_;
     std::optional<NFW_SIGMA_MIS>           sigma_mis_;
     std::optional<NFW_DSIGMA_MIS>          dsigma_mis_;
+    bool use_halo_model_conc_ = false;                 // issue #13
     std::optional<Interp1D>                chi_;
     std::optional<Interp1D>                sci_;
     std::optional<Interp1D>                sigma_z_;   // photo-z kernel sigma(z)
 
-    std::vector<double> b_sel_vals_, theta_grid_;
-    std::vector<double> b_sel_lob_, b_sel_zob_;
-    int n_lob_ = 0, n_zob_ = 0, n_th_b_ = 0;
-
-    // Factorised b_sel asymptotes (see set_sample comment).  Populated
-    // from datablock fields "b_sel_marginalised/{b_small,b_large}"
-    // when available; otherwise b_sel_analytic_ stays false and the
-    // code falls back to the spline tabulation.
-    bool b_sel_analytic_ = false;
-    std::vector<double> b_small_vals_, b_large_vals_;   // (n_zob, n_lob) flat
+    std::optional<sp_detail::BSelBins> bsel_;
 
     // Grid axes parsed at ctor (one entry per wall-grid point).
     std::vector<int>    gp_lam_bin_;
@@ -1033,10 +987,10 @@ namespace y3_cluster {
 
   // =====================================================================
   // ShearPrjGsl -- same integrand as the ShearPrjCore family, but the
-  // outer z-integral is driven by GSL QAGP (piecewise-QAG with an
-  // explicit singular point at z=zob).  QAGP adapts around the xi_nl(Δchi)
-  // peak by construction, so no ring+fg/bg grid is needed.  Inner (lnM, θ)
-  // still use fixed GL, because those axes are smooth.
+  // z-integral is driven by GSL QAGP (piecewise-QAG with an explicit
+  // breakpoint at z=zob). QAGP adapts around the xi_nl(Delta_chi) feature;
+  // z_ob is a non-smooth breakpoint, not necessarily a singularity. Inner
+  // (lnM, ln(theta)) axes still use fixed GL.
   //
   // Writes sigma_prj_gsl / dsigma_prj_gsl / shear_prj_gsl — coexists
   // with the main evaluator so they can be diffed head-to-head.
@@ -1176,9 +1130,12 @@ namespace y3_cluster {
       ln_mass_shift_ = 0.0;
       h0_ = sample.view<double>("cosmological_parameters", "h0");
 
-      // NFW rho_mean normalisation (see ShearPrjEvaluator).
-      sigma_mis_ ->set_rho_mult(omm);
-      dsigma_mis_->set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24, see ShearPrjEvaluator).
+      {
+        double const rho_ref = sample.view<double>("haloModel", "rho_m_ref");
+        sigma_mis_ ->set_rho_ref(rho_ref);
+        dsigma_mis_->set_rho_ref(rho_ref);
+      }
 
       chi_ref_.resize(N_zt_ref_);
       dv_ref_.resize(N_zt_ref_);
@@ -1201,15 +1158,7 @@ namespace y3_cluster {
         }
       }
 
-      b_sel_lob_  = sample.view<std::vector<double>>("b_sel_marginalised", "lob");
-      b_sel_zob_  = sample.view<std::vector<double>>("b_sel_marginalised", "zob");
-      theta_grid_ = sample.view<std::vector<double>>("b_sel_marginalised", "theta");
-      n_lob_  = static_cast<int>(b_sel_lob_.size());
-      n_zob_  = static_cast<int>(b_sel_zob_.size());
-      n_th_b_ = static_cast<int>(theta_grid_.size());
-      auto const& nd = sample.view<cosmosis::ndarray<double>>(
-          "b_sel_marginalised", "vals");
-      b_sel_vals_.assign(nd.begin(), nd.end());
+      bsel_.emplace(sample);
 
       // NFW cache on unique (zob, R) — same as main evaluator.
       std::size_t const Np = zobR_zob_.size();
@@ -1242,22 +1191,20 @@ namespace y3_cluster {
       for (std::size_t k = 0; k != Nlz; ++k) {
         int    const lb  = lzob_lb_[k];
         double const zob = lzob_zob_[k];
-        int zob_idx = 0;
-        double best = 1e9;
-        for (int j = 0; j < n_zob_; ++j) {
-          double const d = std::abs(b_sel_zob_[j] - zob);
-          if (d < best) { best = d; zob_idx = j; }
-        }
-        int const off = (lb * n_zob_ + zob_idx) * n_th_b_;
-        std::vector<double> bsel_slice(n_th_b_);
-        for (int i = 0; i < n_th_b_; ++i) bsel_slice[i] = b_sel_vals_[off + i];
-        Interp1D bsel_th(theta_grid_, bsel_slice);
+        auto const bsel_bin = bsel_->at(lb, zob);
+        double const lobc = bsel_bin.lob;
+        double const theta_lam = sp_detail::R_lambda(lobc)
+                                 * (1.0 + zob) / ((*chi_).clamp(zob) * h0_);
+        double const k_sig = 2.5 / theta_lam;
+        double const theta0 = 0.5 * theta_lam;
         double* bsel_row = &bsel_th_cache_[k * N_th_];
         for (std::size_t it = 0; it != N_th_; ++it)
-          bsel_row[it] = bsel_th.clamp(th_x_[it]);
+          bsel_row[it] = bsel_bin.b_small
+                       + (bsel_bin.b_large - bsel_bin.b_small)
+                       / (1.0 + std::exp(-k_sig * (th_x_[it] - theta0)));
 
         lzob_chi_o_[k]  = (*chi_).clamp(zob) * h0_;
-        lzob_R_excl_[k] = sp_detail::R_lambda(lob_centers_.at(lb))
+        lzob_R_excl_[k] = sp_detail::R_lambda(lobc)
                           * (1.0 + zob);
         lzob_sci_[k]    = (*sci_).clamp(zob);
       }
@@ -1378,10 +1325,10 @@ namespace y3_cluster {
       F.function = &qagp_integrand;
       F.params   = &ctx;
 
-      // QAGP breakpoints: {zt_lo, zob, zt_hi}.  The singular point at
-      // z = zob is handled by QAGP's explicit-breakpoint split -- the
-      // adaptive subdivision clusters evaluations on both sides of the
-      // cusp, which is the mechanism Cuhre/Vegas were using implicitly.
+      // QAGP breakpoints: {zt_lo, zob, zt_hi}.  The non-smooth point at
+      // z = zob is handled by QAGP's explicit-breakpoint split -- adaptive
+      // subdivision can resolve both sides of the feature.  This does not
+      // imply that the integrand diverges at z = zob.
       double pts[3] = {zt_lo_, zob, zt_hi_};
       if (zob <= zt_lo_ || zob >= zt_hi_) {
         // Fall back to plain QAG if zob is on the boundary (shouldn't
@@ -1460,9 +1407,7 @@ namespace y3_cluster {
     std::vector<double> chi_ref_, dv_ref_, om_ref_;
     std::vector<double> hmf_ref_, hmb_ref_;
 
-    std::vector<double> b_sel_vals_, theta_grid_;
-    std::vector<double> b_sel_lob_, b_sel_zob_;
-    int n_lob_ = 0, n_zob_ = 0, n_th_b_ = 0;
+    std::optional<sp_detail::BSelBins> bsel_;
 
     std::vector<int>    lzob_lb_;
     std::vector<double> lzob_zob_;
@@ -1485,7 +1430,7 @@ namespace y3_cluster {
   // ShearPrjCuhre -- same theta recipe as ShearPrjEvaluator
   // (outer log-GL in theta on segments split at feature breakpoints),
   // but the INNER 2-D (z, lnM) integral is driven by cubacpp::Cuhre or
-  // cubacpp::Vegas.  Acts as the adaptive reference path that must
+  // cubacpp::Vegas.  This is the unfrozen adaptive comparison path; it must
   // converge to the fixed-GL evaluator and to Python SigmaPrj.
   //
   // Writes sigma_prj_cuhre / dsigma_prj_cuhre / shear_prj_cuhre,
@@ -1626,9 +1571,12 @@ namespace y3_cluster {
       ln_mass_shift_ = 0.0;
       h0_ = sample.view<double>("cosmological_parameters", "h0");
 
-      // NFW rho_mean normalisation (see ShearPrjEvaluator).
-      sigma_mis_ ->set_rho_mult(omm);
-      dsigma_mis_->set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24, see ShearPrjEvaluator).
+      {
+        double const rho_ref = sample.view<double>("haloModel", "rho_m_ref");
+        sigma_mis_ ->set_rho_ref(rho_ref);
+        dsigma_mis_->set_rho_ref(rho_ref);
+      }
 
       chi_ref_.resize(N_zt_ref_);
       dv_ref_.resize(N_zt_ref_);
@@ -1653,15 +1601,7 @@ namespace y3_cluster {
         }
       }
 
-      b_sel_lob_  = sample.view<std::vector<double>>("b_sel_marginalised", "lob");
-      b_sel_zob_  = sample.view<std::vector<double>>("b_sel_marginalised", "zob");
-      theta_grid_ = sample.view<std::vector<double>>("b_sel_marginalised", "theta");
-      n_lob_  = static_cast<int>(b_sel_lob_.size());
-      n_zob_  = static_cast<int>(b_sel_zob_.size());
-      n_th_b_ = static_cast<int>(theta_grid_.size());
-      auto const& nd = sample.view<cosmosis::ndarray<double>>(
-          "b_sel_marginalised", "vals");
-      b_sel_vals_.assign(nd.begin(), nd.end());
+      bsel_.emplace(sample);
 
       // Per-slice caches.
       std::size_t const Nlz = lzob_lb_.size();
@@ -1676,9 +1616,10 @@ namespace y3_cluster {
       for (std::size_t k = 0; k != Nlz; ++k) {
         int    const lb  = lzob_lb_[k];
         double const zob = lzob_zob_[k];
+        auto const bsel_bin = bsel_->at(lb, zob);
         double const chi_o = (*chi_).clamp(zob) * h0_;
         double const D_A_o = chi_o / (1.0 + zob);
-        double const lobc = lob_centers_.at(lb);
+        double const lobc = bsel_bin.lob;
         double const R_excl = sp_detail::R_lambda(lobc) * (1.0 + zob);
         lzob_chi_o_[k]  = chi_o;
         lzob_R_excl_[k] = R_excl;
@@ -1700,19 +1641,17 @@ namespace y3_cluster {
           g_k[it] = tg.weight[it] * 2.0 * sp_detail::PI * s_k[it];
         }
 
-        int zob_idx = 0;
-        double best = 1.0e9;
-        for (int j = 0; j < n_zob_; ++j) {
-          double const d = std::abs(b_sel_zob_[j] - zob);
-          if (d < best) { best = d; zob_idx = j; }
-        }
-        int const off = (lb * n_zob_ + zob_idx) * n_th_b_;
-        std::vector<double> bsel_slice(n_th_b_);
-        for (int j = 0; j < n_th_b_; ++j) bsel_slice[j] = b_sel_vals_[off + j];
-        Interp1D bsel_th(theta_grid_, bsel_slice);
         auto& bsel_k = lzob_bsel_[k]; bsel_k.resize(Nth);
-        for (std::size_t it = 0; it != Nth; ++it)
-          bsel_k[it] = bsel_th.clamp(th_k[it]);
+        double const theta_lam = sp_detail::R_lambda(lobc)
+                                 * (1.0 + zob) / chi_o;
+        double const k_sig = 2.5 / theta_lam;
+        double const theta0 = 0.5 * theta_lam;
+        for (std::size_t it = 0; it != Nth; ++it) {
+          double const sgm =
+              1.0 / (1.0 + std::exp(-k_sig * (th_k[it] - theta0)));
+          bsel_k[it] = bsel_bin.b_small
+                     + (bsel_bin.b_large - bsel_bin.b_small) * sgm;
+        }
       }
     }
 
@@ -1773,9 +1712,12 @@ namespace y3_cluster {
     // b_sel(theta) (that is applied in the outer theta loop, matching
     // the Python sigma_prj.py convention).
     // The inner integrand is
-    //   rnd_z_M = dV(z) * om(z) * wz(z, zob) * n(M,z) * Sigma_mis(R|M,z,theta*D_A_o)
+    //   rnd_z_M = dV(z) * wz(z, zob) * n(M,z) * Sigma_mis(R|M,z,theta*D_A_o)
     //   cl_z_M  = rnd_z_M * b(M,z) * xi_NL(|dr|, zob) * 1[theta > theta_excl(z)]
-    // integrated over (z, lnM).
+    // integrated over (z, lnM). Omega(z) (survey solid angle) must NOT
+    // appear here: for the Sigma_prj/DSigma_prj surface densities it
+    // cancels between numerator and normalisation, same convention as
+    // sp_detail::ShearPrjCore above and the Python sigma_prj.py reference.
     std::array<double, 4>
     inner_2d_integral(double theta, double chi_o, double D_A_o,
                       double R_excl, double zob, double R, double cos_th) const
@@ -1801,7 +1743,7 @@ namespace y3_cluster {
         double const Smis = (*sigma_mis_)(R, R_th, lnM);
         double const DSmis = (*dsigma_mis_)(R, R_th, lnM);
 
-        double const base = zf.dV * zf.om * wz * nM;
+        double const base = zf.dV * wz * nM;
         double const cl_w = bM * xi_val;
         // Output: {sigma_rnd, sigma_cl, dsigma_rnd, dsigma_cl}
         return {
@@ -1937,9 +1879,7 @@ namespace y3_cluster {
 
     std::vector<double> chi_ref_, dv_ref_, om_ref_, sig_ref_;
     std::vector<double> hmf_ref_, hmb_ref_;
-    std::vector<double> b_sel_vals_, theta_grid_;
-    std::vector<double> b_sel_lob_, b_sel_zob_;
-    int n_lob_ = 0, n_zob_ = 0, n_th_b_ = 0;
+    std::optional<sp_detail::BSelBins> bsel_;
 
     std::vector<int>    gp_lam_bin_;
     std::vector<double> gp_zob_, gp_R_;

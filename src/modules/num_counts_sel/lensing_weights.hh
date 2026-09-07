@@ -223,11 +223,27 @@ namespace y3_cluster_sel_weights {
                                             mis_detail::F_MIS_DEFAULT);
       tau_mis_ = mis_detail::read_mis_param(s, "tau_mis",
                                             mis_detail::TAU_MIS_DEFAULT);
-      // rho_mean normalisation (matches the Python reference's
-      // richness_selection.nfw.NFWMiscentered).
-      double const omm =
-          s.view<double>("cosmological_parameters", "omega_M");
-      dsigma_mis_.set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+      // haloModel/rho_m_ref, the density the centred dSigma_nfw table is
+      // built with (replaces the 200c/rho_crit*Omega_m hybrid).
+      dsigma_mis_.set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
+      // OPT-IN (miscentering/use_halo_model_conc != 0, default 0 = the
+      // ratified fixed-c production path): feed haloModel/concentration
+      // (Child18 x concentration_amplitude) into the miscentered NFW so
+      // the 1h miscentered part matches the centered 1h (dSigma_nfw
+      // table) and the 2-halo (ShearPrjCore). Opt-in until the fixed-c
+      // physical-density default passes report validation (issue #14).
+      if (mis_detail::read_mis_param(s, "use_halo_model_conc", 0.0) != 0.0
+          && s.has_val("haloModel", "concentration"))
+        dsigma_mis_.set_concentration_table(
+            y3_cluster::make_Interp1D(s, "haloModel", "lnM", "concentration"));
+      // Physical mean density (opt-in, [halo_model]
+      // one_halo_physical_density): exact per-zt fixed-c identity
+      // DSigma_phys(R|zt) = (1+zt)^2 DSigma_com(R (1+zt)).
+      int phys = 0;
+      if (s.has_val("haloModel", "one_halo_physical_density"))
+        s.get_val("haloModel", "one_halo_physical_density", phys);
+      phys_density_ = (phys != 0);
       // Stay in a defined state until set_bin is called by the
       // operator template; first integrand evaluation will overwrite.
       current_R_lambda_ = mis_detail::R_lambda(
@@ -244,16 +260,19 @@ namespace y3_cluster_sel_weights {
       current_R_lambda_ = mis_detail::R_lambda(lob_centers_[lob_bin]);
     }
     double
-    operator()(double R, double lnM, double /*zt*/) const
+    operator()(double R, double lnM, double zt) const
     {
-      double const d_cen = dsigma_nfw_->clamp(R, lnM);
+      // Exact physical-density identity at the live zt (q = 1 when off).
+      double const q = phys_density_ ? 1.0 + zt : 1.0;
+      double const d_cen = dsigma_nfw_->clamp(R * q, lnM);
       double const r_mis = tau_mis_ * current_R_lambda_;
-      double const d_mis = dsigma_mis_(R, r_mis, lnM);
-      return (1.0 - f_mis_) * d_cen + f_mis_ * d_mis;
+      double const d_mis = dsigma_mis_(R * q, r_mis * q, lnM);
+      return (q * q) * ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
     }
   private:
     std::optional<y3_cluster::Interp2D> dsigma_nfw_;
     y3_cluster::NFW_DSIGMA_MIS          dsigma_mis_;
+    bool phys_density_{false};
     std::vector<double>                 lob_centers_{};
     double f_mis_  {mis_detail::F_MIS_DEFAULT};
     double tau_mis_{mis_detail::TAU_MIS_DEFAULT};
@@ -337,9 +356,22 @@ namespace y3_cluster_sel_weights {
                                             mis_detail::F_MIS_DEFAULT);
       tau_mis_ = mis_detail::read_mis_param(s, "tau_mis",
                                             mis_detail::TAU_MIS_DEFAULT);
-      double const omm =
-          s.view<double>("cosmological_parameters", "omega_M");
-      dsigma_mis_.set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24): see DSigma1hMisWeight.
+      dsigma_mis_.set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
+      // See DSigma1hMisWeight: OPT-IN (miscentering/use_halo_model_conc)
+      // feed of haloModel/concentration into the miscentered NFW; the
+      // default stays the ratified fixed-c production path (issue #14).
+      if (mis_detail::read_mis_param(s, "use_halo_model_conc", 0.0) != 0.0
+          && s.has_val("haloModel", "concentration"))
+        dsigma_mis_.set_concentration_table(
+            y3_cluster::make_Interp1D(s, "haloModel", "lnM", "concentration"));
+      // Physical mean density (opt-in, [halo_model]
+      // one_halo_physical_density): exact per-zt fixed-c identity
+      // DSigma_phys(R|zt) = (1+zt)^2 DSigma_com(R (1+zt)).
+      int phys = 0;
+      if (s.has_val("haloModel", "one_halo_physical_density"))
+        s.get_val("haloModel", "one_halo_physical_density", phys);
+      phys_density_ = (phys != 0);
       current_R_lambda_ = mis_detail::R_lambda(
           lob_centers_.empty() ? 25.0 : lob_centers_.front());
     }
@@ -353,10 +385,14 @@ namespace y3_cluster_sel_weights {
     double
     operator()(double R, double lnM, double zt) const
     {
-      double const d_cen = dsigma_nfw_->clamp(R, lnM);
+      // Exact physical-density identity at the live zt (q = 1 when off);
+      // the identity scales the DeltaSigma mixture only, never sci.
+      double const q = phys_density_ ? 1.0 + zt : 1.0;
+      double const d_cen = dsigma_nfw_->clamp(R * q, lnM);
       double const r_mis = tau_mis_ * current_R_lambda_;
-      double const d_mis = dsigma_mis_(R, r_mis, lnM);
-      double const d     = (1.0 - f_mis_) * d_cen + f_mis_ * d_mis;
+      double const d_mis = dsigma_mis_(R * q, r_mis * q, lnM);
+      double const d     = (q * q) *
+                           ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
       double const sci   = sigma_crit_inv_->clamp(zt);
       return d * sci;
     }
@@ -364,6 +400,7 @@ namespace y3_cluster_sel_weights {
     std::optional<y3_cluster::Interp2D> dsigma_nfw_;
     std::optional<y3_cluster::Interp1D> sigma_crit_inv_;
     y3_cluster::NFW_DSIGMA_MIS          dsigma_mis_;
+    bool phys_density_{false};
     std::vector<double>                 lob_centers_{};
     double f_mis_  {mis_detail::F_MIS_DEFAULT};
     double tau_mis_{mis_detail::TAU_MIS_DEFAULT};

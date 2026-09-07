@@ -1,0 +1,7 @@
+// Miscentred one-halo shear — full (lambda_true, lnM, z) reference, C++.
+// Physics lives in shear1h_3d_t.hh; see that header for the
+// integrand formula, configuration keys, and status notes.
+#include "shear1h_3d_t.hh"
+#include "utils/module_macros.hh"
+
+DEFINE_COSMOSIS_SCALAR_INTEGRATION_MODULE(Shear1h3d)

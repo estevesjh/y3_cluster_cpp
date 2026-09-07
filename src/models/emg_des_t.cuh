@@ -36,24 +36,24 @@ phi_cdf(double x)
 
 // Scaled complementary error function erfcx(x)=exp(x^2) erfc(x).
 // Used only to make the EMG CDF numerically safer.
+// Faithful port of the host twin rk_detail::erfcx
+// (src/models/richness_kernel_t.hh): direct exp(x^2)*erfc(x) below the
+// cutoff (exact, and covers all x < 0), 4-term nested asymptotic series
+// above. The cutoff must stay at 25.0 — at the old 4.0 the truncated
+// series was ~4e-4 off, caught by num_counts_3d_gpu.test.cu's 1e-13
+// port tolerance.
 __host__ __device__ inline double
 erfcx_impl(double x)
 {
-  double const ax = fabs(x);
-
-  if (ax < 4.0) {
+  constexpr double ERFCX_CUTOFF = 25.0;
+  if (x < ERFCX_CUTOFF) {
     return exp(x * x) * erfc(x);
   }
-
-  double const x2 = ax * ax;
-  double result = (1.0 / emg_constants::SQRTPI) / ax *
-                  (1.0 - 0.5 / x2 + 0.75 / (x2 * x2));
-
-  if (x < 0.0) {
-    result = 2.0 * exp(x2) - result;
-  }
-
-  return result;
+  // Asymptotic series 1/(sqrt(pi)*x) * (1 - 1/(2x^2) + 3/(4x^4) - ...)
+  double const inv = 1.0 / x;
+  double const inv2 = inv * inv;
+  return inv / emg_constants::SQRTPI *
+         (1.0 - 0.5 * inv2 * (1.0 - 1.5 * inv2 * (1.0 - 2.5 * inv2)));
 }
 
 class EMG_DES_t {

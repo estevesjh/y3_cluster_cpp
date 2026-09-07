@@ -21,7 +21,6 @@ running
 installation
 building_macos
 pipeline_organization
-testing
 ```
 
 ```{toctree}
@@ -51,10 +50,12 @@ cosmology/sigma_crit_inv
 
 ```{toctree}
 :maxdepth: 1
-:caption: Selection effects
+:caption: Systematics
 
-selection/sel_function
-selection/bsel
+systematics/boost_factor
+systematics/sel_function
+systematics/bsel
+systematics/costanzi_bprj
 modules/survey_area
 ```
 
@@ -96,6 +97,13 @@ numerics/index
 data/index
 ```
 
+```{toctree}
+:maxdepth: 1
+:caption: Testing
+
+testing
+```
+
 ## References
 
 The main published reference for the pipeline — the cluster
@@ -105,7 +113,8 @@ CosmoSIS/CUBA software framework — is
 (arXiv:[2309.06593](https://arxiv.org/abs/2309.06593)).
 
 The optical selection-bias and projection-lensing model layered on it
-(the `sel_function` / `b_sel_marg` / `bsel` / projection-shear branch)
+(the `sel_function` / `b_sel_marg` / `bsel` / projection-shear branch and
+the $\mathcal B_{\rm prj}(R)$ correction)
 is [Costanzi et al. 2026, PhRvD 113, 103508](https://ui.adsabs.harvard.edu/abs/2026PhRvD.113j3508C/abstract)
 (arXiv:[2604.05833](https://arxiv.org/abs/2604.05833)).
 

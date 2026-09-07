@@ -56,7 +56,6 @@ namespace y3_cuda {
     NFW_SIGMA_MIS(double c, double rhoc, std::string const& kernel)
       : _c(c)
       , _rhoc(rhoc)
-      , _rho_mult(1.0)
       , _nfwProfile(read_vector(logx_file(kernel)),
                     read_vector(logxmis_file(kernel)),
                     read_vector(log_sigma_file(kernel)))
@@ -65,7 +64,6 @@ namespace y3_cuda {
     NFW_SIGMA_MIS()
       : _c(CONC)
       , _rhoc(RHOC)
-      , _rho_mult(1.0)
       , _nfwProfile(read_vector(logx_file(GAMMA)),
                     read_vector(logxmis_file(GAMMA)),
                     read_vector(log_sigma_file(GAMMA)))
@@ -85,32 +83,31 @@ namespace y3_cuda {
       , _rhoc(
           y3_cluster::make_Interp1D(sample, "haloModel", "z", "rhoc")
             .clamp(0.0))
-      , _rho_mult(1.0)
       , _nfwProfile(read_vector(logx_file(GAMMA)),
                     read_vector(logxmis_file(GAMMA)),
                     read_vector(log_sigma_file(GAMMA)))
     {}
 
-    // Multiplier applied to rho_s (= rho_crit * delta_c).  Set to
-    // Omega_m after reading cosmological_parameters to switch from
-    // the rho_crit-based normalisation to rho_mean-based, matching
-    // the CPU y3_cluster::NFW_SIGMA_MIS (nfw_sigma_mis.hh) and the
-    // Python reference (richness_selection.nfw.NFWMiscentered).
-    // Default is 1.0 (legacy rho_crit behaviour) so existing GPU
-    // callers that never call this are unaffected.
-    void set_rho_mult(double m) { _rho_mult = m; }
+
+    // UNIFIED rho_m convention (2026-08-24 decision): use `rho` --
+    // haloModel/rho_m_ref = Omega_m rho_crit,0 (1+z_density)^3, identical
+    // to the density first_halo_term builds the centred tables with --
+    // for BOTH the halo boundary r_200 = [3M/(800 pi rho)]^(1/3) and the
+    // amplitude rho_s = delta_c * rho. Host-only (call before the device
+    // copy). Production call sites use this; pure normalization factors
+    // (legacy Omega_m, the physical (1+z)^2) are applied OUTSIDE.
+    void set_rho_ref(double rho) { _rho_b = rho; }
 
     __device__ __host__ double
     operator()(double r, double rmis, double lnM) const
     {
       double const delta_c = (200.0 * _c * _c * _c / 3.0) / (std::log(1.0 + _c) - _c / (1.0 + _c));
-      double const rho_crit = _rhoc;
       double const r_200 =
-        std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * rho_crit));
+        std::cbrt(3.0 * std::exp(lnM) / (800.0 * M_PI * _rho_b));
       double const r_s = r_200 / _c;
 
       // normalization term defined in Wright & Brainerd 2000
-      double const norm = 2 * r_s * delta_c * rho_crit * _rho_mult;
+      double const norm = 2 * r_s * delta_c * _rho_b;
 
       double const x = r / r_s;
       double const xmis = rmis / r_s;
@@ -124,7 +121,7 @@ namespace y3_cuda {
   private:
     double const _c;
     double const _rhoc;
-    double       _rho_mult;
+    double       _rho_b{_rhoc};   // boundary+amplitude density (set_rho_ref)
     gpu_support::Interp2D _nfwProfile;
   };
 }

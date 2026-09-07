@@ -293,7 +293,7 @@ CPU/GPU experiments, diagnostic backends, and examples — see the
 | One-halo lensing | `Shear1hMisSel` (reference) / `Shear1hSel` (centered-only) | $N_{ij}[\gamma_t^{1h}](R)$ |
 | Selection-bias operators | `b_sel_marg`, `bsel` | $P_1$, $I_1$, $J$, and scale-dependent $b_{\rm sel}$ |
 | Projection lensing | `shear_prj_frozen_physics` (`ShearPrjFrozenPhysics`; `ShearPrjEvaluator` is the validation backend) | $\Delta\Sigma_{\rm prj}$, $\gamma_t^{\rm prj}$ (aliased to `shear_prj/*`) |
-| Likelihood | `y3_buzzard/likelihood_cp.py` | final log-likelihood |
+| Likelihood | `src/pipelines/buzzard/likelihoods/likelihood_cp.py` | final log-likelihood |
 
 ## Repository architecture
 
@@ -398,8 +398,8 @@ The following decisions are reflected throughout this documentation
    `red_shear_prj` is a legacy name for the branch.
 4. **Data-vector length**: 12 number counts + 12 bins × 15 radii = 180
    shear points (`mock_dv_buzzard.npz`). The widePlanck self-closure
-   variant uses 10 radii (120 points), and the committed
-   `likelihood_cp.py` still hard-codes that layout — see
+   variant uses 10 radii (120 points); the likelihood derives the radius
+   count from the supplied data vector — see
    {doc}`observables/likelihood`.
 5. **Reduced shear**: retired/historical; tangential shear (or ΔΣ under
    the unity convention) is the primary observable.

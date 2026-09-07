@@ -228,10 +228,34 @@ public:
 
     // Same normalisation convention as CPU sigma_prj_t.hh:
     // projection uses rho_mean = Omega_m * rho_crit.
+    //
+    // PORT NOTE (des_y3 merge): this originally read
+    //     sigma_mis_->set_rho_mult(omega_m_);
+    //     dsigma_mis_->set_rho_mult(omega_m_);
+    // set_rho_mult was REMOVED from NFW_{,D}SIGMA_MIS by the unified
+    // rho_m reference-density convention (6f812e2). Under the old hybrid
+    // the halo boundary r_200 came from rho_crit while the amplitude
+    // carried an extra Omega_m factor; the unified convention uses ONE
+    // density for both, published always-on as haloModel/rho_m_ref =
+    // Omega_m * rho_crit,0 * (1+one_halo_z_density)^3.
+    //
+    // With the default one_halo_z_density = 0, rho_m_ref is numerically
+    // Omega_m * rho_crit,0 -- i.e. exactly the "rho_mean = Omega_m *
+    // rho_crit" this comment asks for -- so the AMPLITUDE is unchanged
+    // and only the r_200 boundary moves onto the same density. That
+    // boundary change is deliberate: it is the fix for the 56-86%
+    // radial-series offset (docs/known_issues/
+    // radial_series_vs_full_ltmz_defect.md), and it is what makes this
+    // module comparable to ShearPrjGl/ShearPrjCore, which read the same
+    // haloModel/rho_m_ref.
+    double const rho_ref =
+      sample.has_val("haloModel", "rho_m_ref")
+        ? sample.view<double>("haloModel", "rho_m_ref")
+        : omega_m_ * 2.77533742639e+11;
     sigma_mis_.emplace(4.0, 2.77533742639e+11, std::string("single"));
     dsigma_mis_.emplace(4.0, 2.77533742639e+11, std::string("single"));
-    sigma_mis_->set_rho_mult(omega_m_);
-    dsigma_mis_->set_rho_mult(omega_m_);
+    sigma_mis_->set_rho_ref(rho_ref);
+    dsigma_mis_->set_rho_ref(rho_ref);
 
     for (int i = 0; i < sigma_prj_gpu_detail::MAX_BSEL; ++i) {
       b_lob_[i] = 0.0;

@@ -7,14 +7,13 @@ test covers, and its current status.
 Run the configured suite with:
 
 ```bash
-ctest -j 6 --output-on-failure
+ctest -j 10 --output-on-failure
 ```
 
 Use `ctest -N` for the exact target list. Default relative tolerance is
 `1e-3`. Two known-failing tests are deliberate (real defects, not test
-bugs):
-[`radial_series_vs_full_ltmz_defect.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/radial_series_vs_full_ltmz_defect.md),
-[`nfw_dsigma_mis_defect.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/docs/sphinx-site/docs/nfw_dsigma_mis_defect.md).
+bugs): `shear1h_cross_backend.test.py`'s radial-series-vs-full_ltmz
+check, and `nfw_dsigma_mis.test.cu`'s one out-of-tolerance point.
 
 ## Folder inventories
 
@@ -34,3 +33,12 @@ Status labels mean:
   including a known numerical defect, rather than declaring that behavior
   scientifically correct.
 - **Disabled/diagnostic** — not part of the configured CTest suite.
+
+## External validations
+
+Cross-code comparisons, reference benchmarks, and production diagnostics
+live in the sibling [`scratchReports`](https://github.com/estevesjh/scratchReports)
+repository under `y3_cluster_cpp/`. These are not unit tests — they validate
+against independent reference implementations (cluster_toolkit, CLensPy, pyccl,
+clmm) and produce LaTeX validation reports. See the repo's README for setup
+and execution.

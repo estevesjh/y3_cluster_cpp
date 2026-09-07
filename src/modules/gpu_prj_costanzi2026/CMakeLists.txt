@@ -17,5 +17,9 @@ if (USE_CUDA)
   set_target_properties(shear1hmissel_t PROPERTIES POSITION_INDEPENDENT_CODE ON CUDA_ARCHITECTURES ${Y3GCC_TARGET_ARCH})
   target_compile_options(shear1hmissel_t PRIVATE "--expt-relaxed-constexpr" "-lineinfo" "-DCURAND")
 
+  # bSelMargGPU + shear_prj (ShearPrjEvaluator). This subdirectory was
+  # never wired up on the source branch, so neither module was built.
+  add_subdirectory(shear_prj_module)
+
 
 endif ()

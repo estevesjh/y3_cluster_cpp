@@ -72,7 +72,7 @@ matter_power_lin_version = 2
 
 | DataBlock output | Meaning | Units / shape | Consumed by |
 |---|---|---|---|
-| `mass_function/m_h` | mass grid, in the CosmoSIS convention $M\,\Omega_m^{-1}\,h^{-1} M_\odot$ (see warning) | `(969,)` | `NumCountsSel`, `Shear1hMisSel`, `b_sel_marg`, `shear_prj_frozen_physics`, `bsel` |
+| `mass_function/m_h` | mass grid, in the CosmoSIS convention $M\,\Omega_m^{-1}\,h^{-1} M_\odot$ (see warning) | `(969,)` | `NumCountsSijGl`, `Shear1hGl`, `b_sel_marg`, `ShearPrjGl`, `bsel` |
 | `mass_function/z` | redshift grid | `(50,)` | same |
 | `mass_function/dndlnmh` | $dn/d\ln M$ | $h^3\,\mathrm{Mpc}^{-3}$, `(50, 969)` | same |
 | `mass_function/r_h`, `dndlnrh` | radius-space equivalents | $h^{-1}$Mpc | — (unused here) |

@@ -13,15 +13,15 @@ $$P(\lambda^{\rm ob}\mid M, z) = \int d\lambda^{\rm tr}\,
 
 ## Script
 
-- Intrinsic relation (C++): [`src/models/mor_hod_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/models/mor_hod_t.hh)
+- Intrinsic relation (C++): [`src/models/mor_hod_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/models/mor_hod_t.hh)
   (`MOR_HOD_t`), used by `b_sel_marg`.
-- Projection kernel (C++): [`src/models/richness_kernel_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/models/richness_kernel_t.hh)
+- Projection kernel (C++): [`src/models/richness_kernel_t.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/models/richness_kernel_t.hh)
   (EMG CDF `F_EMG`), used by the selection kernels.
 - Python mirrors (line-for-line): `_p_hod_scalar` and `_cdf_lob` in
-  [`src/modules/sel_function/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/src/modules/sel_function/sel_function.py);
+  [`src/modules/sel_function/sel_function.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/modules/sel_function/sel_function.py);
   `_p_ltr_given_M` / `_p_lob_given_ltr_emg` in
-  [`y3_buzzard/bsel.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/y3_buzzard/bsel.py).
-- EMG coefficient calibration: [`y3_buzzard/prj_params.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/d7feb7504ed5dfcad84f99a1791af8a55c858aa0/y3_buzzard/prj_params.py)
+  [`y3_buzzard/bsel.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/y3_buzzard/bsel.py).
+- EMG coefficient calibration: [`y3_buzzard/prj_params.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/y3_buzzard/prj_params.py)
   (`PrjParams`, the Buzzard-calibrated spline table; the standalone
   `prj_params` DataBlock module is retired).
 
@@ -119,17 +119,17 @@ the very line-of-sight structure that adds two-halo lensing signal, so
 Costanzi et al. 2026 propagate $f^{\rm prj}$, $\tau$, and the richness
 excess $\lambda^{\rm ob} - \lambda^{\rm tr}$ into the scale-dependent
 selection-affected bias $b_{\rm sel}(\theta)$ used by
-{doc}`../selection/bsel` and {doc}`../observables/shear_projection`.
+{doc}`../systematics/bsel` and {doc}`../observables/shear_projection`.
 
 Where the reference pipeline evaluates it:
 
-- {doc}`sel_function <../selection/sel_function>` builds
+- {doc}`sel_function <../systematics/sel_function>` builds
   $S_{ij}(\ln M, z)$ from both pieces — this is how it enters
   {doc}`NumCountsSel <../observables/number_counts>` and
   {doc}`Shear1hMisSel <../observables/shear_halo>`;
-- {doc}`b_sel_marg <../selection/bsel>` weights the $P[X]$ operators by
+- {doc}`b_sel_marg <../systematics/bsel>` weights the $P[X]$ operators by
   the shifted-Poisson pdf;
-- {doc}`bsel <../selection/bsel>` uses the EMG pdf in the
+- {doc}`bsel <../systematics/bsel>` uses the EMG pdf in the
   $\lambda^{\rm tr}$ marginalisation.
 
 Full derivation (log-normal alternative, EMG CDF closed form, quadrature

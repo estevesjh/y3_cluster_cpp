@@ -65,6 +65,7 @@ namespace y3_cuda {
     // Wall-grid point-constant (set from the bin edges, not an
     // integration variable) -- see set_lob_centre().
     double r_mis_ = 0.17 * gamma_1h_detail::R_lambda(25.0);
+    double omega_m_ = 1.0;
 
   public:
     size_t
@@ -90,10 +91,11 @@ namespace y3_cuda {
       , f_mis_(gamma_1h_detail::read_or_default(sample, "miscentering", "f_mis", 0.22))
       , tau_mis_(gamma_1h_detail::read_or_default(sample, "miscentering", "tau_mis", 0.17))
     {
-      // rho_mean normalisation, matching NFW_DSIGMA_MIS's other GPU
-      // caller (shear_prj's sigma_prj_gpu_t.cuh) and the CPU reference.
-      double const omega_m = sample.view<double>("cosmological_parameters", "omega_M");
-      _dsigma_mis.set_rho_mult(omega_m);
+      // Legacy hybrid normalisation preserved: rho_crit boundary with an
+      // Omega_m amplitude factor, now applied OUTSIDE the profile class
+      // (rho_mult was removed from NFW_DSIGMA_MIS; the unified des_y3
+      // chain uses set_rho_ref(haloModel/rho_m_ref) instead).
+      omega_m_ = sample.view<double>("cosmological_parameters", "omega_M");
       r_mis_ = tau_mis_ * gamma_1h_detail::R_lambda(25.0);
     }
 
@@ -111,7 +113,7 @@ namespace y3_cuda {
     /* r in h^-1 Mpc */ /* M in h^-1 M_solar, represented by lnM */
     {
       double const dsigma_cen = _dsigma_nfw.clamp(r, lnM);
-      double const dsigma_mis = _dsigma_mis(r, r_mis_, lnM);
+      double const dsigma_mis = omega_m_ * _dsigma_mis(r, r_mis_, lnM);
 
       // Full 1-halo DeltaSigma mixture:
       // DeltaSigma_cl = (1 - f_mis) DeltaSigma_NFW + f_mis DeltaSigma_mis.

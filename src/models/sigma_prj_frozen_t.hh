@@ -73,6 +73,14 @@ namespace y3_cluster {
       // has no Sigma analogue in the Python reference either).
       dsigma_mis_.emplace(4.0, 2.77533742639e+11, SINGLE);
 
+      // use_halo_model_conc = T (issue #13/#14): feed haloModel/concentration
+      // into the miscentered NFW instead of the fixed c=4. ShearPrjCore
+      // (sigma_prj_t.hh) honored this; this frozen backend previously ignored
+      // it silently (the ini flag was a no-op). Read it here.
+      use_halo_model_conc_ =
+          cfg.has_val(module_label(), "use_halo_model_conc") &&
+          cfg.view<bool>(module_label(), "use_halo_model_conc");
+
       auto const lamb = get_vector_double(cfg, module_label(), "lambda_bin");
       auto const zlo  = get_vector_double(cfg, module_label(), "zo_low");
       auto const zhi  = get_vector_double(cfg, module_label(), "zo_high");
@@ -136,18 +144,14 @@ namespace y3_cluster {
 
       double const omm = sample.view<double>("cosmological_parameters", "omega_M");
       h0_ = sample.view<double>("cosmological_parameters", "h0");
-      dsigma_mis_->set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+      // haloModel/rho_m_ref (see ShearPrjEvaluator / sigma_prj_t.hh).
+      dsigma_mis_->set_rho_ref(sample.view<double>("haloModel", "rho_m_ref"));
+      if (use_halo_model_conc_)
+        dsigma_mis_->set_concentration_table(
+            make_Interp1D(sample, "haloModel", "lnM", "concentration"));
 
-      b_sel_lob_ = sample.view<std::vector<double>>("b_sel_marginalised", "lob");
-      b_sel_zob_ = sample.view<std::vector<double>>("b_sel_marginalised", "zob");
-      n_lob_ = static_cast<int>(b_sel_lob_.size());
-      n_zob_ = static_cast<int>(b_sel_zob_.size());
-      auto const& nd_s = sample.view<cosmosis::ndarray<double>>(
-          "b_sel_marginalised", "b_small");
-      auto const& nd_l = sample.view<cosmosis::ndarray<double>>(
-          "b_sel_marginalised", "b_large");
-      b_small_vals_.assign(nd_s.begin(), nd_s.end());
-      b_large_vals_.assign(nd_l.begin(), nd_l.end());
+      bsel_.emplace(sample);
 
       std::size_t const Nlz = lzob_lb_.size();
       lzob_D_A_o_.assign(Nlz, 0.0);
@@ -166,7 +170,8 @@ namespace y3_cluster {
       for (std::size_t k = 0; k != Nlz; ++k) {
         int    const lob_bin = lzob_lb_[k];
         double const zob     = lzob_zob_[k];
-        double const lobc    = lob_centers_.at(lob_bin);
+        auto const bsel_bin = bsel_->at(lob_bin, zob);
+        double const lobc    = bsel_bin.lob;
         double const chi_o   = (*chi_).clamp(zob) * h0_;
         double const D_A_o   = chi_o / (1.0 + zob);
         double const R_excl  = sp_detail::R_lambda(lobc) * (1.0 + zob);
@@ -194,33 +199,14 @@ namespace y3_cluster {
           geom_k[it] = tg.weight[it] * 2.0 * sp_detail::PI * sin_k[it];
         }
 
-        // Analytic b_sel(theta) asymptotes: b_small/b_large linearly
-        // interpolated in zob (same convention as sp_detail::ShearPrjCore's
-        // interp_b_asymptotes_, reimplemented here to avoid depending on a
-        // private method of that class -- same approach as Option E).
-        double Bs = 0.0, Bl = 0.0;
-        {
-          int j = 0;
-          while (j + 1 < n_zob_ && b_sel_zob_[j + 1] < zob) ++j;
-          int const j0 = (j + 1 < n_zob_) ? j     : n_zob_ - 2;
-          int const j1 = (j + 1 < n_zob_) ? j + 1 : n_zob_ - 1;
-          double const z0 = b_sel_zob_[j0];
-          double const z1 = b_sel_zob_[j1];
-          double f = (z1 > z0) ? (zob - z0) / (z1 - z0) : 0.0;
-          f = std::clamp(f, 0.0, 1.0);
-          int const off0 = j0 * n_lob_ + lob_bin;
-          int const off1 = j1 * n_lob_ + lob_bin;
-          Bs = (1.0 - f) * b_small_vals_[off0] + f * b_small_vals_[off1];
-          Bl = (1.0 - f) * b_large_vals_[off0] + f * b_large_vals_[off1];
-        }
         double const theta_lam = sp_detail::R_lambda(lobc) * (1.0 + zob) / chi_o;
         double const k_sig   = 2.5 / theta_lam;
         double const theta0  = 0.5 * theta_lam;
-        double const delta_B = Bl - Bs;
+        double const delta_B = bsel_bin.b_large - bsel_bin.b_small;
         auto& bsel_k = lzob_bsel_[k]; bsel_k.resize(Nth);
         for (std::size_t it = 0; it != Nth; ++it) {
           double const sgm = 1.0 / (1.0 + std::exp(-k_sig * (theta_k[it] - theta0)));
-          bsel_k[it] = Bs + delta_B * sgm;
+          bsel_k[it] = bsel_bin.b_small + delta_B * sgm;
         }
 
         // n(M,zob), b(M,zob), the r_s(M)-anchored amplitude-drift
@@ -489,11 +475,10 @@ namespace y3_cluster {
     std::optional<Interp1D>                chi_;
     std::optional<Interp1D>                sci_;
     std::optional<Interp1D>                sigma_z_;
+    bool use_halo_model_conc_ = false;   // issue #14: feed haloModel/concentration
     double h0_ = 0.0;
 
-    std::vector<double> b_sel_lob_, b_sel_zob_;
-    int n_lob_ = 0, n_zob_ = 0;
-    std::vector<double> b_small_vals_, b_large_vals_;
+    std::optional<sp_detail::BSelBins> bsel_;
 
     std::vector<int>    gp_lam_bin_;
     std::vector<double> gp_zob_, gp_R_;

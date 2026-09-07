@@ -10,15 +10,22 @@ Primary sources: `docs/pipeline_modules.tex` (algorithms, timing audit,
 quadrature knob cheat-sheet), `docs/shear1h_radial_factorization.tex`, and
 `RichnessSelection/docs/sigma_prj_refactor.md`.
 
-New DES Y3 implementations use the strategy names `full_ltmz`, `fast_mass`,
-and `radial_series`. Their precise meanings and available backends are listed
-in {doc}`../pipeline_organization`; the production recipes below correspond
-to the fast, path-stable modules loaded by the reference ini.
+New DES Y3 implementations use adaptive-dimension strategy names: the
+folder tag counts adaptive integration dimensions only, and `0d` collects
+everything with none — fixed-GL sums and offline tables (formerly
+`fast_mass`, `radial_series`, and the `full_ltmz` fixed-GL Python
+references). Their precise meanings and available backends are listed in
+{doc}`../pipeline_organization`; the production recipes below correspond
+to the fast, path-stable modules loaded by the reference ini. Every
+table below leads with a **Dims** column — the adaptive-dimension tag —
+so per-sample cost reads straight off it (`0d` = ms-scale fixed-GL/
+tables, `2d`/`3d` = seconds-to-minutes adaptive); the backend text notes
+the GL structure inside `0d`.
 
 ## Strategy/backend accuracy and timing
 
 **Accuracy policy**: the reference for every observable is the
-**adaptive** `full_ltmz` calculation (reported error $\le 10^{-6}$). A
+**adaptive** explicit `3d` calculation (reported error $\le 10^{-6}$). A
 fixed-GL implementation is never itself the reference — it is certified
 against the adaptive one, then used as the fast stand-in. Agreement
 with the production DES Y1 module is recorded separately as an
@@ -26,45 +33,45 @@ with the production DES Y1 module is recorded separately as an
 real pipeline, fiducial widePlanck point, pinned 12-bin wall, per-MCMC-
 sample timing. Full detail (all strategy/backend cells, caveats, validation
 records) is in
-[`src/pipelines/des_y3/README.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/README.md).
+[`src/pipelines/des_y3/README.md`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/README.md).
 
 **Number counts** (12 bins; DES Y1 `NumCountsSel.so` = 6 ms):
 
-| Strategy / backend | Time | Error vs adaptive reference |
-|---|---:|---:|
-| `full_ltmz` Python adaptive | 25 s | reference |
-| `full_ltmz` Python (fixed GL) | 83 ms | 3.5e-5 |
-| `full_ltmz` C++ (Cuhre) | 3.1 s | 4.9e-4 |
-| `full_ltmz` CUDA (PAGANI) | 2.0 s | 5.1e-4 |
-| `fast_mass` Python | 5 ms | 7.6e-4 |
-| `fast_mass` C++ (`NumCountsFastMass.so`) | 6 ms | 7.6e-4 — **is** DES Y1's `NumCountsSel.so` by identity |
+| Dims | Backend | Time | Precision vs 3d |
+|---|---|---:|---:|
+| `3d` | Python adaptive certifier (shared explicit core) | 25 s | reference |
+| `0d` | Python — explicit 3-dim GL grid | 83 ms | 3.5e-5 |
+| `3d` | C++ (Cuhre) | 3.1 s | 4.9e-4 |
+| `3d` | CUDA (PAGANI) | 2.0 s | 5.1e-4 |
+| `0d` | Python — 2-dim GL sum, $S_{ij}$ tabulated | 5 ms | 7.6e-4 |
+| `0d` | C++ (`NumCountsSijGl.so`) — 2-dim GL sum, $S_{ij}$ tabulated | 6 ms | 7.6e-4; identity **vs production `NumCountsSel.so`** recorded separately |
 
 **One-halo miscentred shear** (12 bins × 10 radii; DES Y1
 `Shear1hMisSel.so` = 9 ms):
 
-| Strategy / backend | Time | Error vs adaptive reference |
-|---|---:|---:|
-| `full_ltmz` Python adaptive | 35 s | reference |
-| `full_ltmz` Python (fixed GL) | 149 ms | 4.9e-5 |
-| `full_ltmz` C++ (Cuhre) | 51 s | 3.3e-4 |
-| `full_ltmz` CUDA (PAGANI) | 32 s | 3.4e-4 |
-| `fast_mass` Python | 74 ms | 8.4e-4 |
-| `fast_mass` C++ (`Shear1hFastMass.so`) | 9 ms | 8.4e-4 — bitwise = DES Y1's `Shear1hMisSel.so` |
-| `radial_series` Python ($\ell\le2$) | 6 ms | 3.7e-3 |
-| `radial_series` C++ (`Shear1hRadialSeries.so`) | 7 ms | 3.7e-3 + 1.6e-4 interp difference |
-| max model (traditional 1h+2h) C++ (`Shear1h2hMax.so`) | 11 ms | inherits 8.3e-4 from Python; see {doc}`../variants` |
-| max model CUDA (`Shear1h2hMaxGpu.so`) | 8 ms | machine precision vs C++ twin |
+| Dims | Backend | Time | Precision vs 3d |
+|---|---|---:|---:|
+| `3d` | Python adaptive certifier (shared explicit core) | 35 s | reference |
+| `0d` | Python — explicit 3-dim GL grid | 149 ms | 4.9e-5 |
+| `3d` | C++ (Cuhre) | 51 s | 3.3e-4 |
+| `3d` | CUDA (PAGANI) | 32 s | 3.4e-4 |
+| `0d` | Python — $z$-contracted 1-dim GL mass sum | 74 ms | 8.4e-4 |
+| `0d` | C++ (`Shear1hGl.so`) — $z$-contracted 1-dim GL mass sum | 9 ms | 8.4e-4; bitwise identity **vs production `Shear1hMisSel.so`** recorded separately |
+| `0d` | Python — radial series ($\ell\le2$, offline tables) | 6 ms | 3.7e-3 |
+| `0d` | C++ (`Shear1hRadialSeries.so`) — radial series | 7 ms | 3.7e-3 (truncation, **vs same-profile doubled-node fiducial**) + 1.6e-4 interp difference **vs its Python twin**; raw vs-3d amplitude is the open c=4 defect |
+| `0d` | max model C++ (`Shear1h2hMax.so`) — $z$-resolved 2-dim GL sum | 11 ms | 8.3e-4 (measured through the Python max-model chain); see {doc}`../variants` |
+| `0d` | max model CUDA (`Shear1h2hMaxGpu.so`) | 8 ms | machine precision **vs its C++ twin**; vs-3d inherited through it |
 
 **Projection shear** (180-point wall; DES Y1
 `ShearPrjFrozenPhysics.so` = 82 ms):
 
-| Strategy / backend | Time | Error vs best-available reference |
-|---|---:|---:|
-| `full_ltmz` CUDA (PAGANI over $\ln\theta, z, \ln M$) | 95 s | median 9.5e-4, max 2.2% at innermost radii (open convergence study) |
-| `fast_mass` Python (exact $z$) | 270 ms | reference (best available) |
-| `fast_mass` C++ (`ShearPrjFastMass.so`) | 154 ms | 9.9e-12 vs the exact evaluator, same core |
-| `fast_mass` DES Y1 frozen (`ShearPrjFrozenPhysics.so`) | 82 ms | 5.5e-5 from exact |
-| `fast_mass` CUDA (`ShearPrjFrozenGpu.so`, frozen) | 8.3 ms | machine precision vs DES Y1 frozen |
+| Dims | Backend | Time | Precision vs 3d |
+|---|---|---:|---:|
+| `3d` | CUDA (PAGANI over $\ln\theta, z, \ln M$) | 95 s | is the 3d diagnostic; median 9.5e-4, max 2.2% **vs the region-split GL baseline** — its own convergence study is open |
+| `0d` | Python — exact $z$, region-split 3-dim GL | 270 ms | best-available baseline; vs-3d pending (Perlmutter re-run, blocked on the 3d convergence study) |
+| `0d` | C++ (`ShearPrjGl.so`) — region-split GL | 154 ms | 9.9e-12 **vs the exact-**$z$** evaluator** (same core); vs-3d pending |
+| `0d` | DES Y1 frozen (`ShearPrjFrozenPhysics.so`, production) | 82 ms | 5.5e-5 **vs the exact-**$z$** baseline** |
+| `0d` | CUDA (`ShearPrjFrozenGpu.so`, frozen) | 8.3 ms | machine precision **vs DES Y1 frozen** |
 
 ## General integral structure
 
@@ -142,6 +149,56 @@ $[\theta_{\rm lo}, 2\theta_\lambda]$ under-resolves all three; the
 breakpoint split reduces the residual by $\gtrsim 10\times$ at
 `n_per_seg` $= 30$ compared to a single-panel 120-node grid.
 
+### Gauss–Legendre setup of the des_y3 `0d` backends
+
+The nodes and weights themselves are standard: the Python layer calls
+`numpy.polynomial.legendre.leggauss(N)` once per $N$ (cached) and
+applies the affine map above; the C++ twin computes the Legendre roots
+by Newton iteration and applies the same map, so the two produce the
+same grid to machine precision. The mass and redshift axes use fixed
+brackets — $N_{\ln M} = 96$ nodes on
+$[\texttt{lnm\_low}, \texttt{lnm\_high}]$ and $N_z = 64$ nodes on
+$[\texttt{zt\_low}, \texttt{zt\_high}]$ — and the integrand is assembled
+as a weight chain evaluated once per MCMC sample,
+
+$$
+\zeta_q = w^z_q\,\frac{dV}{d\Omega\,dz}(z_q)\,\Omega(z_q)
+\,\bigl[\Sigma_{\rm crit}^{-1}(z_q)\bigr],\qquad
+W_{b,kq} = \zeta_q\, n(\ln M_k, z_q)\, S_b(\ln M_k, z_q),
+$$
+
+with the $\Sigma_{\rm crit}^{-1}$ factor present only for shear. A
+$z$-independent radial profile (the one-halo case) lets the $q$ sum
+contract first, leaving one $N_{\ln M}$-term sum per $(b, R)$; the max
+model's $z$-dependent two-halo term forces the full
+$\sum_{kq} w^{\ln M}_k W_{b,kq}\,\Delta\Sigma(R, \ln M_k, z_q)$.
+
+The true-richness dimension is where node placement matters: for each
+$(\ln M, z)$ cell, $N_q = 32$ nodes are mapped onto the HOD support
+$[\max(0, \mu_{\rm eff} - L\sigma_{\rm eff}),\ \mu_{\rm eff} +
+L\sigma_{\rm eff}]$ with $\mu_{\rm eff} = \lambda_{\rm cen} +
+\mu_{\rm sat}$, $\sigma_{\rm eff} = \sqrt{\mu_{\rm sat} +
+(\sigma_\lambda \mu_{\rm sat})^2}$ and $L = 6$, so the quadrature tracks
+the shifted-Poisson peak across five decades of mass instead of wasting
+nodes on a global $[0, \lambda_{\max}]$ bracket. This feature placement
+is why the fixed grids reach $10^{-4}$-class accuracy at millisecond
+cost. The certification is empirical: on the checked-in fiducial dump,
+doubling every node count ($96 \to 192$, $64 \to 128$, $32 \to 64$)
+moves the fiducial by $3.8\times10^{-4}$ (counts) and
+$3.1\times10^{-4}$ (shear), and widening the envelope $L: 6 \to 8$ by
+$1.4\times10^{-4}$.
+
+Code pointers: `shared/datablock_models.py::gl_nodes` and
+`src/models/p_operator_cuhre_t.hh::p_op_detail::gl_nodes` (node
+construction); `systematics/selection_richness/python/sel_function.py::`
+`_compute_lam_nodes_and_P_HOD` (richness envelope);
+`shared/explicit_grid_core.py::explicit_mass_z_weights` and
+`shear_1h2h/cpp/0d/shear1h2h_max_t.hh` (weight chain);
+`systematics/shear_prj/cpp/sigma_prj_t.hh::sp_detail::build_theta_grid`
+($\theta$ breakpoints, ring + fg/bg $z$ split, `n_per_seg`/`n_zring`/
+`n_zouter`); `src/pipelines/des_y3/validate_against_fiducial.py`
+(self-convergence certificates quoted above).
+
 **The $n_{\ln M}$ convergence study.** The `sel_function` mass grid was
 swept as a *whole-pipeline* study, because the `S_stack` grid resolution
 feeds directly into how hard the downstream Cuhre-based `NumCountsSel`
@@ -189,7 +246,11 @@ the reference ini).*
 The full numerical recipe of the two population-operator modules
 (`NumCountsSel`, {doc}`../observables/number_counts`, and
 `Shear1hMisSel`, {doc}`../observables/shear_halo`), which share one
-engine (`SelGLCore` in `src/models/n_operator_sel_gl_t.hh`). The target:
+engine (`SelGLCore` in `src/models/n_operator_sel_gl_t.hh`; the des_y3
+pipeline twins `NumCountsSijGl`/`Shear1hGl` use the pipeline-owned
+re-implementation `y3_pipelines::SelGlWeights` in
+`src/pipelines/shared/sel_gl_weights.hh`, identity-certified against
+this engine). The target:
 
 $$N_i[f] = \int d\ln M \int dz\;
 \Omega(z)\,\frac{dV}{d\Omega\,dz}\,\frac{dn}{d\ln M}(M,z)\,

@@ -17,7 +17,7 @@ node, no queue. `USE_CUDA=OFF` was never optional here: no Mac has a
 CUDA-capable GPU (Apple Silicon has none at all; Intel Macs dropped NVIDIA
 driver support years ago). PAGANI/`gpuintegration` is reference-only
 anyway (see {doc}`pipeline_organization`), so this loses nothing that
-matters for day-to-day `fast_mass` work.
+matters for day-to-day fixed-GL (`0d`, formerly `fast_mass`) work.
 ```
 
 Version pins below match the NERSC `y3cl_je` conda env as of 2026-08-13
@@ -274,9 +274,8 @@ ctest --output-on-failure
 ```
 
 Expect **59/60 passing**. The one failure is `sel_function_test`'s three
-deliberately-red tests pinning the known HOD-normalization defect (see
-`docs/hod_normalization_defect.md` at the repo root — same failure you'd
-see on any platform, not macOS-specific).
+deliberately-red tests pinning the known HOD-normalization defect (same
+failure you'd see on any platform, not macOS-specific).
 
 ## 11. Environment script for new shells
 
@@ -317,7 +316,7 @@ Source it in every new shell: `source ~/cosmosis_y3/cosmosis_init_macos.sh`.
 
 - **No CUDA, no PAGANI.** All `*Gpu.so` modules and the `gpuintegration`
   reference backends are unavailable — expected, not a bug. The
-  `fast_mass` C++ path (this project's actual production speed target)
+  fixed-GL C++ path (this project's actual production speed target)
   never needed them.
 - **CosmoSIS `.ini` pipelines live in sibling repos**, not this tree (see
   the top-level `CLAUDE.md`). Running an actual pipeline additionally

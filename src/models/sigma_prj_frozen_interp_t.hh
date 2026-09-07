@@ -1,25 +1,20 @@
-// Option E (frozen-physics DeltaSigma_prj benchmark backend) -- see
-// RichnessSelection/docs/richness_selection_frozen.tex section "Extension:
-// frozen physics for <DeltaSigma_prj>" and richness_selection.FrozenDeltaSigmaPrj
-// for the Python reference this ports, and the plan doc "Port frozen-physics
-// b_sel/DeltaSigma_prj recipe into the cosmosis pipeline" (Part III, Option E)
-// for the design rationale.
+// Projected shear from correlated line-of-sight structure in the Costanzi et al.
+// (2026) model.
 //
-// Keeps the same frozen-physics algebraic reduction as Option C
-// (ShearPrjFrozenPhysics): the z-dependent work (exact rnd-channel hoist,
-// cl-channel r_s(M)-anchored amplitude drift a_b(z)) is done once per
-// (lob, zob) slice on a fixed ring+outer z-grid (build_z_grid_, copied
-// verbatim from sp_detail::ShearPrjCore). What differs from Option C: the
-// remaining (lnM, theta) assembly is NOT an explicit N_theta x N_M grid +
-// dot product -- w_rnd(lnM), w_cl(lnM), and Psi(theta) are tabulated as
-// continuous Interp1D functions, and the final integral is evaluated by a
-// genuine 2-D adaptive Cuhre integral over (theta, lnM) (cubacpp, same
-// integration backend already used by ShearPrjCuhre in sigma_prj_t.hh),
-// instead of building and summing a fixed grid.
+// Approximation:
+//   - freeze the one-halo profile at the observed cluster redshift z_ob;
+//   - integrate the redshift-dependent two-halo contribution over the
+//     foreground, exclusion, and background regions around z_ob.
 //
-// No adaptive integration over z: that axis is still eliminated by the
-// frozen reduction, same as Option C. Only (theta, lnM) are Cuhre
-// integration variables.
+// Numerical method:
+//   1. The redshift integral is reduced on fixed Gauss--Legendre nodes.  The
+//      nodes are split at z = z_ob, where the line-of-sight kernel changes
+//      branch; this is a non-smooth point, not a pole.
+//   2. For each (lambda_bin, z_ob, R) sample point, Cuba Cuhre (or Vegas, if
+//      selected) performs the remaining two-dimensional integral over
+//      u = ln(theta) and ln(M).  The redshift weights and angular factors are
+//      tabulated/interpolated before this integral is evaluated.
+
 #ifndef Y3_CLUSTER_CPP_SIGMA_PRJ_FROZEN_INTERP_T_HH
 #define Y3_CLUSTER_CPP_SIGMA_PRJ_FROZEN_INTERP_T_HH
 
@@ -75,6 +70,10 @@ namespace y3_cluster {
       // DeltaSigma-only scope (no Sigma_prj counterpart -- FrozenDeltaSigmaPrj
       // has no Sigma analogue in the Python reference either).
       dsigma_mis_.emplace(4.0, 2.77533742639e+11, SINGLE);
+      // issue #14: honor use_halo_model_conc (was silently ignored here).
+      use_halo_model_conc_ =
+          cfg.has_val(module_label(), "use_halo_model_conc") &&
+          cfg.view<bool>(module_label(), "use_halo_model_conc");
 
       auto const lamb = get_vector_double(cfg, module_label(), "lambda_bin");
       auto const zlo  = get_vector_double(cfg, module_label(), "zo_low");
@@ -139,18 +138,14 @@ namespace y3_cluster {
 
       double const omm = sample.view<double>("cosmological_parameters", "omega_M");
       h0_ = sample.view<double>("cosmological_parameters", "h0");
-      dsigma_mis_->set_rho_mult(omm);
+      // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
+      // haloModel/rho_m_ref (see ShearPrjEvaluator / sigma_prj_t.hh).
+      dsigma_mis_->set_rho_ref(sample.view<double>("haloModel", "rho_m_ref"));
+      if (use_halo_model_conc_)
+        dsigma_mis_->set_concentration_table(
+            make_Interp1D(sample, "haloModel", "lnM", "concentration"));
 
-      b_sel_lob_ = sample.view<std::vector<double>>("b_sel_marginalised", "lob");
-      b_sel_zob_ = sample.view<std::vector<double>>("b_sel_marginalised", "zob");
-      n_lob_ = static_cast<int>(b_sel_lob_.size());
-      n_zob_ = static_cast<int>(b_sel_zob_.size());
-      auto const& nd_s = sample.view<cosmosis::ndarray<double>>(
-          "b_sel_marginalised", "b_small");
-      auto const& nd_l = sample.view<cosmosis::ndarray<double>>(
-          "b_sel_marginalised", "b_large");
-      b_small_vals_.assign(nd_s.begin(), nd_s.end());
-      b_large_vals_.assign(nd_l.begin(), nd_l.end());
+      bsel_.emplace(sample);
 
       // Explicit ascending lnM tabulation grid for the Interp1D functions
       // (kept separate from the GL nodes lnm_x_, which are only used for
@@ -184,7 +179,8 @@ namespace y3_cluster {
       for (std::size_t k = 0; k != Nlz; ++k) {
         int    const lob_bin = lzob_lb_[k];
         double const zob     = lzob_zob_[k];
-        double const lobc    = lob_centers_.at(lob_bin);
+        auto const bsel_bin = bsel_->at(lob_bin, zob);
+        double const lobc    = bsel_bin.lob;
         double const chi_o   = (*chi_).clamp(zob) * h0_;
         double const D_A_o   = chi_o / (1.0 + zob);
         double const R_excl  = sp_detail::R_lambda(lobc) * (1.0 + zob);
@@ -216,24 +212,8 @@ namespace y3_cluster {
         lzob_theta_hi_[k]  = theta_hi;
         lzob_theta_lam_[k] = theta_lam;
 
-        // Analytic b_sel(theta) asymptotes: b_small/b_large linearly
-        // interpolated in zob (same convention as sp_detail::ShearPrjCore's
-        // interp_b_asymptotes_, reimplemented here to avoid depending on a
-        // private method of that class).
-        {
-          int j = 0;
-          while (j + 1 < n_zob_ && b_sel_zob_[j + 1] < zob) ++j;
-          int const j0 = (j + 1 < n_zob_) ? j     : n_zob_ - 2;
-          int const j1 = (j + 1 < n_zob_) ? j + 1 : n_zob_ - 1;
-          double const z0 = b_sel_zob_[j0];
-          double const z1 = b_sel_zob_[j1];
-          double f = (z1 > z0) ? (zob - z0) / (z1 - z0) : 0.0;
-          f = std::clamp(f, 0.0, 1.0);
-          int const off0 = j0 * n_lob_ + lob_bin;
-          int const off1 = j1 * n_lob_ + lob_bin;
-          lzob_Bs_[k] = (1.0 - f) * b_small_vals_[off0] + f * b_small_vals_[off1];
-          lzob_Bl_[k] = (1.0 - f) * b_large_vals_[off0] + f * b_large_vals_[off1];
-        }
+        lzob_Bs_[k] = bsel_bin.b_small;
+        lzob_Bl_[k] = bsel_bin.b_large;
 
         // n(M,zob), b(M,zob), and the r_s(M)-anchored amplitude-drift
         // denominator, on the fixed GL lnM grid (lnm_x_/lnm_w_).
@@ -542,14 +522,13 @@ namespace y3_cluster {
     std::optional<y3_cluster::OMEGA_Z_DES> omega_z_;
     std::optional<Interp2D>                xi_nl_;
     std::optional<NFW_DSIGMA_MIS>          dsigma_mis_;
+    bool use_halo_model_conc_ = false;   // issue #14: feed haloModel/concentration
     std::optional<Interp1D>                chi_;
     std::optional<Interp1D>                sci_;
     std::optional<Interp1D>                sigma_z_;
     double h0_ = 0.0;
 
-    std::vector<double> b_sel_lob_, b_sel_zob_;
-    int n_lob_ = 0, n_zob_ = 0;
-    std::vector<double> b_small_vals_, b_large_vals_;
+    std::optional<sp_detail::BSelBins> bsel_;
 
     std::vector<int>    gp_lam_bin_;
     std::vector<double> gp_zob_, gp_R_;

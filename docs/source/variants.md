@@ -2,7 +2,7 @@
 
 The main walkthrough ({doc}`running`) documents the DES Y3 reference
 pipeline (`des_y3.ini`), which swaps three DES Y1 production modules
-for algorithmically-identical `src/pipelines/des_y3` fast_mass
+for algorithmically-identical `src/pipelines/des_y3` fixed-GL (formerly `fast_mass`)
 implementations. This page lists: the DES Y1 pipeline those modules
 replace, and every other retained variant — what changes, which
 observable changes, its status (comparative / validation-only), and how
@@ -15,19 +15,19 @@ the three observable stages:
 
 | DES Y3 reference (`des_y3.ini`) | DES Y1 pipeline (`mock_mcmc_buzzard.ini`) | Relationship |
 |---|---|---|
-| `NumCountsFastMass` | `NumCountsSel` | algorithmically identical ("by identity") |
-| `Shear1hFastMass` | `Shear1hMisSel` | bitwise-equivalent |
-| `ShearPrjFastMass` | `shear_prj_frozen_physics` | same `ShearPrjCore`/`ShearPrjFrozenPhysics` family, exact-$z$ instead of frozen |
+| `NumCountsSijGl` | `NumCountsSel` | algorithmically identical ("by identity") |
+| `Shear1hGl` | `Shear1hMisSel` | bitwise-equivalent |
+| `ShearPrjGl` | `shear_prj_frozen_physics` | same `ShearPrjCore`/`ShearPrjFrozenPhysics` family, exact-$z$ instead of frozen |
 
 Everything else — `consistency`, `GrowthFactor`, `cp_camb`, `MfTinker`,
 `halo_model`, `average_sigma_crit_inv`, `sel_function`, `b_sel_marg`,
-`bsel`, `likelihoods` — is the same module in both pipelines. See
-{doc}`running`'s warning about `likelihood_cp.py` section-name
-compatibility before running `des_y3.ini` end-to-end.
+`bsel`, `likelihoods` — is the same module in both pipelines;
+`des_y3.ini` passes the des_y3 output-section names to the likelihood
+explicitly ({doc}`observables/likelihood`).
 
 | Variant | Modules changed | Observable changed | Status |
 |---|---|---|---|
-| DES Y1 pipeline (`mock_mcmc_buzzard.ini`) | `NumCountsFastMass`/`Shear1hFastMass`/`ShearPrjFastMass` → `NumCountsSel`/`Shear1hMisSel`/`shear_prj_frozen_physics` | none (same theory vector) | previous-generation reference, see above |
+| DES Y1 pipeline (`mock_mcmc_buzzard.ini`) | `NumCountsSijGl`/`Shear1hGl`/`ShearPrjGl` → `NumCountsSel`/`Shear1hMisSel`/`shear_prj_frozen_physics` | none (same theory vector) | previous-generation reference, see above |
 | widePlanck self-closure (`mock_mcmc_cp_camb.ini`) | none (data + grids + `unity = T`) | $\Delta\Sigma$ on 10 radii instead of $\gamma_t$ on 15 | comparative (closure + sampler A/B) |
 | Mock data-vector writer (`generate_mock_dv.ini`) | `likelihoods` → `generate_mock_dv` | none (writes the DV) | tooling |
 | Full projection evaluator (`shear_prj`) | `shear_prj_frozen_physics` → `ShearPrjEvaluator` | same $\gamma_t^{\rm prj}$, exact $z$-resolved clustered channel | validation-only |
@@ -121,20 +121,20 @@ compose the one-halo and biased two-halo terms by the **pointwise max**
 (Hayashi & White 2008, the DES Y1 lensing-analysis prescription — not a
 sum):
 
-$$\Phi_{\max}(R, \ln M, z \mid i) = \max\!\big(
+$$\Delta\Sigma_{\max}(R, \ln M, z \mid i) = \max\!\big(
 \Delta\Sigma_{\rm cl}(R, \ln M \mid i),\;
 b(\ln M, z)\,\Delta\Sigma_{\rm hh}(R, z)\big), \qquad
 \gamma_t^{\rm theory}(R \mid i) =
-N_i[\Phi_{\max}](R)\,\langle\Sigma_{\rm crit}^{-1}\rangle / N_i[1].$$
+N_i[\Delta\Sigma_{\max}](R)\,\langle\Sigma_{\rm crit}^{-1}\rangle / N_i[1].$$
 
 Implemented by
-[`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/pipelines/des_y3/src/pipelines/des_y3/observables/shear_1h2h/fast_mass/python/shear1h2h_max.py)
+[`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py)
 (`shear1h2h_max.py`, C++ `Shear1h2hMax.cc`, CUDA
 `Shear1h2hMaxGpu.cu`) — a **model option**, not part of the reference
 pipeline ({doc}`../running`, {doc}`observables/second_halo_term`).
 Unlike the one-halo operator, the two-halo term is $z$-dependent, so the
 redshift integral cannot be contracted past the profile the way
-`fast_mass` does elsewhere — `Shear1h2hMax` keeps a $z$-resolved
+the one-halo $z$-contracted `0d` path does elsewhere — `Shear1h2hMax` (also `0d`: fixed-GL only) keeps a $z$-resolved
 tabulated weight and does a double fixed-GL contraction instead.
 
 vs the reference's $1h^{\rm mis} + {\rm prj}$: no miscentering
@@ -145,6 +145,16 @@ note). Status: **model option** — and the wired production
 `SigmaTotSel`/`DSigmaTotSel` modules remain broken
 ({doc}`modules/historical`), which is why `Shear1h2hMax` reads
 `haloModel/dSigma_hh` directly rather than through them.
+
+Likelihood wiring: `src/pipelines/buzzard/likelihoods/likelihood_cp.py` consumes the max model
+with `shear_max_section = shear1h2h_max` (theory =
+`shear1h2h_max/vals` / $N_i$, no projection term). Setting
+`is_b_proj_costanzi26 = T` multiplies that theory by the Costanzi-2026
+$\mathcal{B}_{\rm prj}(R)$ selection-bias correction
+(`src/pipelines/systematics/costanzi_bprj/`, App. C of arXiv:2604.05833),
+with its parameters read from the values-file section `[costanzi_bprj]`,
+the bin centres `lob_centers`/`zob_centers` published into that section by
+the `costanzi_bprj` module stage, and the radii from `shear_r_perp`.
 
 ## Population diagnostics
 

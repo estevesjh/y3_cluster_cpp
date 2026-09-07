@@ -62,7 +62,7 @@ dumps to `validation-data/`, leaving stale `.out` copies here.
 
 | Path | Quantity | Class | Used by | Notes |
 |---|---|---|---|---|
-| `data/radial_series/radial_series_nfw_mis_gamma_v1.{json,npz}` | packaged $U_\ell$ unit-profile tables (metadata + arrays) | pipeline input (`radial_series` strategy only, not the default `des_y3.ini`) | `Shear1hRadialSeries.so`, `shear1h_radial_series.py` | Generated once offline by `src/pipelines/des_y3/observables/shear_1h2h/radial_series/python/generate_radial_series_tables.py`; never regenerated during sampling |
+| `data/radial_series/radial_series_nfw_mis_gamma_v1.{json,npz}` | packaged $U_\ell$ unit-profile tables (metadata + arrays) | pipeline input (`0d` series strategy only, not the default `des_y3.ini`) | `Shear1hRadialSeries.so`, `shear1h_radial_series.py` | Generated once offline by `src/pipelines/des_y3/shear_1h2h/python/0d/generate_radial_series_tables.py`; never regenerated during sampling |
 | `data/radial_series/radial_series_nfw_mis_gamma_v1_{lnx,lnxm}.txt` | log-radius / log-miscentering-radius axis grids | pipeline input | same | Raw-text twins of the `.npz` axes, for non-numpy consumers |
 | `data/radial_series/radial_series_nfw_mis_gamma_v1_u{0,1,2,3}_{cen,mis}.txt` | $U_\ell$ moments ($\ell=0..3$), centred and miscentred | pipeline input | same | The offline moment expansion this strategy factors the mass integral through — see {doc}`../numerics/index` |
 
@@ -136,4 +136,4 @@ dumps to `validation-data/`, leaving stale `.out` copies here.
 
 | Path | Quantity | Class | Used by | Notes |
 |---|---|---|---|---|
-| `data/mock/mock_dv_cp_camb.npz` | mock data vector (counts + 1h shear + projected shear) with covariance | pipeline input | `[likelihoods]` → `y3_buzzard/likelihood_cp.py` | **`data/mock/` is not present in the current tree**; the `.npz` is built by the mock-DV scripts in `$PSCRATCH/github/des-cluster-nersc` and must exist before an MCMC run |
+| `data/mock/mock_dv_cp_camb.npz` | mock data vector (counts + 1h shear + projected shear) with covariance | pipeline input | `[likelihoods]` → `src/pipelines/buzzard/likelihoods/likelihood_cp.py` | **`data/mock/` is not present in the current tree**; the `.npz` is built by the mock-DV scripts in `$PSCRATCH/github/des-cluster-nersc` and must exist before an MCMC run |
