@@ -5,12 +5,12 @@ cluster-lensing calculations used in the **DES cluster-cosmology
 analysis**: C++ (and CUDA) CosmoSIS modules that predict cluster number
 counts and stacked lensing profiles in bins of observed richness and
 redshift, together with the optical selection-bias and projection-lensing
-model of the Costanzi-2026 framework.
+model framework of [Costanzi et al. 2026](https://arxiv.org/abs/2604.05833).
 
 This repository is the **cluster-observable prediction engine**. The
 complete analysis also uses CosmoSIS Standard Library modules, local
 Python modules (`y3_buzzard/`), calibration data (`data/`), and
-run-management configurations in sibling repositories.
+run-management configurations in sibling repositories (`add-names-here`).
 
 ## Documentation
 
@@ -36,6 +36,9 @@ cmake -DUSE_CUDA=On -DY3GCC_TARGET_ARCH=80-real ... -G Ninja $Y3_CLUSTER_CPP_DIR
 ninja
 ctest -j 10
 ```
+<div class="alert alert-block alert-info">
+<b>Question:</b> It also runs on Artemis. Don’t you want add this info here?
+</div>
 
 ## Minimal example
 
@@ -49,7 +52,7 @@ cd $Y3_CLUSTER_CPP_DIR
 cosmosis cosmosis-models/des_y3.ini
 ```
 
-Outputs land in `des_y3_test_output/`. See the docs'
+This run will take ~X s/min/h and the outputs are saved in `des_y3_test_output/`. See the docs'
 [Running the reference pipeline](docs/source/running.md) page for the
 full module trace, environment setup, and a caveat about wiring this
 into an end-to-end likelihood evaluation. The production MCMC pipeline
