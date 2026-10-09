@@ -1,9 +1,18 @@
-"""Costanzi-2026 Bsel(R) kernel for the raw surface-density profile.
+r"""Costanzi-2026 optical selection-bias correction kernel.
 
-The model follows Appendix C of arXiv:2604.05833.  ``R``, ``R0`` and the
-richness-radius convention are comoving Mpc/h.  The class is deliberately
-separate from ``CostanziBprj``: this kernel supplies both ``Bsel`` and its
-derivative to the non-local selected-profile calculation.
+The prescription is the Appendix C form of Costanzi et al. (2026),
+arXiv:2604.05833, Eq. (23):
+
+.. math::
+
+   \mathcal{B}_{\rm sel}(R) = 1 + A x^\alpha
+       (1 + x^\gamma)^{(\beta-\alpha)/\gamma},
+       \qquad x = R/R_0,
+       \qquad R_0 = R_\lambda(\lambda_{\rm ob})(1+z).
+
+``R`` and ``R0`` use the comoving ``h^-1 Mpc`` convention.  The class is
+deliberately separate from ``CostanziBprj``: it supplies both the correction
+and its derivative to the non-local selected-profile calculation.
 """
 from __future__ import annotations
 
@@ -23,7 +32,7 @@ def _r_lambda(lob):
 
 @dataclass(frozen=True)
 class BselCostanzi26:
-    """Smooth Costanzi-2026 selection-bias profile ``Bsel(R)``."""
+    """Evaluate the Costanzi et al. (2026) correction ``B_sel(R)``."""
 
     A: float
     alpha: float

@@ -71,6 +71,45 @@ class TestBselModels(unittest.TestCase):
         np.testing.assert_allclose(derivatives[2:], reference[2:, 1],
                                    rtol=2e-14, atol=0.0)
 
+    def test_ten_radius_benchmark(self):
+        # Independent benchmark across R=logspace(-1, 1, 10).  The
+        # Sunayama values cross its R0=3.5 branch in the same sample.
+        radii = np.geomspace(0.1, 10.0, 10)
+        costanzi = BselCostanzi26(0.10, 0.92, -0.53, 4.1)
+        costanzi_values = np.array([
+            1.0111785186792333, 1.01789639910452, 1.0286218236572273,
+            1.0453968273535741, 1.0678416280469756, 1.0791840601769058,
+            1.0680253815140701, 1.0528016345802402, 1.0403504761945139,
+            1.0307745323736017])
+        costanzi_derivatives = np.array([
+            0.10283306354875656, 0.09863043480487986,
+            0.09406590730077931, 0.08570538684808919,
+            0.05493575001600590, -0.00347956712456455,
+            -0.01416523906054845, -0.00763264961463009,
+            -0.00355862842257145, -0.00163056002101080])
+        np.testing.assert_allclose(costanzi(radii, 40.0, 0.3),
+                                   costanzi_values, rtol=2e-14, atol=1e-15)
+        np.testing.assert_allclose(costanzi.derivative(radii, 40.0, 0.3),
+                                   costanzi_derivatives, rtol=2e-13, atol=1e-15)
+
+        sunayama = BselSunayama23([0.45], [3.5], -0.1, [0])
+        sunayama_values = np.array([
+            1.0128571428571429, 1.021447006906858, 1.035775763742663,
+            1.0596775707178785, 1.0995481877732878, 1.1660563855019137,
+            1.2769987458612422, 1.447354902794312, 1.3961863451722221,
+            1.3450177875501321])
+        sunayama_derivatives = np.array([
+            0.12857142857142859, 0.12857142857142859,
+            0.12857142857142859, 0.12857142857142859,
+            0.12857142857142859, 0.12857142857142859,
+            0.12857142857142859, -0.02782559402207126,
+            -0.01668100537200059, -0.01])
+        np.testing.assert_allclose(sunayama(radii, 0), sunayama_values,
+                                   rtol=2e-14, atol=1e-15)
+        np.testing.assert_allclose(sunayama.derivative(radii, 0),
+                                   sunayama_derivatives, rtol=2e-14,
+                                   atol=1e-15)
+
     def test_costanzi_invalid_parameters_and_boundary(self):
         for params in ((np.nan, 0.92, -0.53, 4.1),
                        (0.1, 0.92, -0.53, 0.0),

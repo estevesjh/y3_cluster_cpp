@@ -1,16 +1,15 @@
-# Bsel profiles for `Shear1h2hMax`
+# Optical selection-bias corrections for `Shear1h2hMax`
 
-`Python` + `C++` · `Shear1h2hMax` · optional 3-D-envelope selection-bias
-profiles
+`Python` + `C++` · `Shear1h2hMax` · optical selection-bias correction
+functions
 
-This page documents the tagged Bsel profiles that apply the selection-bias
-model to the raw surface-density profile before the max-model observable is
-formed. They are separate from the existing angular `[bsel]` module and from
-the legacy `costanzi_bprj` post-processing correction.
+This page documents the tagged optical selection-bias corrections applied to
+the raw surface-density profile before the max-model observable is formed.
+They are separate from the existing angular `[bsel]` module and from the
+legacy `costanzi_bprj` post-processing correction.
 
-The feature is opt-in. It requires the 3-D-envelope path because the profile
-calculation needs the underlying surface-density information. The ordinary
-`Shear1h2hMax` path and its output section remain unchanged when Bsel is off.
+The feature is opt-in. The ordinary `Shear1h2hMax` path and its output
+section remain unchanged when the correction is off.
 
 ## Tagged implementations
 
@@ -22,6 +21,30 @@ calculation needs the underlying surface-density information. The ordinary
 `BselModels` in `bsel_profile.py` and `bsel_profile.hh` is the shared
 tag dispatcher. It accepts exactly `Costanzi26` or `Sunayama23`; the two
 scientific prescriptions remain separate after dispatch.
+
+The Costanzi26 correction is the smooth form from Costanzi et al. (2026),
+Appendix C, Eq. (23):
+
+$$
+\mathcal{B}_{\rm sel}(R) = 1 + A x^\alpha
+\left(1+x^\gamma\right)^{(\beta-\alpha)/\gamma},
+\qquad x = R/R_0,
+\qquad R_0 = R_\lambda(\lambda_{\rm ob})(1+z).
+$$
+
+The Sunayama23 correction uses the piecewise contribution from Sunayama et
+al. (2023), Eq. (28), and exposes the multiplicative factor used by the
+profile calculation:
+
+$$
+\Pi(R) =
+\begin{cases}
+\Pi_0 R/R_0, & R \le R_0,\\
+\Pi_0 + c\ln(R/R_0), & R > R_0,
+\end{cases}
+\qquad
+\mathcal{B}_{\rm sel}(R) = 1+\Pi(R).
+$$
 
 The `Sunayama23` kernel returns the multiplicative factor `1 + Pi(R)`. Its
 piecewise `Pi(R)` contribution is zero at the origin, rises linearly to
@@ -57,7 +80,6 @@ zt_high = 0.80
 lnm_low = 29.9336
 lnm_high = 36.7300
 
-three_d_envelope = T
 bsel = T
 bsel_model = Costanzi26
 bsel_section = bsel_profile_costanzi26
@@ -79,7 +101,6 @@ For a Sunayama23 run, change only the selected tag and section:
 
 ```ini
 [Shear1h2hMax]
-three_d_envelope = T
 bsel = T
 bsel_model = Sunayama23
 bsel_section = bsel_profile_sunayama23
@@ -106,16 +127,14 @@ selection-bias treatment.
 
 | Option | Meaning | Required when |
 |---|---|---|
-| `three_d_envelope` | Enables the raw-profile path needed by Bsel | Always `T` when `bsel = T` |
 | `bsel` | Enables the tagged Bsel profile | Optional; defaults to `F` |
 | `bsel_model` | Model tag: `Costanzi26` or `Sunayama23` | `bsel = T` |
 | `bsel_section` | DataBlock section containing the selected calibration | `bsel = T` |
 | `bsel_n_gl` | Gauss–Legendre resolution for the profile correction | `bsel = T` |
 
 Configuration errors should be explicit: an unknown tag, a missing values
-section, incompatible wall lengths, or `bsel = T` without
-`three_d_envelope = T` must stop the module rather than silently falling back
-to the unselected profile.
+section, or incompatible wall lengths must stop the module rather than
+silently falling back to the unselected profile.
 
 ## API map
 
@@ -140,3 +159,8 @@ to the unselected profile.
 
 See {doc}`../observables/second_halo_term` for the max-model context and
 {doc}`costanzi_bprj` for the legacy multiplicative correction.
+
+## References
+
+- Costanzi et al. (2026), Appendix C, [arXiv:2604.05833](https://arxiv.org/abs/2604.05833).
+- Sunayama et al. (2023), Section 4.2, [arXiv:2309.13025](https://arxiv.org/abs/2309.13025).

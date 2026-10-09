@@ -4,6 +4,7 @@
 #include "cosmosis/datablock/datablock.hh"
 #include "systematics/bsel_profile.hh"
 
+#include <array>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -44,6 +45,57 @@ TEST_CASE("BselCostanzi26 agrees with high-precision independent pins")
     CHECK(model(pin.R, 40.0, 0.3) == Approx(pin.value).epsilon(3e-15));
     CHECK(model.derivative(pin.R, 40.0, 0.3) ==
           Approx(pin.derivative).epsilon(2e-11));
+  }
+}
+
+TEST_CASE("Bsel kernels match benchmark values at ten logarithmic radii")
+{
+  // Fixed reference values for R=logspace(-1, 1, 10), generated from the
+  // independent Python implementations.  This checks the full radial range
+  // used by the profile calculation, including both Sunayama branches.
+  std::array<double, 10> const radii = {
+    0.1, 0.16681005372000587, 0.27825594022071243,
+    0.46415888336127786, 0.774263682681127,
+    1.2915496650148841, 2.1544346900318834,
+    3.5938136638046259, 5.9948425031894086, 10.0
+  };
+  std::array<double, 10> const costanzi_values = {
+    1.0111785186792333, 1.01789639910452, 1.0286218236572273,
+    1.0453968273535741, 1.0678416280469756, 1.0791840601769058,
+    1.0680253815140701, 1.0528016345802402, 1.0403504761945139,
+    1.0307745323736017
+  };
+  std::array<double, 10> const costanzi_derivatives = {
+    0.10283306354875656, 0.09863043480487986, 0.09406590730077931,
+    0.08570538684808919, 0.05493575001600590, -0.00347956712456455,
+    -0.01416523906054845, -0.00763264961463009, -0.00355862842257145,
+    -0.00163056002101080
+  };
+  std::array<double, 10> const sunayama_values = {
+    1.0128571428571429, 1.021447006906858, 1.035775763742663,
+    1.0596775707178785, 1.0995481877732878, 1.1660563855019137,
+    1.2769987458612422, 1.447354902794312, 1.3961863451722221,
+    1.3450177875501321
+  };
+  std::array<double, 10> const sunayama_derivatives = {
+    0.12857142857142859, 0.12857142857142859, 0.12857142857142859,
+    0.12857142857142859, 0.12857142857142859, 0.12857142857142859,
+    0.12857142857142859, -0.02782559402207126, -0.01668100537200059,
+    -0.01
+  };
+
+  BselCostanzi26 const costanzi(0.10, 0.92, -0.53, 4.1);
+  BselSunayama23 const sunayama({0.45}, {3.5}, -0.1, {0.0});
+  for (std::size_t i = 0; i != radii.size(); ++i) {
+    INFO("R=" << radii[i]);
+    CHECK(costanzi(radii[i], 40.0, 0.3) ==
+          Approx(costanzi_values[i]).epsilon(2e-14));
+    CHECK(costanzi.derivative(radii[i], 40.0, 0.3) ==
+          Approx(costanzi_derivatives[i]).epsilon(2e-13));
+    CHECK(sunayama(radii[i], 0) ==
+          Approx(sunayama_values[i]).epsilon(2e-14));
+    CHECK(sunayama.derivative(radii[i], 0) ==
+          Approx(sunayama_derivatives[i]).epsilon(2e-14));
   }
 }
 

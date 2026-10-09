@@ -1,9 +1,16 @@
-// Tagged Bsel kernels used by the selected Shear1h2hMax profiles.
+// Tagged optical selection-bias correction kernels used by Shear1h2hMax.
 //
 // BselModels is the shared dispatcher.  The physical prescriptions remain
 // separate: Costanzi26 is smooth and richness/redshift anchored, while
 // Sunayama23 is piecewise and calibrated per richness-bin row; its returned
 // multiplicative factor is 1 + Pi(R).
+//
+// Costanzi et al. (2026), arXiv:2604.05833, Appendix C, Eq. (23):
+//   B_sel(R) = 1 + A x^alpha [1 + x^gamma]^((beta-alpha)/gamma),
+//   x = R/R0, and R0 = R_lambda(lambda_ob)(1+z).
+// Sunayama et al. (2023), arXiv:2309.13025, Eq. (28):
+//   Pi(R) = Pi0 R/R0 for R <= R0, and
+//   Pi(R) = Pi0 + c log(R/R0) for R > R0; B_sel(R) = 1 + Pi(R).
 #ifndef Y3_CLUSTER_CPP_BSEL_PROFILE_HH
 #define Y3_CLUSTER_CPP_BSEL_PROFILE_HH
 

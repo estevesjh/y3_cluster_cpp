@@ -1,8 +1,20 @@
-"""Sunayama-2023/Park selection-bias kernel ``1 + Pi(R)``.
+r"""Sunayama-2023 optical selection-bias correction kernel.
 
-The piecewise profile is calibrated per richness bin with a shared outer
-slope.  The class uses the wall order supplied by the caller; ``lambda_bin``
-is retained so a DataBlock can use explicit, non-contiguous bin labels.
+Sunayama et al. (2023), arXiv:2309.13025, Eq. (28), use the piecewise
+contribution
+
+.. math::
+
+   \Pi(R) = \begin{cases}
+       \Pi_0 R/R_0, & R \le R_0,\\
+       \Pi_0 + c\ln(R/R_0), & R > R_0.
+   \end{cases}
+
+This implementation exposes the multiplicative correction
+``B_sel(R) = 1 + Pi(R)`` used by the selected-profile calculation.  The
+profile is calibrated per richness bin with a shared outer slope.  The class
+uses the wall order supplied by the caller; ``lambda_bin`` is retained so a
+DataBlock can use explicit, non-contiguous bin labels.
 """
 from __future__ import annotations
 
@@ -17,7 +29,7 @@ SECTION = "bsel_profile_sunayama23"
 
 @dataclass(frozen=True)
 class BselSunayama23:
-    """Piecewise Sunayama-2023 multiplicative selection-bias profile."""
+    """Evaluate the Sunayama et al. (2023) correction ``B_sel(R)``."""
 
     pi0: np.ndarray
     r0: np.ndarray

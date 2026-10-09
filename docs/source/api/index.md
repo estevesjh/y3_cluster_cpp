@@ -25,8 +25,8 @@ and compatibility rules.
 
 ### Tagged Bsel profile layer
 
-The following APIs provide the optional selection-bias correction for the
-3-D-envelope `Shear1h2hMax` path. They are documented in
+The following APIs provide optional optical selection-bias correction
+functions for `Shear1h2hMax`. They are documented in
 {doc}`../systematics/bsel_profile`; the existing angular `bsel` module is a
 separate API.
 
@@ -36,8 +36,13 @@ separate API.
 | `src/pipelines/systematics/BselSunayama23.py` | `BselSunayama23` | Sunayama23 tagged Bsel kernel, branch derivative, DataBlock loader, and validation |
 | `src/pipelines/systematics/bsel_profile.py` | `BselModels` | Explicit `Costanzi26`/`Sunayama23` dispatcher |
 | `src/systematics/bsel_profile.hh` | `y3_cluster::BselCostanzi26`, `y3_cluster::BselSunayama23`, `y3_cluster::BselModels` | C++ kernels and tag dispatcher |
-| `src/pipelines/shared/lensing_profiles.py` | `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | Python selected-profile consumers |
-| `src/pipelines/des_y3/shear_1h2h/cpp/0d/shear1h2h_max_profile.hh` | `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | C++ selected-profile consumers |
+| `src/pipelines/shared/lensing_profiles.py` | `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | Python optical selection-bias correction consumers |
+| `src/pipelines/des_y3/shear_1h2h/cpp/0d/shear1h2h_max_profile.hh` | `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | C++ optical selection-bias correction consumers |
+
+The Costanzi26 implementation follows Costanzi et al. (2026),
+[arXiv:2604.05833](https://arxiv.org/abs/2604.05833), Appendix C. The
+Sunayama23 implementation follows Sunayama et al. (2023),
+[arXiv:2309.13025](https://arxiv.org/abs/2309.13025), Section 4.2.
 
 ### Observable products
 
