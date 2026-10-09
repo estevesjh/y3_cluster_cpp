@@ -80,6 +80,8 @@ class lensingModel(object):
 
         self.Sigma = {'1h':None, '2h':None}
         self.dSigma = {'1h':None, '2h':None}
+        self.sigma_bar = {'1h':None, '2h':None}
+        self.m3d = {'1h':None, '2h':None}
 
     def first_halo_term(self, M, z=0.0, conc_model_name='Child18'):
         if not hasattr(self,'c'):
@@ -95,6 +97,7 @@ class lensingModel(object):
         mm, rr  = np.meshgrid(M, self.R, indexing='ij')
         self.Sigma['1h'] = sigmaNFW_Analytical(rr, mm, self.c[:,np.newaxis], rho_c=self.rhom0*(1+z)**3)/1e12
         self.dSigma['1h'] = deltaSigmaNFW_Analytical(rr, mm, self.c[:,np.newaxis], rho_c=self.rhom0*(1+z)**3)/1e12
+        self.sigma_bar['1h'] = self.Sigma['1h'] + self.dSigma['1h']
 
     def second_halo_term(self, z, k, P):
         ## Cluster Toolkit Halo-Halo projected \Sigma and \Delta \Sigma second halo term computation
@@ -105,7 +108,10 @@ class lensingModel(object):
         p2h.pk_to_dsigma(self.R, k, P, z)
         self.Sigma['2h'] = p2h.Sigma
         self.dSigma['2h'] = p2h.dSigma
+        self.sigma_bar['2h'] = p2h.sigma_bar
         self.Wp = p2h.Xi
+        rho_m_h = self.omega_m * p2h.RHO_C
+        self.m3d['2h'] = ct_2hTerm.m3d_at_r(self.R, self.Wp, rho_m=rho_m_h)
 
     def concentration_at_M(self, M, z=0.0, model_name="Child18", **kwargs):
         """ Set the mass-concentration model
@@ -222,6 +228,94 @@ class ct_2hTerm(object):
             raise ValueError("dsigma_method must be 'direct' or 'sandwich', "
                              "got %r" % (dsigma_method,))
         self.dsigma_method = dsigma_method
+        self.Sigma = None
+        self.dSigma = None
+        self.sigma_bar = None
+        self.m3d = None
+
+    @classmethod
+    def m3d_at_r(cls, r_grid, xi_grid, rho_m=None, n_gl=5):
+        r"""Enclosed 3D mass profile M_3D(<r):
+            M_3D(<r) = 4*pi * rho_m * \int_0^r r'^2 \xi(r') dr'
+                     = 4*pi * rho_m * \int_0^r r'^3 \xi(r') d\ln r'
+        evaluated via Gauss-Legendre quadrature on logarithmic intervals.
+        Below r_grid[0], assumes an analytic flat core:
+            M_3D(<r_0) = (4*pi/3) * rho_m * xi(r_0) * r_0^3.
+
+        Parameters
+        ----------
+        r_grid : array_like, shape (n_r,)
+            Comoving radial grid (Mpc/h), must be strictly increasing.
+        xi_grid : array_like, shape (n_r,) or (n_z, n_r)
+            Correlation function values on r_grid.
+        rho_m : float or array_like, optional
+            Background matter density (Msun * h^2 / Mpc^3). If None,
+            uses 1.0 (returning the volume integral / mass per unit density).
+        n_gl : int, optional
+            Gauss-Legendre quadrature order per log interval (default: 5).
+
+        Returns
+        -------
+        m3d : ndarray, shape (n_r,) or (n_z, n_r)
+            Enclosed 3D mass profile M_3D(<r) in Msun/h (or (Mpc/h)^3 if rho_m=1).
+        """
+        r_arr = np.asarray(r_grid, dtype=float)
+        xi_arr = np.asarray(xi_grid, dtype=float)
+        is_1d = (xi_arr.ndim == 1)
+        if is_1d:
+            xi_arr = xi_arr[np.newaxis, :]
+
+        lnr = np.log(r_arr)
+        dlnr = np.diff(lnr)
+        xg, wg = np.polynomial.legendre.leggauss(n_gl)
+        t_nodes = lnr[:-1, None] + 0.5 * dlnr[:, None] * (xg[None, :] + 1.0)
+        w_nodes = 0.5 * dlnr[:, None] * wg[None, :]
+        exp_3t = np.exp(3.0 * t_nodes)
+
+        # The quadrature only needs values inside each tabulated interval.
+        # Piecewise-linear interpolation is sufficient here and avoids making
+        # the cumulative integral depend on a cubic spline's extrapolation or
+        # overshoot between correlation-function knots.
+        flat_t = t_nodes.ravel()
+        interval = np.searchsorted(lnr, flat_t, side="right") - 1
+        interval = np.clip(interval, 0, lnr.size - 2)
+        frac = ((flat_t - lnr[interval]) /
+                (lnr[interval + 1] - lnr[interval]))
+        xi_left = xi_arr[:, interval]
+        xi_right = xi_arr[:, interval + 1]
+        xi_eval = (xi_left + (xi_right - xi_left) * frac[None, :])
+        xi_eval = xi_eval.reshape(xi_arr.shape[0], len(dlnr), n_gl)
+        integrand = exp_3t[None, :, :] * xi_eval
+        steps = np.sum(w_nodes[None, :, :] * integrand, axis=-1)
+
+        cum = np.cumsum(steps, axis=-1)
+        zeros = np.zeros((xi_arr.shape[0], 1), dtype=float)
+        cum = np.concatenate([zeros, cum], axis=-1)
+        cum += (1.0 / 3.0) * (r_arr[0]**3) * xi_arr[:, 0:1]
+        cum *= 4.0 * np.pi
+
+        if rho_m is not None:
+            cum = cum * rho_m
+
+        return cum[0] if is_1d else cum
+
+    # Physical aliases and convenience methods
+    mass_3d_at_r = m3d_at_r
+    enclosed_mass_3d = m3d_at_r
+    m3d = m3d_at_r
+    int_r2_xi = m3d_at_r
+    int_r2_xi_nl = m3d_at_r
+    cumulative_volume_integral = m3d_at_r
+
+    def mass_3d(self, r_grid=None, rho_m=None, n_gl=5):
+        """Enclosed 3D mass profile M_3D,hh(<r) for the 2-halo term (b=1) via GL."""
+        if r_grid is None:
+            r_grid = self.Rfix
+        if rho_m is None:
+            rho_m = self.omega_m * self.RHO_C
+        if not hasattr(self, '_xi_rfix') or self._xi_rfix is None:
+            raise RuntimeError("pk_to_sigma must be called before mass_3d")
+        return self.m3d_at_r(r_grid, self._xi_rfix, rho_m=rho_m, n_gl=n_gl)
 
     def _pk_to_xi(self,k,pk):
         assert np.ndim(pk) == 1, "per-z P(k) slice expected"
@@ -273,7 +367,7 @@ class ct_2hTerm(object):
             zvec = np.atleast_1d(0.0)
 
         # check if Sigma is computed
-        if not hasattr(self,'Sigma'):
+        if not hasattr(self,'Sigma') or self.Sigma is None:
             self.pk_to_sigma(Rp,k,pk,zvec)
 
         # convert to delta sigma
@@ -285,18 +379,20 @@ class ct_2hTerm(object):
                 sigma_ext = ct.deltasigma.Sigma_at_R(
                     r_ext, self.Rfix, self._xi_rfix[i], self.Md, self.cd, self.omega_m)
                 self.dSigma[i] = self._dsigma_direct(r_ext, sigma_ext, Rp)
-            return
+        else:
+            # 'sandwich': add an analytic NFW so cluster_toolkit's interior
+            # extrapolation in DeltaSigma_at_R is NFW-dominated (hence valid),
+            # then subtract the same halo's analytic DeltaSigma. Consistent
+            # (Md, cd) throughout makes the dummy halo cancel exactly; the
+            # two-halo term's own interior mass below Rp.min() is NOT
+            # recovered by this method (use 'direct' for that).
+            sig_nfw = sigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
+            dsig_nfw = deltaSigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
+            for i in range(self.zvec.size):
+                self.dSigma[i] = self._to_dsigma(Rp, self.Sigma[i] + sig_nfw) - dsig_nfw
 
-        # 'sandwich': add an analytic NFW so cluster_toolkit's interior
-        # extrapolation in DeltaSigma_at_R is NFW-dominated (hence valid),
-        # then subtract the same halo's analytic DeltaSigma. Consistent
-        # (Md, cd) throughout makes the dummy halo cancel exactly; the
-        # two-halo term's own interior mass below Rp.min() is NOT
-        # recovered by this method (use 'direct' for that).
-        sig_nfw = sigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
-        dsig_nfw = deltaSigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
-        for i in range(self.zvec.size):
-            self.dSigma[i] = self._to_dsigma(Rp, self.Sigma[i] + sig_nfw) - dsig_nfw
+        self.sigma_bar = self.Sigma + self.dSigma
+        return
 
 
 def scaleShiftCosmo(znew, cosmo, eps=1e-9):
@@ -554,6 +650,11 @@ def execute(block, config):
     for iz, zz in enumerate(z):
         xi_NL[iz] = ct.xi.xi_mm_at_r(r_xi, k_nl, P_k_nl[iz])
 
+    RHOC_HUNITS = 2.77533742639e+11
+    rho_m_comoving = omega_m * RHOC_HUNITS
+    m3d_hh = ct_2hTerm.m3d_at_r(r_xi, xi_NL, rho_m=rho_m_comoving)
+    int_r2_xi_nl = ct_2hTerm.m3d_at_r(r_xi, xi_NL, rho_m=1.0)
+
     # ----- always-on datablock writes (consumed by bsel + shear_prj) -----
     block[section_name, "m_h"] = M
     block[section_name, "lnM"] = logM
@@ -565,16 +666,18 @@ def execute(block, config):
     # decision 2026-08-24). h-unit convention: masses Msun/h, radii Mpc/h,
     # so rho_ref is the h-unit critical density -- the SAME constant
     # lensingModel.rhoc0 uses for the centred tables.
-    RHOC_HUNITS = 2.77533742639e+11
     block[section_name, "rho_m_ref"] = (omega_m * RHOC_HUNITS
                                         * (1.0 + z_density) ** 3)
     # 0/1 flag for the rigorous physical-density treatment (see setup).
     block[section_name, "one_halo_physical_density"] = int(physical_density)
     block[section_name, "bias"] = Bias
     # xi_NL(r, z) table for the b_sel_marg / sigma_prj integrands
-    block["xi_nl", "r"]     = r_xi
-    block["xi_nl", "z"]     = z
-    block["xi_nl", "xi_nl"] = xi_NL
+    block["xi_nl", "r"]            = r_xi
+    block["xi_nl", "z"]            = z
+    block["xi_nl", "xi_nl"]        = xi_NL
+    block["xi_nl", "int_r2_xi_nl"] = int_r2_xi_nl
+    block["xi_nl", "m3d_nl"]       = m3d_hh
+    block[section_name, "m3d_hh"]  = m3d_hh
 
     # ----- lensing section: optional -------------------------------------
     if compute_lensing_1h or compute_lensing_2h:
@@ -595,14 +698,16 @@ def execute(block, config):
         if c_amp != 1.0:
             lensModel.c = lensModel.c * c_amp
         lensModel.first_halo_term(M, z=z_density, conc_model_name="Child18")
-        block[section_name, "Sigma_nfw"]  = lensModel.Sigma['1h']
-        block[section_name, "dSigma_nfw"] = lensModel.dSigma['1h']
+        block[section_name, "Sigma_nfw"]     = lensModel.Sigma['1h']
+        block[section_name, "dSigma_nfw"]    = lensModel.dSigma['1h']
+        block[section_name, "Sigma_bar_nfw"] = lensModel.sigma_bar['1h']
         block[section_name, "concentration"] = lensModel.c
 
     if compute_lensing_2h:
         lensModel.second_halo_term(z, k_nl, P_k_nl)
-        block[section_name, "Sigma_hh"]  = lensModel.Sigma['2h']
-        block[section_name, "dSigma_hh"] = lensModel.dSigma['2h']
+        block[section_name, "Sigma_hh"]     = lensModel.Sigma['2h']
+        block[section_name, "dSigma_hh"]    = lensModel.dSigma['2h']
+        block[section_name, "Sigma_bar_hh"] = lensModel.sigma_bar['2h']
 
     return 0
 

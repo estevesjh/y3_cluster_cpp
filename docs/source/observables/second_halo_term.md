@@ -208,6 +208,12 @@ lnm_high = 36.7300
 n_lnm = 96
 n_z   = 64
 lob_centers = 25.0 37.5 52.5 130.0
+# max_xi = T                         ; enable the 3D xi max profile
+# miscentering_method = table        ; or direct
+# n_offset = 24
+# n_phi = 64
+# n_aperture = 8
+# q_max = 12.0
 include_miscentering = T
 
 [likelihoods]
@@ -219,6 +225,16 @@ is_b_proj_costanzi26 = T          ; optional B_prj(R) correction
 in the values file (no in-code fallback) and `haloModel/rho_m_ref`,
 `bias`, `dSigma_nfw`, `dSigma_hh`. `cosmosis-models/real_pipeline_extract_max2h.ini`
 is the fixture pipeline that exercises this branch.
+
+When `max_xi = T`, `miscentering_method` selects the miscentering benchmark:
+`table` (the default) uses the DES NFW gamma table and applies the signed
+`Sigma_max - Sigma_NFW` residual with the GL aperture projection; `direct`
+performs the same DES gamma-kernel integral on the complete centered
+`Sigma_max` and then applies the aperture projection. The direct path is not
+the shortcut of convolving `DeltaSigma` itself. The quadrature controls are
+`n_offset` for the radial offset integral, `n_phi` for the angular integral,
+`n_aperture` for the aperture projection, and `q_max` for the exponential
+offset tail. `use_nfw_table_residual` affects only the `table` method.
 
 ## DataBlock outputs (when enabled)
 

@@ -1,14 +1,22 @@
-// Traditional 1h+2h shear via the max model — C++ backend.
+// Traditional 1h+2h excess surface density via the max model — C++ backend.
 //
-//   d_tot(R, lnM, z | bin) = max( DSigma_cl(R, lnM | bin),
-//                                 b(lnM, z) * DSigma_hh(R, z) )
+//   DeltaSigma_tot(R, lnM, z | bin) = max(
+//       DeltaSigma_cl(R, lnM | bin),
+//       b(lnM, z) * DeltaSigma_hh(R, z) )
 //
 // the Y1-era SIG_MAX/KAPPA_MAX/GAMMA_MAX composition on the modern
 // haloModel tables (same observable as the Python
 // ../python/shear1h2h_max.py), stacked with the selection weight
 //
 //   O_ij(R) = int dz int dlnM  n dV/dOmegadz Omega Sigma_crit^-1
-//             S_ij(lnM, z) d_tot(R, lnM, z).
+//             S_ij(lnM, z) DeltaSigma_tot(R, lnM, z).
+//
+// The output `shear1h2h_max/vals` is a stacked DeltaSigma, not Sigma and not
+// gamma_T.  Tangential shear is obtained by applying the lens/source
+// geometry: gamma_T(R) = DeltaSigma(R) Sigma_crit^{-1}.  This module already
+// includes Sigma_crit^{-1} in its stack weight, as required by its historical
+// observable contract; the profile helper exposes
+// Sigma, barSigma, DeltaSigma, and gamma_T separately.
 //
 // Structure note: the two-halo term is z-dependent, so — unlike
 // Shear1hGl, which reuses SelGlWeights's z-contracted weight — the
@@ -30,7 +38,11 @@
 //
 // Options: bin_index x r_perp cartesian grid (bin slow / R fast),
 // zt_low/zt_high/lnm_low/lnm_high (required), n_lnm (96), n_z (64),
-// lob_centers, include_miscentering (default T).
+// lob_centers, include_miscentering (default T), max_xi (default F),
+// n_gl (20), n_root (96) for the opt-in max_xi path, n_offset (24),
+// n_phi (64), n_aperture (8), q_max (12),
+// miscentering_method ("table" or "direct", default "table"), and
+// use_nfw_table_residual (default T).
 // f_mis and tau_mis are REQUIRED datablock values (miscentering/f_mis,
 // miscentering/tau_mis): set_sample throws if the section is missing —
 // no silent fallback to the Y3 fiducial defaults.
@@ -49,6 +61,7 @@
 #include "models/nfw_dsigma_mis.hh"
 #include "models/omega_z_des.hh"
 #include "models/sel_function_t.hh"
+#include "shear1h2h_max_profile.hh"
 #include "pipelines/shared/lensing_helpers.hh"
 #include "utils/datablock_reader.hh"
 #include "utils/interp_1d.hh"
@@ -61,6 +74,7 @@
 #include <cmath>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 class Shear1h2hMax {
@@ -82,6 +96,10 @@ public:
                      ? cfg.view<int>(module_label(),
                                      "include_miscentering") != 0
                      : true)
+    , max_xi_(cfg.has_val(module_label(), "max_xi")
+                          ? cfg.view<int>(module_label(),
+                                          "max_xi") != 0
+                          : false)
     // TODO(#14): drop the hardcoded c=4 — once claude/issue-4-dsigma-hh-2h-term
     // merges, call dsigma_mis_.set_concentration_table(
     //   make_Interp1D(s, "haloModel", "lnM", "concentration"))
@@ -89,6 +107,42 @@ public:
     // concentration as the centred dSigma_nfw table.
     , dsigma_mis_(y3_cluster::CONC, y3_cluster::RHOC, y3_cluster::GAMMA)
   {
+    int const n_gl = cfg.has_val(module_label(), "n_gl")
+      ? cfg.view<int>(module_label(), "n_gl") : 20;
+    int const n_root = cfg.has_val(module_label(), "n_root")
+      ? cfg.view<int>(module_label(), "n_root") : 96;
+    if (n_gl < 1)
+      throw std::invalid_argument("Shear1h2hMax: n_gl must be positive");
+    if (n_root < 2)
+      throw std::invalid_argument(
+        "Shear1h2hMax: n_root must be at least 2");
+    N_gl_ = static_cast<std::size_t>(n_gl);
+    N_root_ = static_cast<std::size_t>(n_root);
+    int const n_offset = cfg.has_val(module_label(), "n_offset")
+      ? cfg.view<int>(module_label(), "n_offset") : 24;
+    int const n_phi = cfg.has_val(module_label(), "n_phi")
+      ? cfg.view<int>(module_label(), "n_phi") : 64;
+    int const n_aperture = cfg.has_val(module_label(), "n_aperture")
+      ? cfg.view<int>(module_label(), "n_aperture") : 8;
+    q_max_ = cfg.has_val(module_label(), "q_max")
+      ? cfg.view<double>(module_label(), "q_max") : 12.0;
+    if (n_offset < 1 || n_phi < 1 || n_aperture < 1 || q_max_ <= 0.0)
+      throw std::invalid_argument(
+        "Shear1h2hMax: invalid miscentering quadrature");
+    N_offset_ = static_cast<std::size_t>(n_offset);
+    N_phi_ = static_cast<std::size_t>(n_phi);
+    N_aperture_ = static_cast<std::size_t>(n_aperture);
+    miscentering_method_ = cfg.has_val(
+      module_label(), "miscentering_method")
+      ? cfg.view<std::string>(module_label(), "miscentering_method")
+      : "table";
+    if (miscentering_method_ != "table" &&
+        miscentering_method_ != "direct")
+      throw std::invalid_argument(
+        "Shear1h2hMax: miscentering_method must be 'table' or 'direct'");
+    use_nfw_table_residual_ = cfg.has_val(
+      module_label(), "use_nfw_table_residual")
+      ? cfg.view<int>(module_label(), "use_nfw_table_residual") != 0 : true;
     y3_pipelines::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
     y3_pipelines::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
     lob_centers_ =
@@ -126,6 +180,10 @@ public:
     if (s.has_val("haloModel", "one_halo_physical_density"))
       s.get_val("haloModel", "one_halo_physical_density", phys);
     phys_density_ = (phys != 0);
+
+    if (max_xi_)
+      profile_.emplace(s, N_gl_, N_root_, N_offset_, N_phi_,
+                       N_aperture_, q_max_);
 
     // z-only factors (Sigma_crit_inv folded in, as the shear weight
     // requires) and the z-RESOLVED weight W2d(bin; lnM, z).
@@ -172,16 +230,58 @@ public:
     // node). Both are interpolated once here, so the (lnM, z) double
     // sum below touches no interpolator.
     std::vector<double> one(N_lnm_), two(N_z_);
-    for (std::size_t k = 0; k != N_lnm_; ++k) {
-      double const d_cen = dsigma_nfw_->clamp(R, lnm_x_[k]);
-      double const d_mis = dsigma_mis_(R, r_mis_[b], lnm_x_[k]);
-      one[k] = (1.0 - f_mis_) * d_cen + f_mis_ * d_mis;
-    }
+    if (!max_xi_)
+      for (std::size_t k = 0; k != N_lnm_; ++k) {
+        double const d_cen = dsigma_nfw_->clamp(R, lnm_x_[k]);
+        double const d_mis = dsigma_mis_(R, r_mis_[b], lnm_x_[k]);
+        one[k] = (1.0 - f_mis_) * d_cen + f_mis_ * d_mis;
+      }
     for (std::size_t q = 0; q != N_z_; ++q)
       two[q] = dsigma_hh_->clamp(R, z_x_[q]);
 
     double acc = 0.0;
     double const* w2 = &w2d_[static_cast<std::size_t>(b) * N_lnm_ * N_z_];
+    if (max_xi_) {
+      for (std::size_t k = 0; k != N_lnm_; ++k) {
+        double const* wrow = w2 + k * N_z_;
+        for (std::size_t q = 0; q != N_z_; ++q) {
+          double const qf = phys_density_ ? 1.0 + z_x_[q] : 1.0;
+          double const centered = profile_->excess_surface_density(
+            R * qf, lnm_x_[k], z_x_[q]) * qf * qf;
+          if (miscentering_method_ == "direct" && f_mis_ != 0.0) {
+            double const direct_mis =
+              profile_->miscentered_excess_surface_density(
+                R * qf, r_mis_[b] * qf, lnm_x_[k], z_x_[q]) * qf * qf;
+            double const total = centered + f_mis_ * (
+              direct_mis - centered);
+            acc += wrow[q] * total;
+            continue;
+          }
+          double const d_mis = dsigma_mis_(R * qf, r_mis_[b] * qf,
+                                           lnm_x_[k]) * qf * qf;
+          // The legacy approximation applies the tabulated correction to the
+          // 1-halo leg only.  The residual mode below instead adds the
+          // gamma-convolved Sigma_max - Sigma_NFW residual.
+          double const d_cen = dsigma_nfw_->clamp(R * qf, lnm_x_[k]) * qf * qf;
+          double total = centered + f_mis_ * (d_mis - d_cen);
+          if (use_nfw_table_residual_ && f_mis_ != 0.0) {
+            double const nfw_cen =
+              profile_->nfw_excess_surface_density(
+                R * qf, lnm_x_[k]) * qf * qf;
+            double const residual_cen =
+              profile_->residual_excess_surface_density(
+                R * qf, lnm_x_[k], z_x_[q]) * qf * qf;
+            double const residual_mis =
+              profile_->miscentered_residual_excess_surface_density(
+                R * qf, r_mis_[b] * qf, lnm_x_[k], z_x_[q]) * qf * qf;
+            total = centered + f_mis_ * (
+              d_mis + residual_mis - nfw_cen - residual_cen);
+          }
+          acc += wrow[q] * total;
+        }
+      }
+      return {acc};
+    }
     if (!phys_density_) {
       for (std::size_t k = 0; k != N_lnm_; ++k) {
         double const* wrow = w2 + k * N_z_;
@@ -250,6 +350,9 @@ private:
   }
 
   std::size_t N_lnm_, N_z_;
+  std::size_t N_gl_{20}, N_root_{96};
+  std::size_t N_offset_{24}, N_phi_{64}, N_aperture_{8};
+  double q_max_{12.0};
   double zt_lo_, zt_hi_, lnm_lo_, lnm_hi_;
   bool include_mis_;
   y3_cluster::NFW_DSIGMA_MIS dsigma_mis_;
@@ -259,6 +362,10 @@ private:
   double f_mis_{0.0};
   std::size_t n_bins_{0};
   bool phys_density_{false};
+  bool max_xi_{false};
+  std::string miscentering_method_{"table"};
+  bool use_nfw_table_residual_{true};
+  std::optional<Shear1h2hMaxProfile> profile_;
   std::vector<double> w2d_, bias_kq_, r_mis_;
 };
 
