@@ -11,6 +11,9 @@ legacy `costanzi_bprj` post-processing correction.
 The feature is opt-in. The ordinary `Shear1h2hMax` path and its output
 section remain unchanged when the correction is off.
 
+The pull-request documentation preview is built from the same branch as the
+code changes, so this page can be checked before the pull request is merged.
+
 ## Tagged implementations
 
 | Tag | Python kernel | C++ profile | Max-model consumer |
