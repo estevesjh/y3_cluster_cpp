@@ -2,7 +2,7 @@
 #include "catch2/catch.hpp"
 
 #include "cosmosis/datablock/datablock.hh"
-#include "systematics/bsel_profile.hh"
+#include "pipelines/systematics/selection_boost/Bsel.hh"
 
 #include <array>
 #include <cmath>
@@ -13,6 +13,8 @@
 using y3_cluster::BselCostanzi26;
 using y3_cluster::BselModels;
 using y3_cluster::BselSunayama23;
+using y3_cluster::Shear1h2hMaxSelCostanzi26;
+using y3_cluster::Shear1h2hMaxSelSunayama23;
 
 TEST_CASE("BselCostanzi26 evaluates the profile and derivative")
 {
@@ -161,12 +163,12 @@ TEST_CASE("BselSunayama23 rejects invalid inputs and fractional labels")
 TEST_CASE("BselModels dispatches explicit tags and reads DataBlock values")
 {
   cosmosis::DataBlock source;
-  source.put_val("bsel_profile_costanzi26", "A", 0.10);
-  source.put_val("bsel_profile_costanzi26", "alpha", 0.92);
-  source.put_val("bsel_profile_costanzi26", "beta", -0.53);
-  source.put_val("bsel_profile_costanzi26", "gamma", 4.1);
+  source.put_val("boost_selection_costanzi26", "A", 0.10);
+  source.put_val("boost_selection_costanzi26", "alpha", 0.92);
+  source.put_val("boost_selection_costanzi26", "beta", -0.53);
+  source.put_val("boost_selection_costanzi26", "gamma", 4.1);
   BselModels const model = BselModels::from_datablock(
-    source, "Costanzi26", "bsel_profile_costanzi26");
+    source, "Costanzi26", "boost_selection_costanzi26");
   CHECK(model(1.0, 0, 40.0, 0.3) > 1.0);
   CHECK_THROWS(BselModels::parse_tag("unknown"));
 
@@ -183,4 +185,18 @@ TEST_CASE("BselModels dispatches explicit tags and reads DataBlock values")
         Approx(0.025).epsilon(2e-15));
   CHECK_THROWS(BselModels::from_datablock(
     source, "Sunayama23", "missing_section"));
+}
+
+TEST_CASE("Selected Shear1h2hMax consumers preserve local profile outputs")
+{
+  double const profile = 7.0;
+  BselCostanzi26 const costanzi(0.10, 0.92, -0.53, 4.1);
+  BselSunayama23 const sunayama({0.45}, {3.5}, -0.1, {4.0});
+  Shear1h2hMaxSelCostanzi26 const selected_costanzi(costanzi);
+  Shear1h2hMaxSelSunayama23 const selected_sunayama(sunayama);
+
+  CHECK(selected_costanzi(profile, 1.0, 4, 40.0, 0.3) ==
+        Approx(profile * costanzi(1.0, 40.0, 0.3)));
+  CHECK(selected_sunayama(profile, 1.0, 4, 40.0, 0.3) ==
+        Approx(profile * sunayama(1.0, 4)));
 }

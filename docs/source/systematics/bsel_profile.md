@@ -18,10 +18,10 @@ code changes, so this page can be checked before the pull request is merged.
 
 | Tag | Python kernel | C++ profile | Max-model consumer |
 |---|---|---|---|
-| `Costanzi26` | `src/pipelines/systematics/BselCostanzi26.py` (`BselCostanzi26`) | `BselCostanzi26` in `src/systematics/bsel_profile.hh` | `Shear1h2hMaxSelCostanzi26` |
-| `Sunayama23` | `src/pipelines/systematics/BselSunayama23.py` (`BselSunayama23`) | `BselSunayama23` in `src/systematics/bsel_profile.hh` | `Shear1h2hMaxSelSunayama23` |
+| `Costanzi26` | `src/pipelines/systematics/selection_boost/BselCostanzi26.py` (`BselCostanzi26`) | `BselCostanzi26` in `src/pipelines/systematics/selection_boost/Bsel.hh` | `Shear1h2hMaxSelCostanzi26` |
+| `Sunayama23` | `src/pipelines/systematics/selection_boost/BselSunayama23.py` (`BselSunayama23`) | `BselSunayama23` in `src/pipelines/systematics/selection_boost/Bsel.hh` | `Shear1h2hMaxSelSunayama23` |
 
-`BselModels` in `bsel_profile.py` and `bsel_profile.hh` is the shared
+`BselModels` in `selection_boost/Bsel.py` and `selection_boost/Bsel.hh` is the shared
 tag dispatcher. It accepts exactly `Costanzi26` or `Sunayama23`; the two
 scientific prescriptions remain separate after dispatch.
 
@@ -70,8 +70,7 @@ matching its corresponding mean curve.
 ## CosmoSIS configuration
 
 The `[Shear1h2hMax]` section selects the profile and its numerical settings.
-The `bsel_section` option points to the values section containing the
-calibration for the selected tag.
+The `bsel_model` tag determines the standard values section for that model.
 
 ```ini
 [Shear1h2hMax]
@@ -85,14 +84,12 @@ lnm_high = 36.7300
 
 bsel = T
 bsel_model = Costanzi26
-bsel_section = bsel_profile_costanzi26
-bsel_n_gl = 64
 ```
 
 The corresponding values section for the Costanzi tag is:
 
 ```ini
-[bsel_profile_costanzi26]
+[boost_selection_costanzi26]
 ; Raw-Sigma calibration from Costanzi et al. (2026), App. C.
 A = 0.10
 alpha = 0.92
@@ -106,8 +103,6 @@ For a Sunayama23 run, change only the selected tag and section:
 [Shear1h2hMax]
 bsel = T
 bsel_model = Sunayama23
-bsel_section = bsel_profile_sunayama23
-bsel_n_gl = 64
 
 [bsel_profile_sunayama23]
 ; One Pi0 and R0 value per richness-bin row; c is shared.
@@ -132,11 +127,9 @@ selection-bias treatment.
 |---|---|---|
 | `bsel` | Enables the tagged Bsel profile | Optional; defaults to `F` |
 | `bsel_model` | Model tag: `Costanzi26` or `Sunayama23` | `bsel = T` |
-| `bsel_section` | DataBlock section containing the selected calibration | `bsel = T` |
-| `bsel_n_gl` | Gauss–Legendre resolution for the profile correction | `bsel = T` |
 
-Configuration errors should be explicit: an unknown tag, a missing values
-section, or incompatible wall lengths must stop the module rather than
+Configuration errors should be explicit: an unknown tag, a missing
+model-specific values section, or incompatible wall lengths must stop the module rather than
 silently falling back to the unselected profile.
 
 ## API map

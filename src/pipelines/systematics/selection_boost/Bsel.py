@@ -1,4 +1,4 @@
-"""Shared BselModels dispatcher for tagged selection-bias profiles."""
+"""Tagged selection-boost kernels and Shear1h2hMax consumers."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -49,3 +49,34 @@ class BselModels:
                 raise ValueError("Costanzi26 requires lob and z")
             return self.model.derivative(R, lob, z)
         return self.model.derivative(R, bin_index)
+
+
+@dataclass(frozen=True)
+class Shear1h2hMaxSelCostanzi26:
+    """Multiply a local max-model profile by the Costanzi26 selection boost."""
+
+    model: BselCostanzi26
+
+    def __call__(self, profile, R, *, bin_index, lob, z):
+        del bin_index
+        return profile * self.model(R, lob, z)
+
+
+@dataclass(frozen=True)
+class Shear1h2hMaxSelSunayama23:
+    """Multiply a local max-model profile by the Sunayama23 selection boost."""
+
+    model: BselSunayama23
+
+    def __call__(self, profile, R, *, bin_index, lob=None, z=None):
+        del lob, z
+        return profile * self.model(R, bin_index)
+
+
+def selected_shear1h2h_max_consumer(source: Any, tag: str,
+                                     section: str | None = None):
+    """Load the selected consumer without changing the max-model wall API."""
+    model = BselModels.from_source(source, tag, section)
+    if tag == "Costanzi26":
+        return Shear1h2hMaxSelCostanzi26(model.model)
+    return Shear1h2hMaxSelSunayama23(model.model)

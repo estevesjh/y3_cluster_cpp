@@ -30,6 +30,12 @@ from shared import datablock_models as dm             # noqa: E402
 from shared import lensing_profiles as lp              # noqa: E402
 import shear1h2h_max as mod                              # noqa: E402
 from _dump_datablock import datablock_from_dump, make_options  # noqa: E402
+from systematics.selection_boost.Bsel import (          # noqa: E402
+    Shear1h2hMaxSelCostanzi26,
+    Shear1h2hMaxSelSunayama23,
+)
+from systematics.selection_boost.BselCostanzi26 import BselCostanzi26  # noqa: E402
+from systematics.selection_boost.BselSunayama23 import BselSunayama23  # noqa: E402
 
 DUMP_DIR = (Path("/pscratch/sd/j/jesteves/github/y3_cluster_cpp_dev")
            / "cosmosis-models" / "real_pipeline_extract_max2h_output")
@@ -47,6 +53,17 @@ def _base_options():
 
 
 class TestSetupOptionContract(unittest.TestCase):
+    def test_bsel_defaults_disabled(self):
+        cfg = mod.setup(make_options(_base_options()))
+        self.assertFalse(cfg["bsel"])
+
+    def test_bsel_tag_is_read(self):
+        cfg = mod.setup(make_options(dict(
+            _base_options(), bsel=True, bsel_model="Costanzi26")))
+        self.assertTrue(cfg["bsel"])
+        self.assertEqual(cfg["bsel_model"], "Costanzi26")
+        self.assertNotIn("bsel_section", cfg)
+
     def test_include_miscentering_defaults_true(self):
         cfg = mod.setup(make_options(_base_options()))
         self.assertTrue(cfg["include_miscentering"])
@@ -62,6 +79,38 @@ class TestSetupOptionContract(unittest.TestCase):
                       if k != missing}
             with self.assertRaises(Exception, msg=f"missing {missing}"):
                 mod.setup(make_options(entries))
+
+
+class TestSelectedProfileComposition(unittest.TestCase):
+    class _Profile:
+        def _one(self, _bin, radii, masses, q=1.0):
+            return np.full((radii.shape[0], masses.shape[1]), 2.0)
+
+        def _bias(self, masses, redshifts):
+            return np.ones((masses.shape[0], redshifts.shape[1]))
+
+        def _hh(self, radii, redshifts):
+            return np.full((radii.shape[0], redshifts.shape[1]), 3.0)
+
+    def test_each_selected_consumer_is_applied_after_the_max(self):
+        profile = self._Profile()
+        args = (profile, np.array([0.0]), np.array([1.0]),
+                np.array([0.0]), np.ones((1, 1, 1)), np.array([0]),
+                np.array([1.0]))
+
+        costanzi = Shear1h2hMaxSelCostanzi26(
+            BselCostanzi26(0.1, 0.92, -0.53, 4.1))
+        got_costanzi = mod.compute_shear_max(
+            *args, selected_profile=costanzi, lob_centers=np.array([40.0]))
+        expected_costanzi = 3.0 * costanzi.model(1.0, 40.0, 0.0)
+        np.testing.assert_allclose(got_costanzi, [expected_costanzi])
+
+        sunayama = Shear1h2hMaxSelSunayama23(
+            BselSunayama23([0.45], [3.5], -0.1, [0]))
+        got_sunayama = mod.compute_shear_max(
+            *args, selected_profile=sunayama, lob_centers=np.array([40.0]))
+        expected_sunayama = 3.0 * sunayama.model(1.0, 0)
+        np.testing.assert_allclose(got_sunayama, [expected_sunayama])
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)

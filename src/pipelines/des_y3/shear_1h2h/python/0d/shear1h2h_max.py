@@ -28,7 +28,8 @@ DataBlock contract
 Reads (options): bin_index, r_perp (cartesian, bin slow / R fast),
     lob_centers (default 25 37.5 52.5 130), zt_low/zt_high/
     lnm_low/lnm_high (required), n_lnm (96), n_z (64),
-    include_miscentering (default T).
+    include_miscentering (default T), bsel (default F), and bsel_model when
+    bsel is enabled. The model tag determines its standard DataBlock section.
 Reads (datablock): the Shear1hMisSel contract plus
     halomodel/{r_sigma, z, dSigma_hh, bias}  (compute_lensing_2h = T).
 Writes: shear1h2h_max/vals  (n_bins * n_r,)   [hardcoded section]
@@ -53,6 +54,7 @@ for _p in Path(__file__).resolve().parents:
 from shared import datablock_models as dm
 from shared import lensing_profiles as lp
 from systematics.selection_richness.python import sel_kernels
+from systematics.selection_boost.Bsel import selected_shear1h2h_max_consumer
 
 OUTPUT_SECTION = "shear1h2h_max"
 
@@ -78,7 +80,8 @@ def z_resolved_weights(source, *, n_lnm, n_z, zt_lo, zt_hi, lnm_lo, lnm_hi):
 
 
 def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
-                      physical=False):
+                      physical=False, selected_profile=None,
+                      lob_centers=None):
     """O(R) = sum_kq lnm_w_k W2d[b,k,q] DSigma_max(b, R, lnM_k, z_q).
 
     physical: fold one_halo_physical_density's exact identity
@@ -107,6 +110,13 @@ def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
         DSigma_2h = (profile._bias(lnm_x[:, None], z_x[None, :])[None, :, :]
                     * profile._hh(r_perp[:, None], z_x[None, :])[:, None, :])
         DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
+        if selected_profile is not None:
+            if lob_centers is None:
+                raise ValueError("selected Shear1h2hMax profile requires lob_centers")
+            lob = np.asarray(lob_centers, dtype=float)[b % len(lob_centers)]
+            DSigma_max = selected_profile(
+                DSigma_max, r_perp[:, None, None], bin_index=b, lob=lob,
+                z=z_x[None, None, :])
         vals[i * n_r:(i + 1) * n_r] = np.einsum(
             "rkq,kq->r", DSigma_max, w2d[b] * lnm_w[:, None])
     return vals
@@ -136,6 +146,12 @@ def setup(options):
             options.get_bool(option_section, "include_miscentering"))
     except Exception:
         cfg["include_miscentering"] = True
+    try:
+        cfg["bsel"] = bool(options.get_bool(option_section, "bsel"))
+    except Exception:
+        cfg["bsel"] = False
+    if cfg["bsel"]:
+        cfg["bsel_model"] = options.get_string(option_section, "bsel_model")
     return cfg
 
 
@@ -155,9 +171,14 @@ def execute(block, cfg):
         source, n_lnm=cfg["n_lnm"], n_z=cfg["n_z"],
         zt_lo=cfg["zt_low"], zt_hi=cfg["zt_high"],
         lnm_lo=cfg["lnm_low"], lnm_hi=cfg["lnm_high"])
+    selected_profile = (
+        selected_shear1h2h_max_consumer(
+            block, cfg["bsel_model"])
+        if cfg["bsel"] else None)
     block[OUTPUT_SECTION, "vals"] = compute_shear_max(
         profile, lnm_x, lnm_w, z_x, w2d, cfg["bin_index"], cfg["r_perp"],
-        physical=physical)
+        physical=physical, selected_profile=selected_profile,
+        lob_centers=cfg["lob_centers"])
     dt_ms = 1000.0 * (time.perf_counter() - t0)
     print(f"[shear1h2h_max] {cfg['bin_index'].size} bins x "
           f"{cfg['r_perp'].size} radii (max 1h/2h) — {dt_ms:.0f} ms",

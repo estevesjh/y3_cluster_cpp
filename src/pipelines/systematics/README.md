@@ -15,6 +15,11 @@ systematics/
 │   └── cpp/bsel_bins_t.hh    # exact wall-row lookup for C++ consumers
 ├── selection_function/python/
 │   └── prj_params.py         # Costanzi projection-kernel coefficients
+├── selection_boost/
+│   ├── Bsel.py                # tagged dispatcher and selected-profile consumers
+│   ├── BselCostanzi26.py      # Costanzi26 B_sel(R) kernel
+│   ├── BselSunayama23.py      # Sunayama23 B_sel(R) kernel
+│   └── Bsel.hh                # C++ kernels and selected-profile consumers
 ├── costanzi_bprj/
 │   ├── python/costanzi_bprj.py   # B_prj(R) selection-bias correction (pydantic params)
 │   └── cpp/costanzi_bprj_t.hh    # same model, DataBlock constructor
@@ -28,6 +33,23 @@ The DES Y3 pipeline imports the Python selection modules from here and its
 projection-shear C++ driver includes the `shear_prj` core from here. The
 lower-level numerical and datablock utilities remain in the sibling
 `../shared/` package; halo-model physics remains in `../cosmology/`.
+
+The `selection_boost/` implementation is selected from the `Shear1h2hMax`
+configuration with the `Costanzi26` or `Sunayama23` tag. Each tag determines
+its standard DataBlock section, and the existing `shear1h2h_max/vals` output
+is preserved.
+
+```ini
+[Shear1h2hMax]
+bsel = T
+bsel_model = Costanzi26
+
+[boost_selection_costanzi26]
+A = 0.10
+alpha = 0.92
+beta = -0.53
+gamma = 4.1
+```
 
 The live configurations are:
 

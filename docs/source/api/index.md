@@ -32,12 +32,12 @@ separate API.
 
 | File | Main types | Role |
 |---|---|---|
-| `src/pipelines/systematics/BselCostanzi26.py` | `BselCostanzi26` | Costanzi26 tagged Bsel kernel, derivative, DataBlock loader, and validation |
-| `src/pipelines/systematics/BselSunayama23.py` | `BselSunayama23` | Sunayama23 tagged Bsel kernel, branch derivative, DataBlock loader, and validation |
-| `src/pipelines/systematics/bsel_profile.py` | `BselModels` | Explicit `Costanzi26`/`Sunayama23` dispatcher |
-| `src/systematics/bsel_profile.hh` | `y3_cluster::BselCostanzi26`, `y3_cluster::BselSunayama23`, `y3_cluster::BselModels` | C++ kernels and tag dispatcher |
-| `src/pipelines/shared/lensing_profiles.py` | `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | Python optical selection-bias correction consumers |
-| `src/pipelines/des_y3/shear_1h2h/cpp/0d/shear1h2h_max_profile.hh` | `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | C++ optical selection-bias correction consumers |
+| `src/pipelines/systematics/selection_boost/BselCostanzi26.py` | `BselCostanzi26` | Costanzi26 tagged Bsel kernel, derivative, DataBlock loader, and validation |
+| `src/pipelines/systematics/selection_boost/BselSunayama23.py` | `BselSunayama23` | Sunayama23 tagged Bsel kernel, branch derivative, DataBlock loader, and validation |
+| `src/pipelines/systematics/selection_boost/Bsel.py` | `BselModels`, `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | Python dispatcher and selected-profile consumers |
+| `src/pipelines/systematics/selection_boost/Bsel.hh` | `y3_cluster::BselCostanzi26`, `y3_cluster::BselSunayama23`, `y3_cluster::BselModels`, selected consumers | C++ kernels, dispatcher, and selected-profile consumers |
+| `src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py` | `Shear1h2hMax` | Python selected-profile consumer and `shear1h2h_max/vals` producer |
+| `src/pipelines/des_y3/shear_1h2h/cpp/0d/shear1h2h_max_t.hh` | `Shear1h2hMax` | C++ selected-profile consumer and `shear1h2h_max/vals` producer |
 
 The Costanzi26 implementation follows Costanzi et al. (2026),
 [arXiv:2604.05833](https://arxiv.org/abs/2604.05833), Appendix C. The

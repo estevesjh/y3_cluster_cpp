@@ -11,8 +11,8 @@
 // Sunayama et al. (2023), arXiv:2309.13025, Eq. (28):
 //   Pi(R) = Pi0 R/R0 for R <= R0, and
 //   Pi(R) = Pi0 + c log(R/R0) for R > R0; B_sel(R) = 1 + Pi(R).
-#ifndef Y3_CLUSTER_CPP_BSEL_PROFILE_HH
-#define Y3_CLUSTER_CPP_BSEL_PROFILE_HH
+#ifndef Y3_CLUSTER_CPP_SELECTION_BOOST_BSEL_HH
+#define Y3_CLUSTER_CPP_SELECTION_BOOST_BSEL_HH
 
 #include "cosmosis/datablock/datablock.hh"
 #include "pipelines/shared/lensing_helpers.hh"
@@ -24,6 +24,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace y3_cluster {
@@ -41,7 +42,7 @@ public:
   }
 
   explicit BselCostanzi26(cosmosis::DataBlock& source,
-                          std::string const& section = "bsel_profile_costanzi26")
+                          std::string const& section = "boost_selection_costanzi26")
     : BselCostanzi26(source.view<double>(section, "A"),
                      source.view<double>(section, "alpha"),
                      source.view<double>(section, "beta"),
@@ -206,6 +207,71 @@ private:
   std::optional<BselCostanzi26> costanzi_;
   std::optional<BselSunayama23> sunayama_;
 };
+
+// These consumers are deliberately distinct from the profile kernels above:
+// they multiply the already-composed local max-model profile.  Keeping that
+// boundary explicit prevents a selected profile from accidentally changing
+// the Shear1h2hMax wall or its input coordinates.
+class Shear1h2hMaxSelCostanzi26 {
+public:
+  explicit Shear1h2hMaxSelCostanzi26(BselCostanzi26 model)
+    : model_(std::move(model))
+  {}
+
+  double operator()(double profile, double R, int /*bin_index*/,
+                    double lob, double z) const
+  {
+    return profile * model_(R, lob, z);
+  }
+
+private:
+  BselCostanzi26 model_;
+};
+
+class Shear1h2hMaxSelSunayama23 {
+public:
+  explicit Shear1h2hMaxSelSunayama23(BselSunayama23 model)
+    : model_(std::move(model))
+  {}
+
+  double operator()(double profile, double R, int bin_index,
+                    double /*lob*/, double /*z*/) const
+  {
+    return profile * model_(R, bin_index);
+  }
+
+private:
+  BselSunayama23 model_;
+};
+
+using Shear1h2hMaxSelectedProfile =
+  std::variant<Shear1h2hMaxSelCostanzi26, Shear1h2hMaxSelSunayama23>;
+
+inline Shear1h2hMaxSelectedProfile
+make_shear1h2h_max_selected_profile(cosmosis::DataBlock& source,
+                                    std::string const& tag,
+                                    std::string const& section = "")
+{
+  if (BselModels::parse_tag(tag) == BselModels::Tag::Costanzi26) {
+    return Shear1h2hMaxSelCostanzi26(
+      section.empty() ? BselCostanzi26(source)
+                      : BselCostanzi26(source, section));
+  }
+  return Shear1h2hMaxSelSunayama23(
+    section.empty() ? BselSunayama23(source)
+                    : BselSunayama23(source, section));
+}
+
+inline double
+apply_shear1h2h_max_selected_profile(
+  Shear1h2hMaxSelectedProfile const& selected, double profile, double R,
+  int bin_index, double lob, double z)
+{
+  return std::visit(
+    [&](auto const& consumer) {
+      return consumer(profile, R, bin_index, lob, z);
+    }, selected);
+}
 
 } // namespace y3_cluster
 

@@ -22,7 +22,7 @@ from typing import Any
 import numpy as np
 
 
-SECTION = "bsel_profile_costanzi26"
+SECTION = "boost_selection_costanzi26"
 PARAM_NAMES = ("A", "alpha", "beta", "gamma")
 
 

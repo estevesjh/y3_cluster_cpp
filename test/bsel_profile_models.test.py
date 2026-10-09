@@ -12,9 +12,17 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "pipelines"))
 
-from systematics.BselCostanzi26 import BselCostanzi26  # noqa: E402
-from systematics.BselSunayama23 import BselSunayama23  # noqa: E402
-from systematics.bsel_profile import BselModels  # noqa: E402
+from systematics.selection_boost.Bsel import (  # noqa: E402
+    BselModels,
+    Shear1h2hMaxSelCostanzi26,
+    Shear1h2hMaxSelSunayama23,
+    selected_shear1h2h_max_consumer,
+)
+from systematics.selection_boost.BselCostanzi26 import (  # noqa: E402
+    BselCostanzi26,
+    SECTION as COSTANZI_SECTION,
+)
+from systematics.selection_boost.BselSunayama23 import BselSunayama23  # noqa: E402
 
 
 def _costanzi_decimal_reference(R):
@@ -209,10 +217,10 @@ class TestBselModels(unittest.TestCase):
 
     def test_datablock_loading_default_and_custom_sections(self):
         block = {
-            ("bsel_profile_costanzi26", "A"): 0.1,
-            ("bsel_profile_costanzi26", "alpha"): 0.92,
-            ("bsel_profile_costanzi26", "beta"): -0.53,
-            ("bsel_profile_costanzi26", "gamma"): 4.1,
+            ("boost_selection_costanzi26", "A"): 0.1,
+            ("boost_selection_costanzi26", "alpha"): 0.92,
+            ("boost_selection_costanzi26", "beta"): -0.53,
+            ("boost_selection_costanzi26", "gamma"): 4.1,
             ("custom_sunayama", "pi0"): np.array([1.2, 1.4]),
             ("custom_sunayama", "r0"): np.array([1.0, 2.0]),
             ("custom_sunayama", "c"): 0.1,
@@ -227,6 +235,39 @@ class TestBselModels(unittest.TestCase):
                                2.4 + 0.1 * np.log(2.0))
         with self.assertRaises(KeyError):
             BselModels.from_source(block, "Sunayama23")
+
+    def test_costanzi_default_section_is_the_selection_boost_section(self):
+        self.assertEqual(COSTANZI_SECTION, "boost_selection_costanzi26")
+
+    def test_selected_consumers_preserve_the_local_profile_shape(self):
+        profile = np.array([[2.0, 3.0], [5.0, 7.0]])
+        costanzi = Shear1h2hMaxSelCostanzi26(
+            BselCostanzi26(0.1, 0.92, -0.53, 4.1))
+        sunayama = Shear1h2hMaxSelSunayama23(
+            BselSunayama23([0.45], [3.5], -0.1, [4]))
+        costanzi_out = costanzi(profile, 1.0, bin_index=4, lob=40.0, z=0.3)
+        sunayama_out = sunayama(profile, 1.0, bin_index=4)
+        np.testing.assert_allclose(
+            costanzi_out, profile * BselCostanzi26(0.1, 0.92, -0.53, 4.1)(1.0, 40.0, 0.3))
+        np.testing.assert_allclose(
+            sunayama_out, profile * BselSunayama23([0.45], [3.5], -0.1, [4])(1.0, 4))
+
+    def test_selected_consumer_factory_loads_both_tags(self):
+        block = {
+            ("boost_selection_costanzi26", "A"): 0.1,
+            ("boost_selection_costanzi26", "alpha"): 0.92,
+            ("boost_selection_costanzi26", "beta"): -0.53,
+            ("boost_selection_costanzi26", "gamma"): 4.1,
+            ("boost_selection_sunayama", "pi0"): [0.45],
+            ("boost_selection_sunayama", "r0"): [3.5],
+            ("boost_selection_sunayama", "c"): -0.1,
+            ("boost_selection_sunayama", "lambda_bin"): [4],
+        }
+        self.assertIsInstance(selected_shear1h2h_max_consumer(
+            block, "Costanzi26"), Shear1h2hMaxSelCostanzi26)
+        self.assertIsInstance(selected_shear1h2h_max_consumer(
+            block, "Sunayama23", "boost_selection_sunayama"),
+            Shear1h2hMaxSelSunayama23)
 
     def test_dispatcher(self):
         costanzi = BselModels("Costanzi26", BselCostanzi26(0.1, 0.92, -0.53, 4.1))

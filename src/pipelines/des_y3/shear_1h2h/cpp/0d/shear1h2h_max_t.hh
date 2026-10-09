@@ -30,7 +30,10 @@
 //
 // Options: bin_index x r_perp cartesian grid (bin slow / R fast),
 // zt_low/zt_high/lnm_low/lnm_high (required), n_lnm (96), n_z (64),
-// lob_centers, include_miscentering (default T).
+// lob_centers, include_miscentering (default T), and optional bsel with
+// bsel_model (Costanzi26 or Sunayama23). The model tag selects the standard
+// DataBlock section. Selected profiles preserve the shear1h2h_max/vals wall
+// and multiply its local max profile.
 // f_mis and tau_mis are REQUIRED datablock values (miscentering/f_mis,
 // miscentering/tau_mis): set_sample throws if the section is missing —
 // no silent fallback to the Y3 fiducial defaults.
@@ -50,6 +53,7 @@
 #include "models/omega_z_des.hh"
 #include "models/sel_function_t.hh"
 #include "pipelines/shared/lensing_helpers.hh"
+#include "pipelines/systematics/selection_boost/Bsel.hh"
 #include "utils/datablock_reader.hh"
 #include "utils/interp_1d.hh"
 #include "utils/interp_2d.hh"
@@ -82,6 +86,12 @@ public:
                      ? cfg.view<int>(module_label(),
                                      "include_miscentering") != 0
                      : true)
+    , bsel_enabled_(cfg.has_val(module_label(), "bsel")
+                      ? cfg.view<int>(module_label(), "bsel") != 0
+                      : false)
+    , bsel_model_(bsel_enabled_
+                    ? cfg.view<std::string>(module_label(), "bsel_model")
+                    : "")
     // TODO(#14): drop the hardcoded c=4 — once claude/issue-4-dsigma-hh-2h-term
     // merges, call dsigma_mis_.set_concentration_table(
     //   make_Interp1D(s, "haloModel", "lnM", "concentration"))
@@ -95,12 +105,21 @@ public:
       y3_pipelines::read_lob_centers(cfg, module_label());
     if (lob_centers_.empty())
       throw std::runtime_error("Shear1h2hMax: lob_centers is empty");
+    if (bsel_enabled_)
+      y3_cluster::BselModels::parse_tag(bsel_model_);
   }
 
   void
   set_sample(cosmosis::DataBlock& s)
   {
     namespace w = y3_pipelines;
+
+    selected_profile_.reset();
+    if (bsel_enabled_) {
+      selected_profile_.emplace(
+        y3_cluster::make_shear1h2h_max_selected_profile(
+          s, bsel_model_));
+    }
 
     y3_cluster::HMF_t const hmf(s);
     y3_cluster::DV_DO_DZ_t const dv(s);
@@ -187,8 +206,11 @@ public:
         double const* wrow = w2 + k * N_z_;
         double const* brow = &bias_kq_[k * N_z_];
         double const one_k = one[k];
-        for (std::size_t q = 0; q != N_z_; ++q)
-          acc += wrow[q] * std::max(one_k, brow[q] * two[q]);
+        for (std::size_t q = 0; q != N_z_; ++q) {
+          double const local = std::max(one_k, brow[q] * two[q]);
+          acc += wrow[q] * selected_profile(
+            local, R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+        }
       }
       return {acc};
     }
@@ -206,7 +228,9 @@ public:
           dsigma_mis_(R * qf, r_mis_[b] * qf, lnm_x_[k]);
         double const one_kq =
           (qf * qf) * ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
-        acc += wrow[q] * std::max(one_kq, brow[q] * two[q]);
+        double const local = std::max(one_kq, brow[q] * two[q]);
+        acc += wrow[q] * selected_profile(
+          local, R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
       }
     }
     return {acc};
@@ -249,9 +273,20 @@ private:
     return y3_cluster::Interp2D(r, z, vals);
   }
 
+  double selected_profile(double profile, double R, int bin_index,
+                          double lob, double z) const
+  {
+    if (!selected_profile_)
+      return profile;
+    return y3_cluster::apply_shear1h2h_max_selected_profile(
+      *selected_profile_, profile, R, bin_index, lob, z);
+  }
+
   std::size_t N_lnm_, N_z_;
   double zt_lo_, zt_hi_, lnm_lo_, lnm_hi_;
   bool include_mis_;
+  bool bsel_enabled_;
+  std::string bsel_model_;
   y3_cluster::NFW_DSIGMA_MIS dsigma_mis_;
   std::vector<double> lnm_x_, lnm_w_, z_x_, z_w_, lob_centers_;
 
@@ -259,6 +294,7 @@ private:
   double f_mis_{0.0};
   std::size_t n_bins_{0};
   bool phys_density_{false};
+  std::optional<y3_cluster::Shear1h2hMaxSelectedProfile> selected_profile_;
   std::vector<double> w2d_, bias_kq_, r_mis_;
 };
 
