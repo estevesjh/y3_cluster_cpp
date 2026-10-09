@@ -272,9 +272,19 @@ class ct_2hTerm(object):
         w_nodes = 0.5 * dlnr[:, None] * wg[None, :]
         exp_3t = np.exp(3.0 * t_nodes)
 
-        from scipy.interpolate import CubicSpline
-        cs = CubicSpline(lnr, xi_arr, axis=-1)
-        xi_eval = cs(t_nodes.ravel()).reshape(xi_arr.shape[0], len(dlnr), n_gl)
+        # The quadrature only needs values inside each tabulated interval.
+        # Piecewise-linear interpolation is sufficient here and avoids making
+        # the cumulative integral depend on a cubic spline's extrapolation or
+        # overshoot between correlation-function knots.
+        flat_t = t_nodes.ravel()
+        interval = np.searchsorted(lnr, flat_t, side="right") - 1
+        interval = np.clip(interval, 0, lnr.size - 2)
+        frac = ((flat_t - lnr[interval]) /
+                (lnr[interval + 1] - lnr[interval]))
+        xi_left = xi_arr[:, interval]
+        xi_right = xi_arr[:, interval + 1]
+        xi_eval = (xi_left + (xi_right - xi_left) * frac[None, :])
+        xi_eval = xi_eval.reshape(xi_arr.shape[0], len(dlnr), n_gl)
         integrand = exp_3t[None, :, :] * xi_eval
         steps = np.sum(w_nodes[None, :, :] * integrand, axis=-1)
 

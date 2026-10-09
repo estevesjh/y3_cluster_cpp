@@ -1,12 +1,20 @@
-"""Traditional 1h+2h shear via the max model — Python (fast path).
+"""Traditional 1h+2h excess surface density via ``Shear1h2hMax``.
 
 The traditional-pipeline counterpart of the projection treatment (plan
 owner, 2026-08-12: "two pipelines — one with traditional shear and one
 with prj"). The radial operator is the Y1-era SIG_MAX/GAMMA_MAX
 composition on the modern haloModel tables:
 
-    DSigma_max(R, lnM, z | bin) = max( DSigma_cl(R, lnM | bin),
-                                       bias(lnM, z) * dSigma_hh(R, z) )
+The profile is defined using
+
+    DeltaSigma_max(R, lnM, z | bin) = max(
+        DeltaSigma_cl(R, lnM | bin),
+        bias(lnM, z) * DeltaSigma_hh(R, z) )
+
+where ``Sigma(R)`` is projected surface density and
+``DeltaSigma(R) = barSigma(<R) - Sigma(R)`` is the excess surface density.
+For a specified lens/source geometry,
+``gamma_T(R) = DeltaSigma(R) * Sigma_crit^{-1}``.
 
 with DSigma_cl the production miscentred 1-halo mixture (optionally
 pure centred via include_miscentering = F) and the biased two-halo term
@@ -28,6 +36,10 @@ DataBlock contract
 Reads (options): bin_index, r_perp (cartesian, bin slow / R fast),
     lob_centers (default 25 37.5 52.5 130), zt_low/zt_high/
     lnm_low/lnm_high (required), n_lnm (96), n_z (64),
+    n_gl (20), n_root (96) for the opt-in max_xi path,
+    n_offset (48), n_phi (128), n_aperture (8), q_max (24),
+    n_residual (512) for the signed residual convolution,
+    max_xi (default F; applies max operator on xi in 3D before projection),
     include_miscentering (default T).
 Reads (datablock): the Shear1hMisSel contract plus
     halomodel/{r_sigma, z, dSigma_hh, bias}  (compute_lensing_2h = T).
@@ -95,6 +107,12 @@ def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
     n_z = z_x.size
     vals = np.empty(len(bin_index) * n_r)
     for i, b in enumerate(bin_index):
+        if hasattr(profile, "excess_surface_density_grid"):
+            envelope = profile.excess_surface_density_grid(
+                b, r_perp, lnm_x, z_x, physical=physical)
+            vals[i * n_r:(i + 1) * n_r] = np.einsum(
+                "rkq,kq->r", envelope, w2d[b] * lnm_w[:, None])
+            continue
         if physical:
             DSigma_1h = np.empty((n_r, lnm_x.size, n_z))
             for iq, z in enumerate(z_x):
@@ -126,11 +144,28 @@ def setup(options):
         cfg["lob_centers"] = np.asarray(dm.DEFAULT_LOB_CENTERS)
     for key in ("zt_low", "zt_high", "lnm_low", "lnm_high"):
         cfg[key] = float(options.get_double(option_section, key))
-    for key, default in (("n_lnm", 96), ("n_z", 64)):
+    for key, default in (("n_lnm", 96), ("n_z", 64),
+                         ("n_gl", 20), ("n_root", 96),
+                         ("n_offset", 48), ("n_phi", 128),
+                         ("n_aperture", 8), ("n_residual", 512)):
         try:
             cfg[key] = int(options.get_int(option_section, key))
         except Exception:
             cfg[key] = default
+    try:
+        cfg["q_max"] = float(options.get_double(option_section, "q_max"))
+    except Exception:
+        cfg["q_max"] = 24.0
+    try:
+        cfg["max_xi"] = bool(
+            options.get_bool(option_section, "max_xi"))
+    except Exception:
+        cfg["max_xi"] = False
+    try:
+        cfg["use_nfw_table_residual"] = bool(
+            options.get_bool(option_section, "use_nfw_table_residual"))
+    except Exception:
+        cfg["use_nfw_table_residual"] = True
     try:
         cfg["include_miscentering"] = bool(
             options.get_bool(option_section, "include_miscentering"))
@@ -143,14 +178,24 @@ def execute(block, cfg):
     t0 = time.perf_counter()
     source = dm.DataBlockSource(block)
     physical = dm.physical_density_flag(source)
-    profile = lp.MaxMixtureProfile(
-        source, lob_centers=cfg["lob_centers"],
+    profile_type = (lp.Shear1h2hMaxProfile
+                    if cfg["max_xi"] else lp.MaxMixtureProfile)
+    profile_kwargs = dict(
+        source=source, lob_centers=cfg["lob_centers"],
         # Required: no fallback to the fiducial defaults — a pipeline
         # missing the miscentering section must fail loudly.
         f_mis=source.scalar("miscentering", "f_mis"),
         tau_mis=source.scalar("miscentering", "tau_mis"),
         omega_m=source.scalar("cosmological_parameters", "omega_m"),
         include_miscentering=cfg["include_miscentering"])
+    if cfg["max_xi"]:
+        profile_kwargs.update(
+            n_gl=cfg["n_gl"], n_root=cfg["n_root"],
+            n_offset=cfg["n_offset"], n_phi=cfg["n_phi"],
+            n_aperture=cfg["n_aperture"], q_max=cfg["q_max"],
+            n_residual=cfg["n_residual"],
+            use_nfw_table_residual=cfg["use_nfw_table_residual"])
+    profile = profile_type(**profile_kwargs)
     lnm_x, lnm_w, z_x, w2d = z_resolved_weights(
         source, n_lnm=cfg["n_lnm"], n_z=cfg["n_z"],
         zt_lo=cfg["zt_low"], zt_hi=cfg["zt_high"],
@@ -159,8 +204,9 @@ def execute(block, cfg):
         profile, lnm_x, lnm_w, z_x, w2d, cfg["bin_index"], cfg["r_perp"],
         physical=physical)
     dt_ms = 1000.0 * (time.perf_counter() - t0)
+    label = "max_xi" if cfg["max_xi"] else "max 1h/2h"
     print(f"[shear1h2h_max] {cfg['bin_index'].size} bins x "
-          f"{cfg['r_perp'].size} radii (max 1h/2h) — {dt_ms:.0f} ms",
+          f"{cfg['r_perp'].size} radii ({label}) — {dt_ms:.0f} ms",
           flush=True)
     return 0
 

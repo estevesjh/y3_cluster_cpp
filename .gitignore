@@ -5,6 +5,7 @@
 # Sphinx documentation
 # docs/figs/ — script is source, generated PNGs/PDFs are outputs.
 # owner review notes -- LOCAL ONLY, never commit
+ANTIGRAVITY_CONVERSATIONS.md
 #validation-data/
 *.aux
 *.csv
