@@ -169,7 +169,7 @@ Timing: per-sample, `timing = T` on the DES Y1 reference pipeline
 
 (The remaining Python steps live outside `src/modules/`:
 `halo_model_cosmosis.py` in `y3_buzzard/`; `bsel.py`, `prj_params.py`,
-`costanzi_bprj.py`, `apply_boost_factor.py` under
+`apply_boost_factor.py` under
 `src/pipelines/systematics/`; `likelihood_cp.py` under
 `src/pipelines/buzzard/likelihoods/`.)
 

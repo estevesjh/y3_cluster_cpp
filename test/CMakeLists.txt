@@ -291,21 +291,6 @@ target_include_directories(
   )
 add_test(bsel_bins_test bsel_bins_test)
 
-# Costanzi-2026 selection-bias correction B_prj(R)
-# (src/pipelines/systematics/costanzi_bprj/cpp/costanzi_bprj_t.hh): closed
-# form at R0, power-law limits, values-file DataBlock ctor, and the golden
-# values shared with costanzi_bprj.test.py.
-add_executable(costanzi_bprj_test costanzi_bprj.test.cc)
-target_link_libraries(
-  costanzi_bprj_test PRIVATE testmain utils cosmosis ${GSL_LIBRARIES}
-  )
-target_include_directories(
-  costanzi_bprj_test PRIVATE ${CMAKE_SOURCE_DIR}/src
-                             ${CMAKE_SOURCE_DIR}/externals
-                             ${GSL_INCLUDE_DIR}
-  )
-add_test(costanzi_bprj_test costanzi_bprj_test)
-
 # Tagged Bsel kernels and the BselModels dispatcher used by the selected
 # Shear1h2hMax profiles.
 add_executable(bsel_profile_models_test bsel_profile_models.test.cc)
@@ -481,20 +466,13 @@ add_test(
   NAME signed_mis_table_test
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/signed_mis_table.test.py
   )
-# Costanzi-2026 B_prj(R) Python twin (pydantic dataclass + values-file
-# loader); same golden values as costanzi_bprj_test. Dump-free.
-add_test(
-  NAME costanzi_bprj_python_test
-  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/costanzi_bprj.test.py
-  )
 # Tagged BselCostanzi26/BselSunayama23 kernels and BselModels dispatcher.
 add_test(
   NAME bsel_profile_models_python_test
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bsel_profile_models.test.py
   )
-# likelihood_cp.py max-model mode (shear_max_section) and the Costanzi-2026
-# B_prj(R) option (is_b_proj_costanzi26) on a synthetic DataBlock + DV file.
-# Dump-free.
+# likelihood_cp.py max-model and default 1h + projection paths on a synthetic
+# DataBlock + DV file. Dump-free.
 add_test(
   NAME likelihood_cp_test
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/likelihood_cp.test.py

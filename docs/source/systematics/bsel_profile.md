@@ -5,8 +5,7 @@ functions
 
 This page documents the tagged optical selection-bias corrections applied to
 the raw surface-density profile before the max-model observable is formed.
-They are separate from the existing angular `[bsel]` module and from the
-legacy `costanzi_bprj` post-processing correction.
+They are separate from the existing angular `[bsel]` module.
 
 The feature is opt-in. The ordinary `Shear1h2hMax` path and its output
 section remain unchanged when the correction is off.
@@ -117,9 +116,7 @@ defaults. The final values must match the approved richness-bin wall and the
 units used by the lensing profile.
 
 The existing `[bsel]` section must not be renamed or reused: it belongs to
-the angular selection-bias module. Likewise, `costanzi_bprj` should not be
-enabled for the same `Shear1h2hMax` run, because it represents an alternative
-selection-bias treatment.
+the angular selection-bias module.
 
 ## Options
 
@@ -154,7 +151,7 @@ silently falling back to the unselected profile.
   existing `shear1h2h_max/vals` output.
 
 See {doc}`../observables/second_halo_term` for the max-model context and
-{doc}`costanzi_bprj` for the legacy multiplicative correction.
+the selected-profile consumers described above.
 
 ## References
 

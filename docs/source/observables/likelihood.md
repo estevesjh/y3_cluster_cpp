@@ -42,15 +42,11 @@ $1/(1 - \kappa)$ denominator was retired ({doc}`../math/index`).
 Max-model composition (`shear_max_section` set):
 
 $$\gamma_t^{\rm theory}(R \mid i) =
-\frac{\mathtt{shear1h2h\_max/vals}}{\mathrm{repeat}(N_i)}
-\;\times\;\big[\mathcal B_{\rm prj}(R \mid \lambda_i, z_j)\big]_{\texttt{is\_b\_proj\_costanzi26}},$$
+\frac{\mathtt{shear1h2h\_max/vals}}{\mathrm{repeat}(N_i)},$$
 
-no projection term ({doc}`second_halo_term`). The optional
-Costanzi-2026 correction $\mathcal B_{\rm prj}$ is evaluated per sample
-by `bprj_wall(block, shear_r_perp)` from the `costanzi_bprj` DataBlock
-section ({doc}`../systematics/costanzi_bprj`); requesting it without a
-max section is a configuration error, since the $1h + {\rm prj}$ path
-already carries the selection bias through $b_{\rm sel}$.
+no projection term ({doc}`second_halo_term`). Selection-bias corrections for
+this profile are applied by the tagged `Shear1h2hMax` Bsel consumers when
+that module is configured with `bsel = T`.
 
 Two further multiplicative options act on either shear theory after
 composition: a $\rho_m(z)$ density-evolution factor $(1+z_j)^p$ per
@@ -101,8 +97,7 @@ log_space = F
 | `shear_1h_section` | section of the $N_i$-weighted one-halo shear | — | `shear1h_gl` (default `shear1hmissel`) |
 | `shear_prj_section` | section of the projected shear; its `cl` key is read | — | `shear_prj_gl` (default `shear_prj`) |
 | `shear_max_section` | if set, switch to the max model: theory = `<section>/vals` / $N_i$, no projection term | — | unset (`shear1h2h_max` to enable) |
-| `is_b_proj_costanzi26` | multiply the max-model theory by $\mathcal B_{\rm prj}(R)$ from the `costanzi_bprj` section | — | F |
-| `shear_r_perp` | comoving radii of the shear wall (needed by the scale cut and $\mathcal B_{\rm prj}$) | cMpc/$h$ | the 10-radius widePlanck grid |
+| `shear_r_perp` | comoving radii of the shear wall (needed by the scale cut) | cMpc/$h$ | the 10-radius widePlanck grid |
 | `shear_r_min`, `shear_r_max` | keep only `shear_r_min ≤ R ≤ shear_r_max` (marginalising the rest) | cMpc/$h$ | 0, ∞ (no cut) |
 | `shear_1pz_power` | multiply bin $j$ of the shear theory by $(1+z_j)^p$ | — | 0 |
 | `shear_zbin_reps` | representative $z_j$ per redshift bin for that factor | — | `0.275 0.435 0.575` |
@@ -122,7 +117,6 @@ file) are ignored.
 | `shear1h_gl/vals` | $N_i[\gamma_t^{1h}](R)$, count-weighted | `(N_{\rm shear},)` | `Shear1hGl` |
 | `shear_prj_gl/cl` (fallback `vals`) | $\gamma_t^{\rm prj}(R)$, clustered channel, per bin | `(N_{\rm shear},)` | `ShearPrjGl` |
 | `shear1h2h_max/vals` | $N_i[\gamma_t^{\max}](R)$ — max-model mode only | `(N_{\rm shear},)` | `Shear1h2hMax` |
-| `costanzi_bprj/{A, alpha, beta, gamma, lob_centers, zob_centers}` | $\mathcal B_{\rm prj}$ parameters and bin grid — `is_b_proj_costanzi26` only | scalars, `(4,)`, `(3,)` | values file + `costanzi_bprj` module |
 
 ## DataBlock outputs
 

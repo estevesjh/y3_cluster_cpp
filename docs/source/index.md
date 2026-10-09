@@ -56,7 +56,6 @@ systematics/boost_factor
 systematics/sel_function
 systematics/bsel
 Optical selection-bias corrections <systematics/bsel_profile>
-systematics/costanzi_bprj
 modules/survey_area
 ```
 

@@ -10,9 +10,9 @@ arXiv:2604.05833, Eq. (23):
        \qquad x = R/R_0,
        \qquad R_0 = R_\lambda(\lambda_{\rm ob})(1+z).
 
-``R`` and ``R0`` use the comoving ``h^-1 Mpc`` convention.  The class is
-deliberately separate from ``CostanziBprj``: it supplies both the correction
-and its derivative to the non-local selected-profile calculation.
+``R`` and ``R0`` use the comoving ``h^-1 Mpc`` convention.  The class supplies
+both the correction and its derivative to the non-local selected-profile
+calculation.
 """
 from __future__ import annotations
 
