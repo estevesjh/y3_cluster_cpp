@@ -533,5 +533,82 @@ class TestSigmaCritInvModule(unittest.TestCase):
                 self.assertIn(key, table.files, f"{key} absent from the LUT")
 
 
+class TestCt2hTermAndEnclosedMass3D(unittest.TestCase):
+    """Unit tests for ct_2hTerm.m3d_at_r (Gauss-Legendre) and sigma_bar."""
+
+    def setUp(self):
+        self.r_grid = np.logspace(-3.0, 3.0, 128)
+
+    def test_m3d_at_r_shape_and_aliases(self):
+        xi_1d = np.exp(-self.r_grid / 10.0)
+        xi_2d = np.array([xi_1d * (1.0 + 0.1 * iz) for iz in range(4)])
+
+        # Test physical names and aliases
+        out1 = hm.ct_2hTerm.m3d_at_r(self.r_grid, xi_1d, rho_m=1.0)
+        out2 = hm.ct_2hTerm.mass_3d_at_r(self.r_grid, xi_1d, rho_m=1.0)
+        out3 = hm.ct_2hTerm.enclosed_mass_3d(self.r_grid, xi_1d, rho_m=1.0)
+        out4 = hm.ct_2hTerm.m3d(self.r_grid, xi_1d, rho_m=1.0)
+        out5 = hm.ct_2hTerm.int_r2_xi(self.r_grid, xi_1d, rho_m=1.0)
+
+        self.assertEqual(out1.shape, (128,))
+        self.assertTrue(np.allclose(out1, out2, rtol=1e-15))
+        self.assertTrue(np.allclose(out1, out3, rtol=1e-15))
+        self.assertTrue(np.allclose(out1, out4, rtol=1e-15))
+        self.assertTrue(np.allclose(out1, out5, rtol=1e-15))
+
+        # Test 2D broadcast
+        out_2d = hm.ct_2hTerm.m3d_at_r(self.r_grid, xi_2d, rho_m=1.0)
+        self.assertEqual(out_2d.shape, (4, 128))
+        for iz in range(4):
+            expected = hm.ct_2hTerm.m3d_at_r(self.r_grid, xi_2d[iz], rho_m=1.0)
+            self.assertTrue(np.allclose(out_2d[iz], expected, rtol=1e-14))
+
+    def test_m3d_at_r_analytic_constant(self):
+        xi_const = 2.5 * np.ones_like(self.r_grid)
+        rho_m = 0.3 * 2.77533742639e11
+        out = hm.ct_2hTerm.m3d_at_r(self.r_grid, xi_const, rho_m=rho_m, n_gl=5)
+        exact = (4.0 * np.pi / 3.0) * rho_m * 2.5 * (self.r_grid ** 3)
+
+        # Gauss-Legendre quadrature achieves near machine precision on power laws
+        rel_err = np.max(np.abs(out / exact - 1.0))
+        self.assertLess(rel_err, 1e-11)
+
+    def test_ct_2h_term_mass_3d_and_sigma_bar(self):
+        p2h = hm.ct_2hTerm(0.3, NSIZE=20)
+        k = np.logspace(-3, 1, 50)
+        pk = 1000.0 / (1.0 + k**2)
+        r_eval = np.logspace(0, 1.5, 10)
+
+        p2h.pk_to_dsigma(r_eval, k, pk, zvec=np.array([0.0]))
+        self.assertIsNotNone(p2h.sigma_bar)
+        self.assertEqual(p2h.sigma_bar.shape, (1, 10))
+        expected = p2h.Sigma + p2h.dSigma
+        self.assertTrue(np.allclose(p2h.sigma_bar, expected, rtol=1e-14))
+
+        m3d = p2h.mass_3d()
+        self.assertEqual(m3d.shape, (1, p2h.Rfix.size))
+        mask_pos = (p2h.Rfix <= 10.0)
+        self.assertTrue(np.all(m3d[0, mask_pos] > 0.0))
+        self.assertTrue(np.all(np.diff(m3d[0, mask_pos]) > 0.0))
+
+    def test_lensing_model_sigma_bar(self):
+        r_eval = np.logspace(-1, 1.5, 15)
+        model = hm.lensingModel(r_eval, omega_m=0.3)
+        model.first_halo_term(np.array([1e14, 2e14]), z=0.3)
+
+        self.assertIn("1h", model.sigma_bar)
+        self.assertIsNotNone(model.sigma_bar["1h"])
+        expected_1h = model.Sigma["1h"] + model.dSigma["1h"]
+        self.assertTrue(np.allclose(model.sigma_bar["1h"], expected_1h, rtol=1e-14))
+
+        k = np.logspace(-3, 1, 50)
+        pk = 1000.0 / (1.0 + k**2)
+        model.second_halo_term(np.array([0.3]), k, pk[np.newaxis, :])
+        self.assertIn("2h", model.sigma_bar)
+        self.assertIsNotNone(model.sigma_bar["2h"])
+        expected_2h = model.Sigma["2h"] + model.dSigma["2h"]
+        self.assertTrue(np.allclose(model.sigma_bar["2h"], expected_2h, rtol=1e-14))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
