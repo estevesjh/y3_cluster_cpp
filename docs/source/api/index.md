@@ -23,6 +23,22 @@ and compatibility rules.
 | `shared/sel_kernels.py` | Cached loader and HOD/richness-kernel adapters for the shared selection module |
 | `shared/z_kernel.py` | Projection photo-$z$ kernel conventions |
 
+### Tagged Bsel profile layer
+
+The following APIs provide the optional selection-bias correction for the
+3-D-envelope `Shear1h2hMax` path. They are documented in
+{doc}`../systematics/bsel_profile`; the existing angular `bsel` module is a
+separate API.
+
+| File | Main types | Role |
+|---|---|---|
+| `src/pipelines/systematics/BselCostanzi26.py` | `BselCostanzi26` | Costanzi26 tagged Bsel kernel, derivative, DataBlock loader, and validation |
+| `src/pipelines/systematics/BselSunayama23.py` | `BselSunayama23` | Sunayama23 tagged Bsel kernel, branch derivative, DataBlock loader, and validation |
+| `src/pipelines/systematics/bsel_profile.py` | `BselModels` | Explicit `Costanzi26`/`Sunayama23` dispatcher |
+| `src/systematics/bsel_profile.hh` | `y3_cluster::BselCostanzi26`, `y3_cluster::BselSunayama23`, `y3_cluster::BselModels` | C++ kernels and tag dispatcher |
+| `src/pipelines/shared/lensing_profiles.py` | `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | Python selected-profile consumers |
+| `src/pipelines/des_y3/shear_1h2h/cpp/0d/shear1h2h_max_profile.hh` | `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | C++ selected-profile consumers |
+
 ### Observable products
 
 Timing: per-MCMC-sample wall-clock at the fiducial widePlanck point, from

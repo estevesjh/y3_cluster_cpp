@@ -55,6 +55,7 @@ cosmology/sigma_crit_inv
 systematics/boost_factor
 systematics/sel_function
 systematics/bsel
+systematics/bsel_profile
 systematics/costanzi_bprj
 modules/survey_area
 ```
