@@ -47,21 +47,23 @@ def _base_options():
 
 
 class TestSetupOptionContract(unittest.TestCase):
-    def test_3d_envelope_quadrature_options_have_defaults_and_overrides(self):
+    def test_max_xi_quadrature_options_have_defaults_and_overrides(self):
         cfg = mod.setup(make_options(_base_options()))
         self.assertEqual(cfg["n_gl"], 20)
         self.assertEqual(cfg["n_root"], 96)
-        self.assertEqual(cfg["n_offset"], 48)
-        self.assertEqual(cfg["n_phi"], 128)
+        self.assertEqual(cfg["n_offset"], 24)
+        self.assertEqual(cfg["n_phi"], 64)
         self.assertEqual(cfg["n_aperture"], 8)
         self.assertEqual(cfg["n_residual"], 512)
-        self.assertEqual(cfg["q_max"], 24.0)
+        self.assertEqual(cfg["q_max"], 12.0)
+        self.assertEqual(cfg["miscentering_method"], "table")
         self.assertTrue(cfg["use_nfw_table_residual"])
 
         entries = dict(_base_options(), max_xi=True, n_gl=8,
                        n_root=32, n_offset=4, n_phi=8, n_aperture=4,
                        q_max=20.0, n_residual=64,
-                       use_nfw_table_residual=False)
+                       use_nfw_table_residual=False,
+                       miscentering_method="direct")
         cfg = mod.setup(make_options(entries))
         self.assertTrue(cfg["max_xi"])
         self.assertEqual(cfg["n_gl"], 8)
@@ -71,6 +73,7 @@ class TestSetupOptionContract(unittest.TestCase):
         self.assertEqual(cfg["n_aperture"], 4)
         self.assertEqual(cfg["q_max"], 20.0)
         self.assertEqual(cfg["n_residual"], 64)
+        self.assertEqual(cfg["miscentering_method"], "direct")
         self.assertFalse(cfg["use_nfw_table_residual"])
 
     def test_include_miscentering_defaults_true(self):

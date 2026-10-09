@@ -47,10 +47,10 @@ class Shear1h2hMaxProfile {
   static constexpr double MSUN_PER_MPC2_TO_MSUN_PER_PC2 = 1.0e-12;
   static constexpr std::size_t DEFAULT_N_ROOT = 96;
   static constexpr std::size_t DEFAULT_N_GL = 20;
-  static constexpr std::size_t DEFAULT_N_OFFSET = 48;
-  static constexpr std::size_t DEFAULT_N_PHI = 128;
+  static constexpr std::size_t DEFAULT_N_OFFSET = 24;
+  static constexpr std::size_t DEFAULT_N_PHI = 64;
   static constexpr std::size_t DEFAULT_N_APERTURE = 8;
-  static constexpr double DEFAULT_Q_MAX = 24.0;
+  static constexpr double DEFAULT_Q_MAX = 12.0;
 
   Interp2D bias_;
   Interp2D xi_nl_;
@@ -259,17 +259,21 @@ class Shear1h2hMaxProfile {
   }
 
   double
-  convolved_residual_surface_density(double radius, double r_mis,
-                                      double lnM, double z) const
+  convolved_surface_density(double radius, double r_mis,
+                             double lnM, double z,
+                             bool residual) const
   {
     radius = std::max(radius, 1.0e-8);
     if (r_mis <= 0.0)
-      return residual_surface_density(radius, lnM, z);
+      return residual ? residual_surface_density(radius, lnM, z)
+                      : surface_density(radius, lnM, z);
 
     std::vector<double> edges{0.0, 1.0, 4.0, 8.0, 16.0, q_max_};
     double const q_break = radius / r_mis;
     if (q_break > 0.0 && q_break < q_max_)
       edges.push_back(q_break);
+    for (double& edge : edges)
+      edge = std::clamp(edge, 0.0, q_max_);
     std::sort(edges.begin(), edges.end());
     edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
 
@@ -291,14 +295,39 @@ class Shear1h2hMaxProfile {
             (radius - offset) * (radius - offset) +
             4.0 * radius * offset *
               std::sin(0.5 * phi) * std::sin(0.5 * phi));
-          angular += 2.0 * phi_t[ip] * phi_w[ip] *
-                     residual_surface_density(
-                       separation, lnM, z);
+          double const value = residual
+            ? residual_surface_density(separation, lnM, z)
+            : surface_density(separation, lnM, z);
+          angular += 2.0 * phi_t[ip] * phi_w[ip] * value;
         }
         total += wq[iq] * q[iq] * std::exp(-q[iq]) * angular;
       }
     }
     return total;
+  }
+
+  double
+  convolved_residual_surface_density(double radius, double r_mis,
+                                      double lnM, double z) const
+  {
+    return convolved_surface_density(radius, r_mis, lnM, z, true);
+  }
+
+  double
+  miscentered_excess_surface_density_impl(
+    double R, double r_mis, double lnM, double z, bool residual) const
+  {
+    std::vector<double> t, wt;
+    y3_pipelines::gl_nodes(0.0, 1.0, n_aperture_, t, wt);
+    double mean = 0.0;
+    for (std::size_t i = 0; i != t.size(); ++i) {
+      double const radius = std::max(R * t[i] * t[i], 1.0e-8);
+      mean += 4.0 * wt[i] * t[i] * t[i] * t[i] *
+              convolved_surface_density(radius, r_mis, lnM, z, residual);
+    }
+    double const edge = convolved_surface_density(
+      std::max(R, 1.0e-8), r_mis, lnM, z, residual);
+    return mean - edge;
   }
 
 public:
@@ -383,18 +412,16 @@ public:
   miscentered_residual_excess_surface_density(
     double R, double r_mis, double lnM, double z) const
   {
-    std::vector<double> t, wt;
-    y3_pipelines::gl_nodes(0.0, 1.0, n_aperture_, t, wt);
-    double mean = 0.0;
-    for (std::size_t i = 0; i != t.size(); ++i) {
-      double const radius = std::max(R * t[i] * t[i], 1.0e-8);
-      mean += 4.0 * wt[i] * t[i] * t[i] * t[i] *
-              convolved_residual_surface_density(
-                radius, r_mis, lnM, z);
-    }
-    double const edge = convolved_residual_surface_density(
-      std::max(R, 1.0e-8), r_mis, lnM, z);
-    return mean - edge;
+    return miscentered_excess_surface_density_impl(
+      R, r_mis, lnM, z, true);
+  }
+
+  double
+  miscentered_excess_surface_density(
+    double R, double r_mis, double lnM, double z) const
+  {
+    return miscentered_excess_surface_density_impl(
+      R, r_mis, lnM, z, false);
   }
 
   double

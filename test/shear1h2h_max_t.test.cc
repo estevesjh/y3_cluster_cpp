@@ -568,6 +568,19 @@ TEST_CASE("Shear1h2hMax opt-in max_xi path is finite")
       INFO("bin " << b << " R " << R);
       CHECK(std::isfinite(value));
     }
+
+  auto cfg_direct = make_cfg_block();
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "max_xi", 1);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_gl", 8);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_root", 32);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_offset", 3);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_phi", 8);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_aperture", 3);
+  cfg_direct.put_val(Shear1h2hMax::module_label(),
+                     "miscentering_method", std::string("direct"));
+  Shear1h2hMax direct(cfg_direct);
+  REQUIRE_NOTHROW(direct.set_sample(s));
+  CHECK(std::isfinite(direct.evaluate({0.0, 1.0})[0]));
 }
 
 TEST_CASE("Shear1h2hMaxProfile exposes Sigma DeltaSigma and gamma_T")
@@ -590,6 +603,8 @@ TEST_CASE("Shear1h2hMaxProfile exposes Sigma DeltaSigma and gamma_T")
   double const residual_mis =
     profile.miscentered_residual_excess_surface_density(
       R, 0.2, lnM, z);
+  double const direct_mis = profile.miscentered_excess_surface_density(
+    R, 0.2, lnM, z);
 
   CHECK(std::isfinite(sigma));
   CHECK(std::isfinite(delta_sigma));
@@ -597,6 +612,7 @@ TEST_CASE("Shear1h2hMaxProfile exposes Sigma DeltaSigma and gamma_T")
   CHECK(std::isfinite(residual_sigma));
   CHECK(std::isfinite(residual_delta));
   CHECK(std::isfinite(residual_mis));
+  CHECK(std::isfinite(direct_mis));
   CHECK(mean_sigma - sigma == Approx(delta_sigma).epsilon(1e-12));
   CHECK(gamma_t == Approx(delta_sigma * sigma_crit_inv).epsilon(1e-12));
 }
@@ -640,6 +656,14 @@ TEST_CASE("Shear1h2hMax ini-option contract: [Shear1h2hMax] required vs optional
   REQUIRE_NOTHROW(Shear1h2hMax{cfg_default});
   CHECK(y3_pipelines::read_lob_centers(cfg_default, label) ==
         y3_pipelines::default_lob_centers());
+
+  cosmosis::DataBlock cfg_direct = cfg_default;
+  cfg_direct.put_val(label, "miscentering_method", std::string("direct"));
+  CHECK_NOTHROW(Shear1h2hMax{cfg_direct});
+
+  cosmosis::DataBlock cfg_invalid = cfg_default;
+  cfg_invalid.put_val(label, "miscentering_method", std::string("bad"));
+  CHECK_THROWS_AS(Shear1h2hMax{cfg_invalid}, std::invalid_argument);
 
   // An explicitly EMPTY lob_centers is a configuration error, not a
   // silent fall-back to the default.

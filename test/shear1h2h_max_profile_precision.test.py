@@ -145,6 +145,16 @@ class TestShear1h2hMaxProfilePrecision(unittest.TestCase):
         self.assertEqual(values.shape, (2, 1, 1))
         self.assertTrue(np.all(np.isfinite(values)))
 
+    def test_direct_full_surface_density_convolution_is_finite(self):
+        profile = Shear1h2hMaxProfile(
+            make_source(), lob_centers=[30.0], f_mis=0.2, tau_mis=0.17,
+            omega_m=0.3, n_gl=8, n_root=64, n_offset=2, n_phi=8,
+            n_aperture=3, miscentering_method="direct")
+        values = profile.excess_surface_density_grid(
+            0, np.array([0.2, 0.6]), np.array([34.0]), np.array([0.3]))
+        self.assertEqual(values.shape, (2, 1, 1))
+        self.assertTrue(np.all(np.isfinite(values)))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

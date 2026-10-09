@@ -37,9 +37,12 @@ Reads (options): bin_index, r_perp (cartesian, bin slow / R fast),
     lob_centers (default 25 37.5 52.5 130), zt_low/zt_high/
     lnm_low/lnm_high (required), n_lnm (96), n_z (64),
     n_gl (20), n_root (96) for the opt-in max_xi path,
-    n_offset (48), n_phi (128), n_aperture (8), q_max (24),
+    n_offset (24), n_phi (64), n_aperture (8), q_max (12),
     n_residual (512) for the signed residual convolution,
     max_xi (default F; applies max operator on xi in 3D before projection),
+    miscentering_method (default ``table``; ``table`` keeps the DES NFW
+        gamma table plus residual correction, ``direct`` convolves the full
+        centered Sigma_max and then applies the aperture operation),
     include_miscentering (default T).
 Reads (datablock): the Shear1hMisSel contract plus
     halomodel/{r_sigma, z, dSigma_hh, bias}  (compute_lensing_2h = T).
@@ -146,7 +149,7 @@ def setup(options):
         cfg[key] = float(options.get_double(option_section, key))
     for key, default in (("n_lnm", 96), ("n_z", 64),
                          ("n_gl", 20), ("n_root", 96),
-                         ("n_offset", 48), ("n_phi", 128),
+                         ("n_offset", 24), ("n_phi", 64),
                          ("n_aperture", 8), ("n_residual", 512)):
         try:
             cfg[key] = int(options.get_int(option_section, key))
@@ -155,7 +158,7 @@ def setup(options):
     try:
         cfg["q_max"] = float(options.get_double(option_section, "q_max"))
     except Exception:
-        cfg["q_max"] = 24.0
+        cfg["q_max"] = 12.0
     try:
         cfg["max_xi"] = bool(
             options.get_bool(option_section, "max_xi"))
@@ -166,6 +169,14 @@ def setup(options):
             options.get_bool(option_section, "use_nfw_table_residual"))
     except Exception:
         cfg["use_nfw_table_residual"] = True
+    try:
+        cfg["miscentering_method"] = options.get_string(
+            option_section, "miscentering_method").lower()
+    except Exception:
+        cfg["miscentering_method"] = "table"
+    if cfg["miscentering_method"] not in ("table", "direct"):
+        raise ValueError(
+            "miscentering_method must be 'table' or 'direct'")
     try:
         cfg["include_miscentering"] = bool(
             options.get_bool(option_section, "include_miscentering"))
@@ -194,7 +205,8 @@ def execute(block, cfg):
             n_offset=cfg["n_offset"], n_phi=cfg["n_phi"],
             n_aperture=cfg["n_aperture"], q_max=cfg["q_max"],
             n_residual=cfg["n_residual"],
-            use_nfw_table_residual=cfg["use_nfw_table_residual"])
+            use_nfw_table_residual=cfg["use_nfw_table_residual"],
+            miscentering_method=cfg["miscentering_method"])
     profile = profile_type(**profile_kwargs)
     lnm_x, lnm_w, z_x, w2d = z_resolved_weights(
         source, n_lnm=cfg["n_lnm"], n_z=cfg["n_z"],

@@ -238,11 +238,13 @@ class Shear1h2hMaxProfile:
     Weak Lensing.md``.  The outer branch uses the exact ``C0 / R**2``
     decoupled tail; the inner branch uses nonsingular GL integrals after the
     ``y = R sinh(u)`` substitution.  In
-    ``excess_surface_density_grid``, the NFW gamma table is retained as the
-    baseline and the signed residual
-    ``Sigma_max_cen - Sigma_NFW_cen`` is convolved separately.  This is the
-    additive correction implied by linearity; no NFW response ratio is
-    transferred to the complete max profile.
+    ``excess_surface_density_grid``, ``miscentering_method="table"`` retains
+    the NFW gamma table as the baseline and convolves the signed residual
+    ``Sigma_max_cen - Sigma_NFW_cen`` separately.  With
+    ``miscentering_method="direct"``, the complete centered ``Sigma_max`` is
+    convolved instead.  Both methods perform the gamma convolution at Sigma
+    level and apply the aperture projection afterward; neither transfers an
+    NFW response ratio to the complete max profile.
 
     This class deliberately consumes the published ``xi_nl`` and cumulative
     ``m3d_nl`` tables.  It does not recompute the nonlinear correlation
@@ -251,8 +253,9 @@ class Shear1h2hMaxProfile:
 
     def __init__(self, source, *, lob_centers, f_mis, tau_mis, omega_m,
                  include_miscentering=True, n_gl=20, n_root=96,
-                 n_offset=48, n_phi=128, n_aperture=8, q_max=24.0,
-                 n_residual=512, use_nfw_table_residual=True):
+                 n_offset=24, n_phi=64, n_aperture=8, q_max=12.0,
+                 n_residual=512, use_nfw_table_residual=True,
+                 miscentering_method="table"):
         from . import datablock_models as _dm
 
         self._cen = HaloModelDSigmaNfw(source)
@@ -292,6 +295,10 @@ class Shear1h2hMaxProfile:
         self.q_max = float(q_max)
         self.n_residual = int(n_residual)
         self.use_nfw_table_residual = bool(use_nfw_table_residual)
+        self.miscentering_method = str(miscentering_method).lower()
+        if self.miscentering_method not in ("table", "direct"):
+            raise ValueError(
+                "miscentering_method must be 'table' or 'direct'")
         if self.n_gl < 1:
             raise ValueError("n_gl must be positive")
         if self.n_root < 2:
@@ -379,20 +386,34 @@ class Shear1h2hMaxProfile:
         return (self.surface_density(r_perp, lnM, z)
                 - self._nfw_surface_density(r_perp, lnM))
 
-    def _residual_interpolator(self, r_max, lnM, z):
-        """Build a signed log-radius interpolator for the residual Sigma."""
+    def _surface_interpolator(self, r_max, lnM, z, residual=False):
+        """Build a log-radius interpolator for centered Sigma."""
         r_min = 1.0e-8
         r_max = max(float(r_max), 10.0 * r_min)
         radii = np.geomspace(r_min, r_max, self.n_residual)
-        values = np.array([
-            self._residual_surface_density(radius, lnM, z)
-            for radius in radii
-        ])
+        if residual:
+            values = np.array([
+                self._residual_surface_density(radius, lnM, z)
+                for radius in radii
+            ])
+        else:
+            values = np.array([
+                self.surface_density(radius, lnM, z) for radius in radii
+            ])
         return np.log(radii), PchipInterpolator(
             np.log(radii), values, extrapolate=False)
 
-    def _gamma_residual_surface_density(self, radius, r_mis, log_r, interp):
-        """Gamma-convolve the signed residual surface density."""
+    def _residual_interpolator(self, r_max, lnM, z):
+        """Build a signed log-radius interpolator for residual Sigma."""
+        return self._surface_interpolator(r_max, lnM, z, residual=True)
+
+    def _centered_surface_interpolator(self, r_max, lnM, z):
+        """Build a log-radius interpolator for complete centered Sigma."""
+        return self._surface_interpolator(r_max, lnM, z, residual=False)
+
+    def _gamma_interpolated_surface_density(
+            self, radius, r_mis, log_r, interp):
+        """Gamma-convolve an interpolated centered surface density."""
         radius = max(float(radius), 1.0e-8)
         if r_mis <= 0.0:
             return float(interp(np.clip(np.log(radius), log_r[0], log_r[-1])))
@@ -421,20 +442,27 @@ class Shear1h2hMaxProfile:
             total += np.sum(w_q * q * np.exp(-q) * angular)
         return float(total)
 
-    def _gamma_residual_excess_surface_density(
+    def _gamma_interpolated_excess_surface_density(
             self, radius, r_mis, log_r, interp):
-        """Aperture-project the gamma-convolved residual Sigma."""
+        """Aperture-project a gamma-convolved interpolated Sigma."""
         radius = max(float(radius), 1.0e-8)
         x = radius * self._aperture_t**2
         values = np.array([
-            self._gamma_residual_surface_density(value, r_mis, log_r, interp)
+            self._gamma_interpolated_surface_density(
+                value, r_mis, log_r, interp)
             for value in x
         ])
         mean = 4.0 * np.sum(
             self._aperture_w * self._aperture_t**3 * values)
-        edge = self._gamma_residual_surface_density(
+        edge = self._gamma_interpolated_surface_density(
             radius, r_mis, log_r, interp)
         return float(mean - edge)
+
+    def _gamma_residual_excess_surface_density(
+            self, radius, r_mis, log_r, interp):
+        """Aperture-project the gamma-convolved residual Sigma."""
+        return self._gamma_interpolated_excess_surface_density(
+            radius, r_mis, log_r, interp)
 
     def _xi_1h(self, r, lnM):
         rs, rho_s, _ = self._nfw_parameters(lnM)
@@ -568,7 +596,12 @@ class Shear1h2hMaxProfile:
             for iz, redshift in enumerate(z):
                 q = 1.0 + redshift if physical else 1.0
                 log_r = residual = None
-                if self.use_nfw_table_residual and self.f_mis != 0.0:
+                if self.f_mis != 0.0 and self.miscentering_method == "direct":
+                    log_r, residual = self._centered_surface_interpolator(
+                        np.max(r_perp * q) + self.q_max * r_mis_base * q,
+                        mass, redshift)
+                elif (self.use_nfw_table_residual and
+                      self.f_mis != 0.0):
                     log_r, residual = self._residual_interpolator(
                         np.max(r_perp * q) + self.q_max * r_mis_base * q,
                         mass, redshift)
@@ -577,6 +610,15 @@ class Shear1h2hMaxProfile:
                     centered_com = self.excess_surface_density(
                         R * q, mass, redshift)
                     centered = centered_com * q**2
+                    if self.miscentering_method == "direct":
+                        if self.f_mis == 0.0:
+                            out[ir, ik, iz] = centered
+                            continue
+                        d_mis = self._gamma_interpolated_excess_surface_density(
+                            R * q, r_mis_base * q, log_r, residual) * q**2
+                        out[ir, ik, iz] = (
+                            centered + self.f_mis * (d_mis - centered))
+                        continue
                     d_cen = float(np.asarray(
                         self._cen(R * q, mass)).item()) * q**2
                     mis = float(np.asarray(
