@@ -28,20 +28,8 @@ Replaces the 1h + prj composition by the traditional max model
 
     gamma_t^theory(R) = shear1h2h_max/vals / numcounts/vals
 
-no projection term. With is_b_proj_costanzi26 = T the max-model theory
-is multiplied by the Costanzi-2026 selection-bias correction
-(arXiv:2604.05833 App. C, src/pipelines/systematics/costanzi_bprj):
-
-    gamma_t^theory(R) *= B_prj(R | lob_i, z_j),   R0 = R_lambda(lob) (1+z)
-
-evaluated by costanzi_bprj.bprj_wall(block, R): A/alpha/beta/gamma
-(values file) and the bin grid lob_centers / zob_centers (published by
-the costanzi_bprj module stage) are read per sample from the datablock
-section [costanzi_bprj]; only the radii come from this module's
-shear_r_perp (comoving Mpc/h, the Shear1h2hMax r_perp grid). B_prj only
-makes sense on the max model (the 1h + prj path already carries the
-selection bias through b_sel), so the flag without shear_max_section is
-a configuration error.
+no projection term. Optical selection bias is handled by the tagged
+`Shear1h2hMax` Bsel consumers when that module is configured with `bsel = T`.
 
 logL = -0.5 * sum_obs delta^T C^-1 delta, summed over NC and Shear.
 
@@ -77,9 +65,6 @@ once in setup().
 
 from __future__ import annotations
 
-from pathlib import Path
-import sys
-
 import numpy as np
 from cosmosis.datablock import option_section
 
@@ -107,41 +92,6 @@ def _to_log_space(d: np.ndarray, ic: np.ndarray) -> np.ndarray:
     if ic.ndim == 1:
         return ic * d * d
     return ic * np.outer(d, d)
-
-
-def _costanzi_bprj_wall(config, r_grid):
-    """Return wall(block) -> B_prj on the shear wall (Costanzi-2026, max model).
-
-    Everything but the radii is read from the costanzi_bprj datablock
-    section per sample (values-file parameters + the lob_centers /
-    zob_centers the costanzi_bprj module publishes), see
-    src/pipelines/systematics/costanzi_bprj/python/costanzi_bprj.py.
-    """
-    from systematics.costanzi_bprj.python.costanzi_bprj import bprj_wall
-    
-    if not config["shear_max_section"]:
-        raise ValueError(
-            "likelihood_cp: is_b_proj_costanzi26 requires "
-            "shear_max_section (B_prj corrects the max model only)")
-    if r_grid.size != config["shear_n_r"]:
-        raise ValueError(
-            f"likelihood_cp: shear_r_perp has {r_grid.size} radii but "
-            f"data_Shear implies {config['shear_n_r']} per bin")
-    pipelines_dir = str(Path(__file__).resolve().parents[2])  # src/pipelines
-    if pipelines_dir not in sys.path:
-        sys.path.insert(0, pipelines_dir)
-    
-    n_shear = _NC_N_BINS * config["shear_n_r"]
-
-    def wall(block):
-        B = bprj_wall(block, r_grid)
-        if B.size != n_shear:
-            raise ValueError(
-                f"likelihood_cp: costanzi_bprj wall has {B.size} points, "
-                f"shear theory has {n_shear}")
-        return B
-
-    return wall
 
 
 def setup(options):
@@ -232,11 +182,6 @@ def setup(options):
     else:
         config["shear_1pz_factor"] = np.ones(data_shear.size)
 
-    # Costanzi-2026 B_prj(R) on the max model (module docstring).
-    config["is_b_proj_costanzi26"] = bool(options.get_bool(
-        option_section, "is_b_proj_costanzi26", default=False))
-    if config["is_b_proj_costanzi26"]:
-        config["bprj_wall"] = _costanzi_bprj_wall(config, r_grid)
     expected = [("NC", _NC_N_BINS), ("Shear", data_shear.size)]
     for name, expected_n in expected:
         d = np.asarray(vec[f"data_{name}"]).ravel()
@@ -356,11 +301,9 @@ def execute(block, config):
     parts["NC"] = -0.5 * _chi2(delta_NC, config["invcov_NC"])
     logL += parts["NC"]
 
-    # Shear — theory = <gamma_t^1h> + gamma_t^prj,
-    # scale-cut to match the data when shear_r_min/max is set.
+    # Shear — theory = <gamma_t^1h> + gamma_t^prj, with the optional max
+    # model; scale-cut to match the data when shear_r_min/max is set.
     Shear_theory = _shear_theory(block, config)
-    if config["is_b_proj_costanzi26"]:
-        Shear_theory = Shear_theory * config["bprj_wall"](block)
     Shear_theory = Shear_theory * config["shear_1pz_factor"]   # rho_m(z) (1+z)^p
     if config["shear_cut_active"]:
         Shear_theory = Shear_theory[config["shear_mask"]]

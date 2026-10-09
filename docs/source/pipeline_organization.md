@@ -33,7 +33,6 @@ src/pipelines/
 │   ├── selection_richness/python/  # sel_function, sel_kernels
 │   ├── selection_bias/{python,cpp,cuda/3d}/  # bsel, BSelBins, PAGANI b_sel_marg
 │   ├── selection_function/         # prj_params (EMG coefficients)
-│   ├── costanzi_bprj/{python,cpp}/ # B_prj(R) max-model correction
 │   ├── boost_factor/               # McClintock+19 B(R) (published, unconsumed)
 │   └── shear_prj/cpp/              # ShearPrjCore + frozen twins
 ├── buzzard/likelihoods/            # likelihood_cp.py

@@ -148,13 +148,9 @@ note). Status: **model option** — and the wired production
 
 Likelihood wiring: `src/pipelines/buzzard/likelihoods/likelihood_cp.py` consumes the max model
 with `shear_max_section = shear1h2h_max` (theory =
-`shear1h2h_max/vals` / $N_i$, no projection term). Setting
-`is_b_proj_costanzi26 = T` multiplies that theory by the Costanzi-2026
-$\mathcal{B}_{\rm prj}(R)$ selection-bias correction
-(`src/pipelines/systematics/costanzi_bprj/`, App. C of arXiv:2604.05833),
-with its parameters read from the values-file section `[costanzi_bprj]`,
-the bin centres `lob_centers`/`zob_centers` published into that section by
-the `costanzi_bprj` module stage, and the radii from `shear_r_perp`.
+`shear1h2h_max/vals` / $N_i$, no projection term). Selection-bias
+corrections for the max profile are selected by the tagged `Shear1h2hMax`
+Bsel configuration described in {doc}`systematics/bsel_profile`.
 
 ## Population diagnostics
 

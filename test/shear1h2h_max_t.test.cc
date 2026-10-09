@@ -435,6 +435,40 @@ TEST_CASE("Shear1h2hMax exercises both branches of max(1h, b * 2h)")
     }
 }
 
+TEST_CASE("Shear1h2hMax dispatches the selected Sunayama23 consumer")
+{
+  auto cfg_selected = make_cfg_block();
+  cfg_selected.put_val(Shear1h2hMax::module_label(), "bsel", 1);
+  cfg_selected.put_val(Shear1h2hMax::module_label(), "bsel_model",
+                       std::string("Sunayama23"));
+
+  auto cfg_baseline = make_cfg_block();
+  auto sample = make_sample_block(SampleOpts{F_MIS, TAU_MIS, 1.5});
+  sample.put_val("bsel_profile_sunayama23", "pi0",
+                 std::vector<double>{0.45, 0.45});
+  sample.put_val("bsel_profile_sunayama23", "r0",
+                 std::vector<double>{3.5, 3.5});
+  sample.put_val("bsel_profile_sunayama23", "c", -0.1);
+  sample.put_val("bsel_profile_sunayama23", "lambda_bin",
+                 std::vector<double>{0.0, 1.0});
+
+  Shear1h2hMax selected(cfg_selected);
+  Shear1h2hMax baseline(cfg_baseline);
+  selected.set_sample(sample);
+  baseline.set_sample(sample);
+
+  y3_cluster::BselSunayama23 const bsel(
+    std::vector<double>{0.45, 0.45}, std::vector<double>{3.5, 3.5}, -0.1,
+    std::vector<double>{0.0, 1.0});
+  for (int bin : {0, 1})
+    for (double R : R_QUERY) {
+      auto const pt = Shear1h2hMax::grid_point_t{
+        static_cast<double>(bin), R};
+      CHECK(selected.evaluate(pt)[0] ==
+            Approx(baseline.evaluate(pt)[0] * bsel(R, bin)).epsilon(1e-12));
+    }
+}
+
 TEST_CASE("Shear1h2hMax sanitizes an all-NaN dSigma_hh to zero: max(1h, 0) = 1h")
 {
   // The historical dSigma_hh defect shape (docs/known_issues/

@@ -23,6 +23,27 @@ and compatibility rules.
 | `shared/sel_kernels.py` | Cached loader and HOD/richness-kernel adapters for the shared selection module |
 | `shared/z_kernel.py` | Projection photo-$z$ kernel conventions |
 
+### Tagged Bsel profile layer
+
+The following APIs provide optional optical selection-bias correction
+functions for `Shear1h2hMax`. They are documented in
+{doc}`../systematics/bsel_profile`; the existing angular `bsel` module is a
+separate API.
+
+| File | Main types | Role |
+|---|---|---|
+| `src/pipelines/systematics/selection_boost/BselCostanzi26.py` | `BselCostanzi26` | Costanzi26 tagged Bsel kernel, derivative, DataBlock loader, and validation |
+| `src/pipelines/systematics/selection_boost/BselSunayama23.py` | `BselSunayama23` | Sunayama23 tagged Bsel kernel, branch derivative, DataBlock loader, and validation |
+| `src/pipelines/systematics/selection_boost/Bsel.py` | `BselModels`, `Shear1h2hMaxSelCostanzi26`, `Shear1h2hMaxSelSunayama23` | Python dispatcher and selected-profile consumers |
+| `src/pipelines/systematics/selection_boost/Bsel.hh` | `y3_cluster::BselCostanzi26`, `y3_cluster::BselSunayama23`, `y3_cluster::BselModels`, selected consumers | C++ kernels, dispatcher, and selected-profile consumers |
+| `src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py` | `Shear1h2hMax` | Python selected-profile consumer and `shear1h2h_max/vals` producer |
+| `src/pipelines/des_y3/shear_1h2h/cpp/0d/shear1h2h_max_t.hh` | `Shear1h2hMax` | C++ selected-profile consumer and `shear1h2h_max/vals` producer |
+
+The Costanzi26 implementation follows Costanzi et al. (2026),
+[arXiv:2604.05833](https://arxiv.org/abs/2604.05833), Appendix C. The
+Sunayama23 implementation follows Sunayama et al. (2023),
+[arXiv:2309.13025](https://arxiv.org/abs/2309.13025), Section 4.2.
+
 ### Observable products
 
 Timing: per-MCMC-sample wall-clock at the fiducial widePlanck point, from
@@ -148,7 +169,7 @@ Timing: per-sample, `timing = T` on the DES Y1 reference pipeline
 
 (The remaining Python steps live outside `src/modules/`:
 `halo_model_cosmosis.py` in `y3_buzzard/`; `bsel.py`, `prj_params.py`,
-`costanzi_bprj.py`, `apply_boost_factor.py` under
+`apply_boost_factor.py` under
 `src/pipelines/systematics/`; `likelihood_cp.py` under
 `src/pipelines/buzzard/likelihoods/`.)
 

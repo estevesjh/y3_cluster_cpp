@@ -18,10 +18,9 @@ limit** of the selection-affected two-halo term $\Sigma^{\rm prj}$ of
 {doc}`shear_projection`: replace $b(M,z)\,b_{\rm sel}(\theta)$ by the
 plain halo bias, drop the halo exclusion and the neighbour-by-neighbour
 projection, and the $\theta$–$z$ integral collapses to a line-of-sight
-projection of $b\,\xi_{\rm NL}$. The optical selection bias that
-$\Sigma^{\rm prj}$ carries explicitly is then reintroduced, in the max
-model, as a multiplicative correction $\mathcal B_{\rm prj}(R)$
-({doc}`../systematics/costanzi_bprj`).
+projection of $b\,\xi_{\rm NL}$. The tagged Bsel correction is applied
+inside the selected max-model profile when that profile is configured with
+`bsel = T`.
 
 ```{admonition} Not active in the reference pipeline
 :class: important
@@ -131,10 +130,9 @@ S_{ij}(\ln M, z)\;\langle\Sigma_{\rm crit}^{-1}\rangle(z)\;
 \qquad
 \gamma_t^{\max}(R \mid i) = \frac{N_i[\Delta\Sigma_{\max}](R)}{N_i[1]}.$$
 
-The selection-affected bias never enters this composition; the
-Costanzi-2026 max-model correction multiplies the result by
-$\mathcal B_{\rm prj}(R)$ instead ({doc}`../systematics/costanzi_bprj`),
-and `likelihood_cp.py` applies it when `is_b_proj_costanzi26 = T`.
+The selection-affected bias never enters this composition directly; use the
+tagged Bsel selected-profile variants when a selection-bias correction is
+needed.
 Compared with the reference $1h^{\rm mis} + {\rm prj}$ composition, the
 max model has no $b_{\rm sel}$ boost at large $R$ and a different 1h–2h
 transition; the two are compared in {doc}`../math/index`.
@@ -212,7 +210,6 @@ include_miscentering = T
 
 [likelihoods]
 shear_max_section = shear1h2h_max
-is_b_proj_costanzi26 = T          ; optional B_prj(R) correction
 ```
 
 `Shear1h2hMax` requires `miscentering/f_mis` and `miscentering/tau_mis`

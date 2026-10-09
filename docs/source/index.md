@@ -55,7 +55,7 @@ cosmology/sigma_crit_inv
 systematics/boost_factor
 systematics/sel_function
 systematics/bsel
-systematics/costanzi_bprj
+Optical selection-bias corrections <systematics/bsel_profile>
 modules/survey_area
 ```
 
