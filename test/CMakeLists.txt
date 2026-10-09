@@ -306,6 +306,19 @@ target_include_directories(
   )
 add_test(costanzi_bprj_test costanzi_bprj_test)
 
+# Tagged Bsel kernels and the BselModels dispatcher used by the selected
+# Shear1h2hMax profiles.
+add_executable(bsel_profile_models_test bsel_profile_models.test.cc)
+target_link_libraries(
+  bsel_profile_models_test PRIVATE testmain utils cosmosis ${GSL_LIBRARIES}
+  )
+target_include_directories(
+  bsel_profile_models_test PRIVATE ${CMAKE_SOURCE_DIR}/src
+                                  ${CMAKE_SOURCE_DIR}/externals
+                                  ${GSL_INCLUDE_DIR}
+  )
+add_test(bsel_profile_models_test bsel_profile_models_test)
+
 # End-to-end driver test for the projection-shear 0d wrapper
 # (shear_projection/cpp/0d/shear_prj_gl_t.hh) and the sample-level half of
 # ShearPrjCore that shear_prj_gl_test cannot reach: set_sample, the
@@ -473,6 +486,11 @@ add_test(
 add_test(
   NAME costanzi_bprj_python_test
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/costanzi_bprj.test.py
+  )
+# Tagged BselCostanzi26/BselSunayama23 kernels and BselModels dispatcher.
+add_test(
+  NAME bsel_profile_models_python_test
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bsel_profile_models.test.py
   )
 # likelihood_cp.py max-model mode (shear_max_section) and the Costanzi-2026
 # B_prj(R) option (is_b_proj_costanzi26) on a synthetic DataBlock + DV file.
