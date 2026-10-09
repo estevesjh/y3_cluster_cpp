@@ -32,7 +32,15 @@ def _r_lambda(lob):
 
 @dataclass(frozen=True)
 class BselCostanzi26:
-    """Evaluate the Costanzi et al. (2026) correction ``B_sel(R)``."""
+    r"""Evaluate the Costanzi et al. (2026) correction ``B_sel(R)``.
+
+    .. math::
+
+       \mathcal{B}_{\rm sel}(R) = 1 + A x^\alpha
+           (1 + x^\gamma)^{(\beta-\alpha)/\gamma},
+           \qquad x = R/R_0,
+           \qquad R_0 = R_\lambda(\lambda_{\rm ob})(1+z).
+    """
 
     A: float
     alpha: float

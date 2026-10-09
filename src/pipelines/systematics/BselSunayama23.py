@@ -29,7 +29,16 @@ SECTION = "bsel_profile_sunayama23"
 
 @dataclass(frozen=True)
 class BselSunayama23:
-    """Evaluate the Sunayama et al. (2023) correction ``B_sel(R)``."""
+    r"""Evaluate the Sunayama et al. (2023) correction ``B_sel(R)``.
+
+    .. math::
+
+       \Pi(R) = \begin{cases}
+           \Pi_0 R/R_0, & R \le R_0,\\
+           \Pi_0 + c\ln(R/R_0), & R > R_0,
+       \end{cases}
+       \qquad \mathcal{B}_{\rm sel}(R) = 1 + \Pi(R).
+    """
 
     pi0: np.ndarray
     r0: np.ndarray
