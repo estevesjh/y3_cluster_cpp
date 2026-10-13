@@ -174,8 +174,12 @@ public:
   {
     namespace w = y3_pipelines;
 
+    bsel_op_.reset();
     selected_profile_.reset();
     if (bsel_enabled_) {
+      bsel_op_.emplace(
+        y3_cluster::BselDeltaSigmaOperator::from_datablock(
+          s, bsel_model_));
       selected_profile_.emplace(
         y3_cluster::make_shear1h2h_max_selected_profile(
           s, bsel_model_));
@@ -210,6 +214,12 @@ public:
       profile_.emplace(s, N_gl_, N_root_, N_offset_, N_phi_,
                        N_aperture_, q_max_);
 
+    if (s.has_val("haloModel", "Sigma_bar_hh"))
+      sigma_bar_hh_.emplace(make_sanitized_table(s, "Sigma_bar_hh"));
+    if (s.has_val("haloModel", "Sigma_bar_nfw"))
+      sigma_bar_nfw_.emplace(y3_cluster::make_Interp2D(
+        s, "haloModel", "r_sigma", "lnM", "Sigma_bar_nfw"));
+
     // z-only factors (Sigma_crit_inv folded in, as the shear weight
     // requires) and the z-RESOLVED weight W2d(bin; lnM, z).
     std::vector<double> zfac(z_x_.size());
@@ -243,25 +253,34 @@ public:
         s, "haloModel", "lnM", "z", "c0_trans"));
       delta_gap_1_.emplace(y3_cluster::make_Interp2D(
         s, "haloModel", "lnM", "z", "delta_gap_1"));
+      if (s.has_val("haloModel", "delta_gap_0")) {
+        delta_gap_0_.emplace(y3_cluster::make_Interp2D(
+          s, "haloModel", "lnM", "z", "delta_gap_0"));
+      }
 
       r_trans_kq_.assign(N_lnm_ * N_z_, 0.0);
       c0_trans_kq_.assign(N_lnm_ * N_z_, 0.0);
       delta_gap_1_kq_.assign(N_lnm_ * N_z_, 0.0);
+      delta_gap_0_kq_.assign(N_lnm_ * N_z_, 0.0);
       for (std::size_t k = 0; k != N_lnm_; ++k) {
         for (std::size_t q = 0; q != N_z_; ++q) {
           std::size_t const idx = k * N_z_ + q;
           r_trans_kq_[idx] = r_trans_->clamp(lnm_x_[k], z_x_[q]);
           c0_trans_kq_[idx] = c0_trans_->clamp(lnm_x_[k], z_x_[q]);
           delta_gap_1_kq_[idx] = delta_gap_1_->clamp(lnm_x_[k], z_x_[q]);
+          if (delta_gap_0_)
+            delta_gap_0_kq_[idx] = delta_gap_0_->clamp(lnm_x_[k], z_x_[q]);
         }
       }
     } else {
       r_trans_.reset();
       c0_trans_.reset();
       delta_gap_1_.reset();
+      delta_gap_0_.reset();
       r_trans_kq_.clear();
       c0_trans_kq_.clear();
       delta_gap_1_kq_.clear();
+      delta_gap_0_kq_.clear();
     }
 
     r_mis_.assign(n_bins_, 0.0);
@@ -330,8 +349,19 @@ public:
             total = centered + f_mis_ * (
               d_mis + residual_mis - nfw_cen - residual_cen);
           }
-          acc += wrow[q] * selected_profile(
-            total, R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+          double d_val = total;
+          if (bsel_op_) {
+            d_val = bsel_op_->apply(
+              total,
+              [this, k, q, qf](double r) {
+                return profile_->mean_surface_density(r * qf, lnm_x_[k], z_x_[q]) * qf * qf;
+              },
+              R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+          } else if (selected_profile_) {
+            d_val = selected_profile(
+              total, R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+          }
+          acc += wrow[q] * d_val;
         }
       }
       return {acc};
@@ -343,8 +373,8 @@ public:
         double const one_k = one[k];
         for (std::size_t q = 0; q != N_z_; ++q) {
           double d_tot;
+          std::size_t const idx = k * N_z_ + q;
           if (r_trans_) {
-            std::size_t const idx = k * N_z_ + q;
             double const rt = r_trans_kq_[idx];
             double const d_2h = brow[q] * two[q];
             if (R >= rt) {
@@ -358,8 +388,19 @@ public:
           } else {
             d_tot = std::max(one_k, brow[q] * two[q]);
           }
-          acc += wrow[q] * selected_profile(
-            d_tot, R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+          double d_val = d_tot;
+          if (bsel_op_) {
+            d_val = bsel_op_->apply(
+              d_tot,
+              [this, k, q, idx, brow](double r) {
+                return mean_surface_density_node(r, k, q, idx, brow[q]);
+              },
+              R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+          } else if (selected_profile_) {
+            d_val = selected_profile(
+              d_tot, R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+          }
+          acc += wrow[q] * d_val;
         }
       }
       return {acc};
@@ -379,8 +420,8 @@ public:
         double const one_kq =
           (qf * qf) * ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
         double d_tot;
+        std::size_t const idx = k * N_z_ + q;
         if (r_trans_) {
-          std::size_t const idx = k * N_z_ + q;
           double const rt = r_trans_kq_[idx];
           double const d_2h = brow[q] * two[q];
           if (R >= rt) {
@@ -394,8 +435,19 @@ public:
         } else {
           d_tot = std::max(one_kq, brow[q] * two[q]);
         }
-        acc += wrow[q] * selected_profile(
-          d_tot, R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+        double d_val = d_tot;
+        if (bsel_op_) {
+          d_val = bsel_op_->apply(
+            d_tot,
+            [this, k, q, idx, brow, qf](double r) {
+              return mean_surface_density_node(r * qf, k, q, idx, brow[q]) * qf * qf;
+            },
+            R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+        } else if (selected_profile_) {
+          d_val = selected_profile(
+            d_tot, R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
+        }
+        acc += wrow[q] * d_val;
       }
     }
     return {acc};
@@ -417,25 +469,53 @@ public:
   }
 
 private:
-  // haloModel/dSigma_hh through Interp2D, with the producer's NaNs
-  // replaced by 0 first (docs/known_issues/dsigma_hh_debug_flag.md — since fixed;
-  // guard kept). The datablock
-  // ndarray is (n_z, n_r) row-major, which is exactly the column-major
-  // (x = r_sigma fastest) layout Interp2D's vector constructor wants.
   static y3_cluster::Interp2D
-  make_sanitized_hh(cosmosis::DataBlock& s)
+  make_sanitized_table(cosmosis::DataBlock& s, char const* key)
   {
     using doubles = std::vector<double>;
     auto const r = s.view<doubles>("haloModel", "r_sigma");
     auto const z = s.view<doubles>("haloModel", "z");
     auto const& nd =
-      s.view<cosmosis::ndarray<double>>("haloModel", "dSigma_hh");
+      s.view<cosmosis::ndarray<double>>("haloModel", key);
     std::vector<double> vals(nd.begin(), nd.end());
     if (vals.size() != r.size() * z.size())
-      throw std::runtime_error("Shear1h2hMax: dSigma_hh extents mismatch");
+      throw std::runtime_error(std::string("Shear1h2hMax: ") + key + " extents mismatch");
     for (auto& v : vals)
       if (!std::isfinite(v)) v = 0.0;
     return y3_cluster::Interp2D(r, z, vals);
+  }
+
+  static y3_cluster::Interp2D
+  make_sanitized_hh(cosmosis::DataBlock& s)
+  {
+    return make_sanitized_table(s, "dSigma_hh");
+  }
+
+  double mean_surface_density_node(double r, std::size_t k, std::size_t q,
+                                   std::size_t idx, double bias) const
+  {
+    if (profile_)
+      return profile_->mean_surface_density(r, lnm_x_[k], z_x_[q]);
+
+    if (r_trans_ && c0_trans_ && delta_gap_1_) {
+      double const rt = r_trans_kq_[idx];
+      if (r >= rt) {
+        double const s_2h = sigma_bar_hh_ ? bias * sigma_bar_hh_->clamp(r, z_x_[q]) : 0.0;
+        double const c0 = c0_trans_kq_[idx];
+        return s_2h + (c0 / (r * r)) * 1.0e-12;
+      } else {
+        double const s_1h = sigma_bar_nfw_ ? sigma_bar_nfw_->clamp(r, lnm_x_[k])
+                                           : (dsigma_nfw_ ? dsigma_nfw_->clamp(r, lnm_x_[k]) : 0.0);
+        double const gap0 = !delta_gap_0_kq_.empty() ? delta_gap_0_kq_[idx] : 0.0;
+        double const gap1 = delta_gap_1_kq_[idx];
+        double const r_ratio = r / rt;
+        return s_1h + gap0 + 2.0 * gap1 - gap1 * r_ratio * r_ratio;
+      }
+    }
+    if (sigma_bar_nfw_ && sigma_bar_hh_) {
+      return std::max(sigma_bar_nfw_->clamp(r, lnm_x_[k]), bias * sigma_bar_hh_->clamp(r, z_x_[q]));
+    }
+    return dsigma_nfw_ ? dsigma_nfw_->clamp(r, lnm_x_[k]) : 0.0;
   }
 
   double selected_profile(double profile, double R, int bin_index,
@@ -460,6 +540,8 @@ private:
 
   std::optional<y3_cluster::Interp2D> dsigma_nfw_, bias_, dsigma_hh_;
   std::optional<y3_cluster::Interp2D> r_trans_, c0_trans_, delta_gap_1_;
+  std::optional<y3_cluster::Interp2D> sigma_bar_hh_, sigma_bar_nfw_, delta_gap_0_;
+  std::optional<y3_cluster::BselDeltaSigmaOperator> bsel_op_;
   double f_mis_{0.0};
   std::size_t n_bins_{0};
   bool phys_density_{false};
@@ -469,7 +551,7 @@ private:
   bool use_nfw_table_residual_{true};
   std::optional<Shear1h2hMaxProfile> profile_;
   std::vector<double> w2d_, bias_kq_, r_mis_;
-  std::vector<double> r_trans_kq_, c0_trans_kq_, delta_gap_1_kq_;
+  std::vector<double> r_trans_kq_, c0_trans_kq_, delta_gap_1_kq_, delta_gap_0_kq_;
 };
 
 #endif

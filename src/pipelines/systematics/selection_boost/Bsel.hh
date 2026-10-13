@@ -16,6 +16,7 @@
 
 #include "cosmosis/datablock/datablock.hh"
 #include "pipelines/shared/lensing_helpers.hh"
+#include "pipelines/shared/sel_gl_weights.hh"
 
 #include <cmath>
 #include <cstddef>
@@ -179,11 +180,13 @@ public:
 
   static BselModels from_datablock(cosmosis::DataBlock& source,
                                    std::string const& tag,
-                                   std::string const& section)
+                                   std::string const& section = "")
   {
     if (parse_tag(tag) == Tag::Costanzi26)
-      return BselModels(BselCostanzi26(source, section));
-    return BselModels(BselSunayama23(source, section));
+      return BselModels(section.empty() ? BselCostanzi26(source)
+                                        : BselCostanzi26(source, section));
+    return BselModels(section.empty() ? BselSunayama23(source)
+                                      : BselSunayama23(source, section));
   }
 
   Tag tag() const { return tag_; }
@@ -206,6 +209,70 @@ private:
   Tag tag_;
   std::optional<BselCostanzi26> costanzi_;
   std::optional<BselSunayama23> sunayama_;
+};
+
+// Non-local optical selection-bias operator on excess surface density:
+//   DeltaSigma_sel(R) = B_sel(R) * DeltaSigma(R) - M_sel(R) / (pi * R^2)
+// where the mass-weighted gradient integral M_sel(R) [Msun] is:
+//   M_sel(R) = pi * int_0^R R'^2 * barSigma(<R') * (dB_sel/dR')(R') dR'
+// Under the substitution R' = u * R (u in [0, 1]):
+//   M_sel(R) / (pi * R^2) = R * int_0^1 u^2 * barSigma(<u * R) * (dB_sel/dR')(u * R) du
+class BselDeltaSigmaOperator {
+public:
+  static constexpr std::size_t DEFAULT_N_GL = 20;
+
+  explicit BselDeltaSigmaOperator(BselModels model, std::size_t n_gl = DEFAULT_N_GL)
+    : model_(std::move(model)), n_gl_(n_gl)
+  {
+    if (n_gl_ < 1)
+      throw std::invalid_argument("BselDeltaSigmaOperator requires n_gl >= 1");
+    y3_pipelines::gl_nodes(0.0, 1.0, n_gl_, u_, w_);
+  }
+
+  static BselDeltaSigmaOperator from_datablock(
+    cosmosis::DataBlock& source,
+    std::string const& tag,
+    std::string const& section = "",
+    std::size_t n_gl = DEFAULT_N_GL)
+  {
+    return BselDeltaSigmaOperator(
+      BselModels::from_datablock(source, tag, section), n_gl);
+  }
+
+  BselModels const& model() const { return model_; }
+  std::size_t n_gl() const { return n_gl_; }
+  std::vector<double> const& u_nodes() const { return u_; }
+  std::vector<double> const& weights() const { return w_; }
+
+  template <typename MeanSigmaFn>
+  double apply(double delta_sigma, MeanSigmaFn&& mean_sigma_fn,
+               double R, int bin_index, double lob, double z) const
+  {
+    if (!(R > 0.0))
+      throw std::invalid_argument("BselDeltaSigmaOperator requires R > 0");
+
+    double const b_val = model_(R, bin_index, lob, z);
+    double m_sel_over_pi_r2 = 0.0;
+    for (std::size_t i = 0; i != n_gl_; ++i) {
+      double const r_prime = u_[i] * R;
+      double const d_bsel = model_.derivative(r_prime, bin_index, lob, z);
+      double const mean_sig = mean_sigma_fn(r_prime);
+      m_sel_over_pi_r2 += w_[i] * (u_[i] * u_[i]) * mean_sig * d_bsel;
+    }
+    m_sel_over_pi_r2 *= R;
+    return b_val * delta_sigma - m_sel_over_pi_r2;
+  }
+
+  double operator()(double delta_sigma, double R, int bin_index,
+                    double lob, double z) const
+  {
+    return delta_sigma * model_(R, bin_index, lob, z);
+  }
+
+private:
+  BselModels model_;
+  std::size_t n_gl_{DEFAULT_N_GL};
+  std::vector<double> u_, w_;
 };
 
 // These consumers are deliberately distinct from the profile kernels above:

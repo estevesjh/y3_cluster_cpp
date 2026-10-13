@@ -1,33 +1,26 @@
 // Lensing observables for the Shear1h2hMax profile.
 //
-// The profile constructs
-//   xi_hm(r) = max[xi_1h(r), b(M,z) xi_nl(r,z)]
-// and projects it into the following *comoving* surface-density quantities,
-// in the same mass/area convention as haloModel/{Sigma_hh,dSigma_hh}:
-//
-//   Sigma(R)       = projected surface density,
-//   barSigma(<R)   = 2/R^2 integral_0^R Sigma(R') R' dR',
-//   DeltaSigma(R)  = barSigma(<R) - Sigma(R),
-//   gamma_T(R)     = DeltaSigma(R) Sigma_crit^{-1}.
-//
-// `surface_density` returns Sigma, `mean_surface_density` returns barSigma,
-// `excess_surface_density` returns DeltaSigma, and `tangential_shear` returns
-// gamma_T only when the caller supplies Sigma_crit^{-1}.  The profile never
-// hides lens/source geometry or silently converts DeltaSigma into shear.
-//
 // Assembled via the 3-pillar smooth bridging operators:
-//   For R < r_trans:  DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
-//   For R >= r_trans: b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+//   For R < r_trans:
+//     DeltaSigma(R) = DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
+//     Sigma(R)      = Sigma_1h(R) + Delta_gap^0 + 2 * Delta_gap^1 * (1 - (R / r_trans)^2)
+//   For R >= r_trans:
+//     DeltaSigma(R) = b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+//     Sigma(R)      = b * (Sigma_bar_hh(R) - DeltaSigma_hh(R))
+// Mean surface density:
+//   barSigma(<R) = Sigma(R) + DeltaSigma(R)
+//
 // where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
 // Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
-// For R < r_trans, nonsingular fixed-order GL integrals after y = R sinh(u)
-// also provide the underlying Sigma and barSigma corrections.
+// If r_trans is not in the datablock, the profile falls back to the pointwise
+// max(1h, 2h) model, exactly matching the Python MaxMixtureProfile implementation.
 #ifndef Y3_CLUSTER_CPP_SHEAR1H2H_MAX_PROFILE_HH
 #define Y3_CLUSTER_CPP_SHEAR1H2H_MAX_PROFILE_HH
 
 #include "cosmosis/datablock/datablock.hh"
 #include "cosmosis/datablock/ndarray.hh"
 #include "pipelines/shared/sel_gl_weights.hh"
+#include "pipelines/systematics/selection_boost/Bsel.hh"
 #include "utils/interp_1d.hh"
 #include "utils/interp_2d.hh"
 #include "utils/make_interp_1d.hh"
@@ -36,7 +29,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <map>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -56,15 +48,10 @@ class Shear1h2hMaxProfile {
   static constexpr double DEFAULT_Q_MAX = 12.0;
 
   Interp2D bias_;
-  Interp2D xi_nl_;
-  Interp2D m3d_nl_;
   Interp2D sigma_bar_hh_;
   Interp2D dsigma_hh_;
-  std::vector<double> r_xi_;
   std::vector<double> r_sigma_;
   std::optional<Interp1D> concentration_;
-  std::size_t n_root_;
-  std::size_t n_gl_;
   std::size_t n_offset_;
   std::size_t n_phi_;
   std::size_t n_aperture_;
@@ -74,13 +61,6 @@ class Shear1h2hMaxProfile {
   std::optional<Interp2D> c0_trans_;
   std::optional<Interp2D> delta_gap_0_;
   std::optional<Interp2D> delta_gap_1_;
-  mutable std::map<std::pair<double, double>, double> transition_cache_;
-
-  struct ProjectionCorrections {
-    double sigma;
-    double mean_sigma;
-    double delta_sigma;
-  };
 
   static Interp2D
   make_sanitized(cosmosis::DataBlock& sample,
@@ -141,128 +121,6 @@ class Shear1h2hMaxProfile {
     double const a = std::atan(root) / std::sqrt(x * x - 1.0);
     return {(1.0 - 2.0 * a) / (x * x - 1.0),
             std::log(x / 2.0) + 2.0 * a};
-  }
-
-  double
-  xi_1h(double r, double lnM) const
-  {
-    double rs, rho_s, r200;
-    nfw_parameters(lnM, rs, rho_s, r200);
-    double const x = std::max(r / rs, 1.0e-15);
-    return rho_s / (rho_ref_ * x * (1.0 + x) * (1.0 + x)) - 1.0;
-  }
-
-  double
-  m3d_1h(double r, double lnM) const
-  {
-    double rs, rho_s, r200;
-    nfw_parameters(lnM, rs, rho_s, r200);
-    double const x = r / rs;
-    return 4.0 * PI * rho_s * rs * rs * rs *
-             (std::log1p(x) - x / (1.0 + x)) -
-           (4.0 / 3.0) * PI * rho_ref_ * r * r * r;
-  }
-
-  double
-  xi_2h(double r, double lnM, double z) const
-  {
-    return bias_.clamp(lnM, z) * xi_nl_.clamp(r, z);
-  }
-
-  double
-  m3d_2h(double r, double lnM, double z) const
-  {
-    return bias_.clamp(lnM, z) * m3d_nl_.clamp(r, z);
-  }
-
-  double
-  transition_radius(double lnM, double z) const
-  {
-    auto const key = std::make_pair(lnM, z);
-    auto const found = transition_cache_.find(key);
-    if (found != transition_cache_.end()) return found->second;
-
-    double rs, rho_s, r200;
-    nfw_parameters(lnM, rs, rho_s, r200);
-    double const lo = std::max(r_xi_.front(), 0.25 * r200);
-    double const hi = r_xi_.back();
-    double prev_r = lo;
-    double prev_f = xi_1h(prev_r, lnM) - xi_2h(prev_r, lnM, z);
-    double a = lo, b = hi;
-    bool bracketed = false;
-    for (std::size_t i = 1; i != n_root_; ++i) {
-      double const t = static_cast<double>(i) /
-                       static_cast<double>(n_root_ - 1);
-      double const r = lo * std::pow(hi / lo, t);
-      double const f = xi_1h(r, lnM) - xi_2h(r, lnM, z);
-      if (std::isfinite(prev_f) && std::isfinite(f) &&
-          prev_f >= 0.0 && f <= 0.0) {
-        a = prev_r;
-        b = r;
-        bracketed = true;
-        break;
-      }
-      prev_r = r;
-      prev_f = f;
-    }
-    if (!bracketed) {
-      double const fallback = std::clamp(2.0 * r200,
-                                         r_xi_.front(), r_xi_.back());
-      transition_cache_.emplace(key, fallback);
-      return fallback;
-    }
-
-    double fa = xi_1h(a, lnM) - xi_2h(a, lnM, z);
-    for (int i = 0; i != 60; ++i) {
-      double const mid = std::sqrt(a * b);
-      double const fm = xi_1h(mid, lnM) - xi_2h(mid, lnM, z);
-      if (fa * fm > 0.0) {
-        a = mid;
-        fa = fm;
-      } else {
-        b = mid;
-      }
-    }
-    double const result = std::sqrt(a * b);
-    transition_cache_.emplace(key, result);
-    return result;
-  }
-
-  ProjectionCorrections
-  projection_corrections(double radius, double lnM, double z,
-                         double r_trans) const
-  {
-    double const delta_m_trans =
-      m3d_1h(r_trans, lnM) - m3d_2h(r_trans, lnM, z);
-    double const outer_tail = delta_m_trans / (PI * radius * radius) *
-                              MSUN_PER_MPC2_TO_MSUN_PER_PC2;
-    if (radius >= r_trans)
-      return {0.0, outer_tail, outer_tail};
-
-    std::vector<double> nodes, weights;
-    double const u_max = std::acosh(r_trans / radius);
-    y3_pipelines::gl_nodes(0.0, u_max, n_gl_, nodes, weights);
-    double sigma_diff = 0.0;
-    double mantle = 0.0;
-    for (std::size_t i = 0; i != nodes.size(); ++i) {
-      double const u = nodes[i];
-      double const y = radius * std::sinh(u);
-      double const r = radius * std::cosh(u);
-      double const delta_xi = xi_1h(r, lnM) - xi_2h(r, lnM, z);
-      double const jacobian = r;
-      sigma_diff += weights[i] * jacobian * delta_xi;
-      mantle += weights[i] * jacobian * delta_xi * y / (r + y);
-    }
-    sigma_diff *= 2.0 * rho_ref_;
-    mantle *= 4.0 * rho_ref_;
-    double const delta_m = m3d_1h(radius, lnM) -
-                           m3d_2h(radius, lnM, z);
-    double const unit_conversion = MSUN_PER_MPC2_TO_MSUN_PER_PC2;
-    return {
-      sigma_diff * unit_conversion,
-      (delta_m / (PI * radius * radius) + mantle) * unit_conversion,
-      (delta_m / (PI * radius * radius) + mantle - sigma_diff) *
-        unit_conversion};
   }
 
   double
@@ -348,30 +206,19 @@ public:
     double q_max = DEFAULT_Q_MAX)
     : bias_(y3_cluster::make_Interp2D(
         sample, "haloModel", "lnM", "z", "bias"))
-    , xi_nl_(y3_cluster::make_Interp2D(
-        sample, "xi_nl", "r", "z", "xi_nl"))
-    , m3d_nl_(y3_cluster::make_Interp2D(
-        sample, "xi_nl", "r", "z", "m3d_nl"))
     , sigma_bar_hh_(make_sanitized(
         sample, "haloModel", "r_sigma", "z", "Sigma_bar_hh"))
     , dsigma_hh_(make_sanitized(
         sample, "haloModel", "r_sigma", "z", "dSigma_hh"))
-    , r_xi_(sample.view<std::vector<double>>("xi_nl", "r"))
     , r_sigma_(sample.view<std::vector<double>>("haloModel", "r_sigma"))
-    , n_root_(n_root)
-    , n_gl_(n_gl)
     , n_offset_(n_offset)
     , n_phi_(n_phi)
     , n_aperture_(n_aperture)
     , q_max_(q_max)
     , rho_ref_(sample.view<double>("haloModel", "rho_m_ref"))
   {
-    if (n_gl_ < 1)
-      throw std::invalid_argument(
-        "Shear1h2hMaxProfile: n_gl must be positive");
-    if (n_root_ < 2)
-      throw std::invalid_argument(
-        "Shear1h2hMaxProfile: n_root must be at least 2");
+    (void)n_gl;
+    (void)n_root;
     if (n_offset_ < 1 || n_phi_ < 1 || n_aperture_ < 1 || q_max_ <= 0.0)
       throw std::invalid_argument(
         "Shear1h2hMaxProfile: invalid miscentering quadrature");
@@ -460,23 +307,8 @@ public:
         return s1h + gap0 + 2.0 * gap1 * (1.0 - r_ratio * r_ratio);
       }
     }
-    double const r_trans = transition_radius(lnM, z);
-    return sigma_2h + projection_corrections(
-      radius, lnM, z, r_trans).sigma;
-  }
-
-  double
-  mean_surface_density(double R, double lnM, double z) const
-  {
-    double const radius = std::max(R, r_sigma_.front());
-    if (r_trans_ && delta_gap_0_ && delta_gap_1_ && c0_trans_) {
-      return surface_density(radius, lnM, z) + excess_surface_density(radius, lnM, z);
-    }
-    double const r_trans = transition_radius(lnM, z);
-    double const bias = bias_.clamp(lnM, z);
-    double const mean_sigma_2h = bias * sigma_bar_hh_.clamp(radius, z);
-    return mean_sigma_2h + projection_corrections(
-      radius, lnM, z, r_trans).mean_sigma;
+    double const s1h = nfw_surface_density(radius, lnM);
+    return std::max(s1h, sigma_2h);
   }
 
   double
@@ -497,9 +329,15 @@ public:
         return dsigma_1h + gap1 * r_ratio * r_ratio;
       }
     }
-    double const r_trans = transition_radius(lnM, z);
-    return dsigma_2h + projection_corrections(
-      radius, lnM, z, r_trans).delta_sigma;
+    double const dsigma_1h = nfw_excess_surface_density(radius, lnM);
+    return std::max(dsigma_1h, dsigma_2h);
+  }
+
+  double
+  mean_surface_density(double R, double lnM, double z) const
+  {
+    double const radius = std::max(R, r_sigma_.front());
+    return surface_density(radius, lnM, z) + excess_surface_density(radius, lnM, z);
   }
 
   double
@@ -507,6 +345,30 @@ public:
                    double sigma_crit_inv) const
   {
     return excess_surface_density(R, lnM, z) * sigma_crit_inv;
+  }
+
+  double
+  selected_excess_surface_density(
+    double R, double lnM, double z,
+    y3_cluster::BselDeltaSigmaOperator const& bsel_op,
+    int bin_index, double lob) const
+  {
+    return bsel_op.apply(
+      excess_surface_density(R, lnM, z),
+      [this, lnM, z](double r) { return mean_surface_density(r, lnM, z); },
+      R, bin_index, lob, z);
+  }
+
+  double
+  miscentered_selected_excess_surface_density(
+    double R, double r_mis, double lnM, double z,
+    y3_cluster::BselDeltaSigmaOperator const& bsel_op,
+    int bin_index, double lob) const
+  {
+    return bsel_op.apply(
+      miscentered_excess_surface_density(R, r_mis, lnM, z),
+      [this, lnM, z](double r) { return mean_surface_density(r, lnM, z); },
+      R, bin_index, lob, z);
   }
 };
 

@@ -13,6 +13,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "pipelines"))
 
 from systematics.selection_boost.Bsel import (  # noqa: E402
+    BselDeltaSigmaOperator,
     BselModels,
     Shear1h2hMaxSelCostanzi26,
     Shear1h2hMaxSelSunayama23,
@@ -283,6 +284,68 @@ class TestBselModels(unittest.TestCase):
         with self.assertRaises(ValueError):
             costanzi.derivative(1.0, bin_index=0)
         np.testing.assert_allclose(sunayama.derivative(0.5, bin_index=0), 1.2)
+
+    def test_bsel_delta_sigma_operator_analytic_integral(self):
+        # When mean_sigma is constant sigma0, and R < r0:
+        # B(R') = 1 + pi0 * R' / r0 -> dB/dR' = pi0 / r0
+        # M_sel(R) / (pi * R^2) = (1/3) * sigma0 * (pi0 / r0) * R
+        # DeltaSigma_sel(R) = B(R) * DeltaSigma(R) - (1/3) * sigma0 * (pi0 / r0) * R
+        sunayama = BselSunayama23([0.45], [3.5], -0.1, [0])
+        model = BselModels("Sunayama23", sunayama)
+        op = BselDeltaSigmaOperator(model, n_gl=20)
+
+        sigma0 = 50.0
+        delta_sigma = 100.0
+        R = 1.5  # R < r0 = 3.5
+
+        def mean_sigma_fn(r):
+            return sigma0 * np.ones_like(r, dtype=float)
+
+        expected_b = 1.0 + 0.45 * (R / 3.5)
+        expected_msel_over_pi_r2 = (1.0 / 3.0) * sigma0 * (0.45 / 3.5) * R
+        expected_dsigma_sel = expected_b * delta_sigma - expected_msel_over_pi_r2
+
+        result = op.apply(delta_sigma, mean_sigma_fn, R, bin_index=0)
+        np.testing.assert_allclose(result, expected_dsigma_sel, rtol=1e-14)
+
+    def test_bsel_delta_sigma_operator_flat_limit(self):
+        sunayama_flat = BselSunayama23([0.0], [3.5], 0.0, [0])
+        op = BselDeltaSigmaOperator(BselModels("Sunayama23", sunayama_flat))
+        delta_sigma = 123.456
+        res = op.apply(delta_sigma, lambda r: 50.0, 2.0, bin_index=0)
+        np.testing.assert_allclose(res, delta_sigma, rtol=1e-15)
+
+    def test_bsel_delta_sigma_operator_scipy_quad(self):
+        from scipy.integrate import quad
+        costanzi = BselCostanzi26(0.10, 0.92, -0.53, 4.1)
+        model = BselModels("Costanzi26", costanzi)
+        op = BselDeltaSigmaOperator(model, n_gl=40)
+
+        lob, z = 40.0, 0.3
+        R = 2.0
+        delta_sigma = 85.0
+
+        def mean_sigma_fn(r):
+            return 200.0 / (1.0 + np.asarray(r, dtype=float))
+
+        def integrand(u):
+            r_prime = u * R
+            return (u * u) * float(mean_sigma_fn(r_prime)) * costanzi.derivative(r_prime, lob, z)
+
+        val_quad, _ = quad(integrand, 0.0, 1.0, epsabs=1e-12, epsrel=1e-10)
+        expected_msel = val_quad * R
+        expected_dsigma_sel = costanzi(R, lob, z) * delta_sigma - expected_msel
+
+        result = op.apply(delta_sigma, mean_sigma_fn, R, bin_index=0, lob=lob, z=z)
+        np.testing.assert_allclose(result, expected_dsigma_sel, rtol=1e-6)
+
+    def test_bsel_delta_sigma_operator_requires_positive_radius(self):
+        costanzi = BselCostanzi26(0.10, 0.92, -0.53, 4.1)
+        op = BselDeltaSigmaOperator(BselModels("Costanzi26", costanzi))
+        with self.assertRaises(ValueError):
+            op.apply(10.0, lambda r: 50.0, 0.0, bin_index=0, lob=40.0, z=0.3)
+        with self.assertRaises(ValueError):
+            op.apply(10.0, lambda r: 50.0, -1.0, bin_index=0, lob=40.0, z=0.3)
 
 
 if __name__ == "__main__":

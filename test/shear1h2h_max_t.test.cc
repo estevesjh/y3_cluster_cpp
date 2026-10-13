@@ -452,7 +452,7 @@ TEST_CASE("Shear1h2hMax exercises both branches of max(1h, b * 2h)")
     }
 }
 
-TEST_CASE("Shear1h2hMax dispatches the selected Sunayama23 consumer")
+TEST_CASE("Shear1h2hMax dispatches the selected Sunayama23 consumer with non-local correction")
 {
   auto cfg_selected = make_cfg_block();
   cfg_selected.put_val(Shear1h2hMax::module_label(), "bsel", 1);
@@ -481,8 +481,33 @@ TEST_CASE("Shear1h2hMax dispatches the selected Sunayama23 consumer")
     for (double R : R_QUERY) {
       auto const pt = Shear1h2hMax::grid_point_t{
         static_cast<double>(bin), R};
+      double const sel_val = selected.evaluate(pt)[0];
+      double const base_val = baseline.evaluate(pt)[0];
+      // Selection operator DeltaSigma_sel(R) = B(R)*DeltaSigma(R) - M_sel(R)/(pi*R^2).
+      // With dB/dR > 0, the M_sel core term is positive, so sel_val < base_val * B(R).
+      CHECK(std::isfinite(sel_val));
+      CHECK(sel_val > 0.0);
+      CHECK(sel_val < base_val * bsel(R, bin));
+    }
+
+  // In the flat limit (dB/dR = 0), M_sel = 0 so DeltaSigma_sel = DeltaSigma.
+  auto sample_flat = make_sample_block(SampleOpts{F_MIS, TAU_MIS, 1.5});
+  sample_flat.put_val("bsel_profile_sunayama23", "pi0",
+                      std::vector<double>{0.0, 0.0});
+  sample_flat.put_val("bsel_profile_sunayama23", "r0",
+                      std::vector<double>{3.5, 3.5});
+  sample_flat.put_val("bsel_profile_sunayama23", "c", 0.0);
+  sample_flat.put_val("bsel_profile_sunayama23", "lambda_bin",
+                      std::vector<double>{0.0, 1.0});
+
+  selected.set_sample(sample_flat);
+  baseline.set_sample(sample_flat);
+  for (int bin : {0, 1})
+    for (double R : R_QUERY) {
+      auto const pt = Shear1h2hMax::grid_point_t{
+        static_cast<double>(bin), R};
       CHECK(selected.evaluate(pt)[0] ==
-            Approx(baseline.evaluate(pt)[0] * bsel(R, bin)).epsilon(1e-12));
+            Approx(baseline.evaluate(pt)[0]).epsilon(1e-12));
     }
 }
 

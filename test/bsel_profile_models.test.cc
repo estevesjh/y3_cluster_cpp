@@ -11,6 +11,7 @@
 #include <vector>
 
 using y3_cluster::BselCostanzi26;
+using y3_cluster::BselDeltaSigmaOperator;
 using y3_cluster::BselModels;
 using y3_cluster::BselSunayama23;
 using y3_cluster::Shear1h2hMaxSelCostanzi26;
@@ -199,4 +200,67 @@ TEST_CASE("Selected Shear1h2hMax consumers preserve local profile outputs")
         Approx(profile * costanzi(1.0, 40.0, 0.3)));
   CHECK(selected_sunayama(profile, 1.0, 4, 40.0, 0.3) ==
         Approx(profile * sunayama(1.0, 4)));
+}
+
+TEST_CASE("BselDeltaSigmaOperator integrates analytic linear branch to machine precision")
+{
+  BselSunayama23 const sunayama({0.45}, {3.5}, -0.1, {0.0});
+  BselModels const model(sunayama);
+  BselDeltaSigmaOperator const op(model, 20);
+
+  double const sigma0 = 50.0;
+  double const delta_sigma = 100.0;
+  double const R = 1.5; // R < r0 = 3.5
+
+  auto mean_sigma_fn = [sigma0](double) { return sigma0; };
+
+  double const expected_b = 1.0 + 0.45 * (R / 3.5);
+  double const expected_msel_over_pi_r2 = (1.0 / 3.0) * sigma0 * (0.45 / 3.5) * R;
+  double const expected_dsigma_sel = expected_b * delta_sigma - expected_msel_over_pi_r2;
+
+  double const result = op.apply(delta_sigma, mean_sigma_fn, R, 0, 0.0, 0.0);
+  CHECK(result == Approx(expected_dsigma_sel).epsilon(1e-14));
+}
+
+TEST_CASE("BselDeltaSigmaOperator flat limit reproduces DeltaSigma exactly")
+{
+  BselSunayama23 const sunayama_flat({0.0}, {3.5}, 0.0, {0.0});
+  BselModels const model_flat(sunayama_flat);
+  BselDeltaSigmaOperator const op(model_flat);
+  double const delta_sigma = 123.456;
+  double const res = op.apply(delta_sigma, [](double) { return 50.0; }, 2.0, 0, 0.0, 0.0);
+  CHECK(res == Approx(delta_sigma).epsilon(1e-15));
+}
+
+TEST_CASE("BselDeltaSigmaOperator validates positive radius and n_gl")
+{
+  BselCostanzi26 const costanzi(0.10, 0.92, -0.53, 4.1);
+  BselModels const model(costanzi);
+  BselDeltaSigmaOperator const op(model);
+
+  CHECK_THROWS_AS(op.apply(10.0, [](double) { return 50.0; }, 0.0, 0, 40.0, 0.3),
+                  std::invalid_argument);
+  CHECK_THROWS_AS(op.apply(10.0, [](double) { return 50.0; }, -1.0, 0, 40.0, 0.3),
+                  std::invalid_argument);
+  CHECK_THROWS_AS(BselDeltaSigmaOperator(model, 0), std::invalid_argument);
+}
+
+TEST_CASE("BselDeltaSigmaOperator loads correctly from DataBlock")
+{
+  cosmosis::DataBlock source;
+  source.put_val("boost_selection_costanzi26", "A", 0.10);
+  source.put_val("boost_selection_costanzi26", "alpha", 0.92);
+  source.put_val("boost_selection_costanzi26", "beta", -0.53);
+  source.put_val("boost_selection_costanzi26", "gamma", 4.1);
+
+  auto op_costanzi = BselDeltaSigmaOperator::from_datablock(source, "Costanzi26");
+  CHECK(op_costanzi.model().tag() == BselModels::Tag::Costanzi26);
+
+  source.put_val("bsel_profile_sunayama23", "pi0", std::vector<double>{0.45});
+  source.put_val("bsel_profile_sunayama23", "r0", std::vector<double>{3.5});
+  source.put_val("bsel_profile_sunayama23", "c", -0.1);
+  source.put_val("bsel_profile_sunayama23", "lambda_bin", std::vector<double>{0.0});
+
+  auto op_sunayama = BselDeltaSigmaOperator::from_datablock(source, "Sunayama23");
+  CHECK(op_sunayama.model().tag() == BselModels::Tag::Sunayama23);
 }

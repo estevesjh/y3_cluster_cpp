@@ -65,6 +65,7 @@ from shared import datablock_models as dm
 from shared import explicit_grid_core
 from shared import lensing_profiles as lp
 from systematics.selection_richness.python import sel_kernels
+from systematics.selection_boost.Bsel import BselDeltaSigmaOperator
 
 OUTPUT_SECTION = "shear1h2h_max_explicit_gl"
 
@@ -85,7 +86,7 @@ def z_resolved_weights(source, *, n_lnm, n_z, zt_lo, zt_hi, lnm_lo, lnm_hi):
 
 
 def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
-                      physical=False):
+                      physical=False, bsel_op=None, lob_centers=None):
     """O(R) = sum_kq lnm_w_k W2d[b,k,q] DSigma_max(b, R, lnM_k, z_q).
 
     physical: fold one_halo_physical_density's exact identity
@@ -121,6 +122,25 @@ def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
             DSigma_max = np.where(r_arr < rt, inner, outer)
         else:
             DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
+        if bsel_op is not None:
+            if lob_centers is None:
+                raise ValueError("BselDeltaSigmaOperator requires lob_centers")
+            lob = np.asarray(lob_centers, dtype=float)[b % len(lob_centers)]
+
+            def mean_sig_fn(r):
+                if physical:
+                    res = np.empty((np.asarray(r).shape[0], lnm_x.size, n_z))
+                    for iq, z in enumerate(z_x):
+                        qf = 1.0 + z
+                        res[:, :, iq] = profile.mean_surface_density(
+                            b, np.asarray(r)[:, 0, 0] * qf, lnm_x[None, :], z) * (qf * qf)
+                    return res
+                return profile.mean_surface_density(
+                    b, np.asarray(r), lnm_x[None, :, None], z_x[None, None, :])
+
+            DSigma_max = bsel_op.apply(
+                DSigma_max, mean_sig_fn, r_perp[:, None, None],
+                bin_index=b, lob=lob, z=z_x[None, None, :])
         vals[i * n_r:(i + 1) * n_r] = np.einsum(
             "rkq,kq->r", DSigma_max, w2d[b] * lnm_w[:, None])
     return vals
@@ -156,6 +176,12 @@ def setup(options):
             options.get_bool(option_section, "include_miscentering"))
     except Exception:
         cfg["include_miscentering"] = True
+    try:
+        cfg["bsel"] = bool(options.get_bool(option_section, "bsel"))
+    except Exception:
+        cfg["bsel"] = False
+    if cfg["bsel"]:
+        cfg["bsel_model"] = options.get_string(option_section, "bsel_model")
     return cfg
 
 
@@ -181,9 +207,14 @@ def execute(block, cfg):
         n_lnm=cfg["n_lnm"], n_z=cfg["n_z"], n_q=cfg["n_q"],
         l_lam=cfg["l_lam"])
 
+    bsel_op = (
+        BselDeltaSigmaOperator.from_source(
+            source, cfg["bsel_model"])
+        if cfg.get("bsel", False) else None)
     block[OUTPUT_SECTION, "vals"] = compute_shear_max(
         profile, lnm_x, lnm_w, z_x, w2d, cfg["bin_index"], cfg["r_perp"],
-        physical=physical)
+        physical=physical, bsel_op=bsel_op,
+        lob_centers=cfg["lob_centers"])
     dt_ms = 1000.0 * (time.perf_counter() - t0)
     print(f"[shear1h2h_max_explicit_gl] {cfg['bin_index'].size} bins x "
           f"{cfg['r_perp'].size} radii "
