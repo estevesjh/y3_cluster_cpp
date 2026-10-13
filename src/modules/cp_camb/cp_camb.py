@@ -59,16 +59,15 @@ if not logger.handlers:
 
 cosmo = names.cosmological_parameters
 
-# CosmoPower emulators were trained on this parameter order, and
-# parameter names are lowercased by CosmoSIS when reading the datablock.
-_COSMO_PARAM_MAP = {
-    "h0": "h0",
-    "omega_m": "omega_m",
-    "omega_b": "omega_b",
-    "n_s": "n_s",
-    "sigma8": "sigma8",         # s8 emulator: amplitude param is sigma8
-    "mnu": "mnu",
-}
+# Amplitude parameterizations the emulators are trained on: the v3c
+# design uses log1e10As, the *_s8_* emulators swap it for sigma8.  The
+# cosmological parameter names are read from the linear emulator itself
+# (everything except `z`), so the values file must sample the same one.
+_AMPLITUDE_PARAMS = ("log1e10As", "sigma8")
+
+
+def _cosmo_param_names(emu):
+    return [p for p in emu.parameters if p != "z"]
 
 
 def _ensure_repo_on_path(options):
@@ -156,6 +155,39 @@ def setup(options):
             "apply_growth=True to fix."
         )
 
+    # All emulators must take the same cosmological parameters (in
+    # particular the same amplitude, log1e10As or sigma8): the datablock
+    # carries only one of them.
+    param_names = _cosmo_param_names(linear)
+    amplitude = [p for p in param_names if p in _AMPLITUDE_PARAMS]
+    if len(amplitude) != 1:
+        raise ValueError(
+            f"cp_camb: linear emulator parameters {param_names} must contain "
+            f"exactly one amplitude parameter from {_AMPLITUDE_PARAMS}"
+        )
+    for label, emu in (("linear_nonu", nonu), ("nonlinear", nonlin)):
+        if emu is not None and _cosmo_param_names(emu) != param_names:
+            raise ValueError(
+                f"cp_camb: {label} emulator parameters "
+                f"{_cosmo_param_names(emu)} differ from linear {param_names}; "
+                "all emulators must share one parameterization"
+            )
+
+    # Emulators with `z` as an input extrapolate silently past their
+    # trained z range.
+    for label, emu in (("linear", linear), ("linear_nonu", nonu),
+                       ("nonlinear", nonlin)):
+        if emu is None or "z" not in emu.parameters:
+            continue
+        iz = list(emu.parameters).index("z")
+        z_lo, z_hi = emu.parameters_min[iz], emu.parameters_max[iz]
+        if zmin < z_lo or zmax > z_hi:
+            logger.warning(
+                "%s emulator was trained on z in [%.3g, %.3g] but the output "
+                "grid spans [%.3g, %.3g]; P(k, z) outside it is extrapolated",
+                label, z_lo, z_hi, zmin, zmax,
+            )
+
     # Sanity-check that all loaded emulators share the same k-modes; if
     # they don't, downstream consumers would see inconsistent grids.
     for label, emu in (("linear_nonu", nonu), ("nonlinear", nonlin)):
@@ -218,6 +250,7 @@ def setup(options):
         "write_distances": write_distances,
         "apply_growth": apply_growth,
         "cosmo_bounds": cosmo_bounds,
+        "param_names": param_names,
     }
 
 
@@ -256,17 +289,18 @@ def _validate_cosmo_box(cosmo_params, config) -> tuple[bool, str]:
     return True, ""
 
 
-def _read_cosmo_params(block):
+def _read_cosmo_params(block, param_names):
     params = {}
-    for emu_key, block_key in _COSMO_PARAM_MAP.items():
+    for name in param_names:
         # CosmoSIS lowercases by default; be tolerant of either case.
-        if block.has_value(cosmo, block_key):
-            params[emu_key] = float(block[cosmo, block_key])
-        elif block.has_value(cosmo, emu_key.lower()):
-            params[emu_key] = float(block[cosmo, emu_key.lower()])
+        if block.has_value(cosmo, name):
+            params[name] = float(block[cosmo, name])
+        elif block.has_value(cosmo, name.lower()):
+            params[name] = float(block[cosmo, name.lower()])
         else:
             raise KeyError(
-                f"cp_camb: {block_key!r} not found in cosmological_parameters"
+                f"cp_camb: {name!r} not found in cosmological_parameters "
+                "(the values file must sample the emulators' parameters)"
             )
     return params
 
@@ -368,7 +402,7 @@ def _write_distances(block, cosmo_params, z_array):
 
 
 def execute(block, config):
-    cosmo_params = _read_cosmo_params(block)
+    cosmo_params = _read_cosmo_params(block, config["param_names"])
 
     # Bound-box validation -- abort BEFORE GSL touches the cosmology.
     # cluster_toolkit (used by halo_model) calls GSL's qag adaptive
