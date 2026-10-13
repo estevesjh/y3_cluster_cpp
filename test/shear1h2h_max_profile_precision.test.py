@@ -13,7 +13,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "pipelines"))
 
 from cosmology.halo_model import ct_2hTerm  # noqa: E402
-from shared.lensing_profiles import Shear1h2hMaxProfile  # noqa: E402
+from cosmology.shear1h2h_max_profile import Shear1h2hMaxProfile  # noqa: E402
 
 
 class SyntheticSource:

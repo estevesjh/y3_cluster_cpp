@@ -189,7 +189,8 @@ def execute(block, cfg):
     t0 = time.perf_counter()
     source = dm.DataBlockSource(block)
     physical = dm.physical_density_flag(source)
-    profile_type = (lp.Shear1h2hMaxProfile
+    from cosmology.shear1h2h_max_profile import Shear1h2hMaxProfile
+    profile_type = (Shear1h2hMaxProfile
                     if cfg["max_xi"] else lp.MaxMixtureProfile)
     profile_kwargs = dict(
         source=source, lob_centers=cfg["lob_centers"],
