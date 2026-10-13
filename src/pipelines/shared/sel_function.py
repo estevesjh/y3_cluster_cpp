@@ -677,6 +677,7 @@ def setup(options):
             raise ValueError(
                 f"sel_function: axis '{key}' size {cfg[key].size} != {n}")
     cfg['n_bins'] = n
+    _warmup_numba_kernels()
     return cfg
 
 
@@ -863,6 +864,22 @@ def _compute_lam_nodes_and_P_HOD(lnM, z, mor, gl_t, gl_w, L=6.0):
         np.asarray(gl_t, dtype=np.float64), np.asarray(gl_w, dtype=np.float64),
         float(L), lam_k, W_k, P_Mz, degenerate)
     return lam_k, W_k, P_Mz, degenerate
+
+
+def _warmup_numba_kernels():
+    """JIT-compile the per-sample Numba kernels on tiny dummy arrays.
+
+    On-disk caching is off (see the import note), so without this the
+    first ``execute()`` pays ~1.2 s of compilation and per-sample timing
+    reports are misleading. Argument types/layouts here must match the
+    production calls exactly, or execute() would trigger a second compile.
+    """
+    one = np.ones(1, dtype=np.float64)
+    _compute_lam_nodes_and_P_HOD_nb(
+        one, one, 12.0, 13.0, 1.0, 0.0, 0.2, 0.5, one, one, 6.0,
+        np.empty((1, 1, 1)), np.empty((1, 1, 1)), np.empty((1, 1, 1)),
+        np.empty((1, 1), dtype=np.bool_))
+    _cdf_lob_stacked_nb(one, one, one, one, one, np.empty((1, 1)))
 
 
 def _unique_edges(lam_min, lam_max):
