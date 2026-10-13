@@ -99,7 +99,7 @@ private:
   std::optional<y3_cluster::MOR_HOD_t> mor_;
   std::optional<y3_cluster::PlobLtrEMG_t> plob_;
   std::optional<y3_cluster::Interp2D> dsigma_nfw_, bias_, dsigma_hh_;
-  std::optional<y3_cluster::Interp2D> r_trans_, c0_trans_, delta_gap_1_;
+  std::optional<y3_cluster::Interp2D> r_trans_, c0_trans_, delta_gap_1_, delta_gap_0_;
   std::optional<y3_cluster::Interp1D> sci_;
   // TODO(#14): drop the hardcoded c=4 — once claude/issue-4-dsigma-hh-2h-term
   // merges, call dsigma_mis_.set_concentration_table(
@@ -177,10 +177,15 @@ public:
         y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "c0_trans"));
       delta_gap_1_.emplace(
         y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "delta_gap_1"));
+      if (sample.has_val("haloModel", "delta_gap_0")) {
+        delta_gap_0_.emplace(
+          y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "delta_gap_0"));
+      }
     } else {
       r_trans_.reset();
       c0_trans_.reset();
       delta_gap_1_.reset();
+      delta_gap_0_.reset();
     }
     sci_.emplace(w::load_sigma_crit_inv(sample));
     // Required: no fallback to the fiducial defaults — a pipeline that
@@ -242,11 +247,14 @@ public:
     }
     double d_val = d_tot;
     if (bsel_op_) {
+      // Apply the selection boost operator:
+      // DeltaSigma_sel(R) = B_sel(R) * DeltaSigma(R) - M_sel(R) / (pi R^2).
+      // The lambda supplies comoving barSigma(<r) matching the comoving B_sel(R) grid.
       double const lob = lob_centers_[current_bin_ % lob_centers_.size()];
       d_val = bsel_op_->apply(
         d_tot,
-        [this, lnM, zt, q](double r) {
-          return mean_surface_density(r * q, lnM, zt) * q * q;
+        [this, lnM, zt](double r) {
+          return mean_surface_density(r, lnM, zt);
         },
         current_R_, current_bin_, lob, zt);
     }
@@ -299,6 +307,8 @@ private:
     return make_sanitized_table(s, "dSigma_hh");
   }
 
+  // barSigma(<r) = Sigma(r) + DeltaSigma(r) for a given (lnM, zt); the
+  // integrand input to BselDeltaSigmaOperator::apply in comoving coordinates.
   double mean_surface_density(double r, double lnM, double zt) const
   {
     if (r_trans_ && c0_trans_ && delta_gap_1_) {
@@ -310,9 +320,10 @@ private:
       } else {
         double const s_1h = sigma_bar_nfw_ ? sigma_bar_nfw_->clamp(r, lnM)
                                            : (dsigma_nfw_ ? dsigma_nfw_->clamp(r, lnM) : 0.0);
+        double const gap0 = delta_gap_0_ ? delta_gap_0_->clamp(lnM, zt) : 0.0;
         double const gap1 = delta_gap_1_->clamp(lnM, zt);
         double const r_ratio = r / rt;
-        return s_1h + 2.0 * gap1 - gap1 * r_ratio * r_ratio;
+        return s_1h + gap0 + 2.0 * gap1 - gap1 * r_ratio * r_ratio;
       }
     }
     if (sigma_bar_nfw_ && sigma_bar_hh_) {

@@ -128,13 +128,7 @@ def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
             lob = np.asarray(lob_centers, dtype=float)[b % len(lob_centers)]
 
             def mean_sig_fn(r):
-                if physical:
-                    res = np.empty((np.asarray(r).shape[0], lnm_x.size, n_z))
-                    for iq, z in enumerate(z_x):
-                        qf = 1.0 + z
-                        res[:, :, iq] = profile.mean_surface_density(
-                            b, np.asarray(r)[:, 0, 0] * qf, lnm_x[None, :], z) * (qf * qf)
-                    return res
+                # Return comoving mean surface density barSigma(<r) matching the comoving B_sel(R) grid
                 return profile.mean_surface_density(
                     b, np.asarray(r), lnm_x[None, :, None], z_x[None, None, :])
 

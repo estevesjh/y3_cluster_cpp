@@ -351,10 +351,13 @@ public:
           }
           double d_val = total;
           if (bsel_op_) {
+            // Apply the selection boost operator:
+            // DeltaSigma_sel(R) = B_sel(R) * DeltaSigma(R) - M_sel(R) / (pi R^2).
+            // The lambda supplies comoving barSigma(<r) matching the comoving B_sel(R) grid.
             d_val = bsel_op_->apply(
               total,
-              [this, k, q, qf](double r) {
-                return profile_->mean_surface_density(r * qf, lnm_x_[k], z_x_[q]) * qf * qf;
+              [this, k, q](double r) {
+                return profile_->mean_surface_density(r, lnm_x_[k], z_x_[q]);
               },
               R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
           } else if (selected_profile_) {
@@ -390,6 +393,8 @@ public:
           }
           double d_val = d_tot;
           if (bsel_op_) {
+            // For a given (lnM, z): d_val = B_sel(R) * d_tot - M_sel(R) / (pi R^2),
+            // with barSigma(<r) from the tabulated profile at that (lnM, z).
             d_val = bsel_op_->apply(
               d_tot,
               [this, k, q, idx, brow](double r) {
@@ -437,10 +442,13 @@ public:
         }
         double d_val = d_tot;
         if (bsel_op_) {
+          // Apply the selection boost operator:
+          // DeltaSigma_sel(R) = B_sel(R) * DeltaSigma(R) - M_sel(R) / (pi R^2).
+          // The lambda supplies comoving barSigma(<r) matching the comoving B_sel(R) grid.
           d_val = bsel_op_->apply(
             d_tot,
-            [this, k, q, idx, brow, qf](double r) {
-              return mean_surface_density_node(r * qf, k, q, idx, brow[q]) * qf * qf;
+            [this, k, q, idx, brow](double r) {
+              return mean_surface_density_node(r, k, q, idx, brow[q]);
             },
             R, b, lob_centers_[b % lob_centers_.size()], z_x_[q]);
         } else if (selected_profile_) {
@@ -491,6 +499,8 @@ private:
     return make_sanitized_table(s, "dSigma_hh");
   }
 
+  // barSigma(<r) = Sigma(r) + DeltaSigma(r) for a given (lnM_k, z_q); the
+  // mean_sigma_fn input to BselDeltaSigmaOperator::apply.
   double mean_surface_density_node(double r, std::size_t k, std::size_t q,
                                    std::size_t idx, double bias) const
   {

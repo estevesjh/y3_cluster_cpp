@@ -366,6 +366,8 @@ public:
     return excess_surface_density(R, lnM, z) * sigma_crit_inv;
   }
 
+  // B_sel(R) * DeltaSigma_max(R) - M_sel(R) / (pi R^2), with barSigma(<r)
+  // from mean_surface_density of the same (lnM, z) profile.
   double
   selected_excess_surface_density(
     double R, double lnM, double z,
@@ -378,6 +380,8 @@ public:
       R, bin_index, lob, z);
   }
 
+  // As above for the miscentred DeltaSigma.  NOTE: M_sel still uses the
+  // centred barSigma(<r).
   double
   miscentered_selected_excess_surface_density(
     double R, double r_mis, double lnM, double z,

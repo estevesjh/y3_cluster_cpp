@@ -244,6 +244,10 @@ public:
   std::vector<double> const& u_nodes() const { return u_; }
   std::vector<double> const& weights() const { return w_; }
 
+  // delta_sigma:   the unselected DeltaSigma(R) being corrected.
+  // mean_sigma_fn: callback r -> barSigma(<r) for the SAME profile, in the
+  //                same units/density convention as delta_sigma.
+  // Returns B_sel(R) * delta_sigma - M_sel(R) / (pi R^2).
   template <typename MeanSigmaFn>
   double apply(double delta_sigma, MeanSigmaFn&& mean_sigma_fn,
                double R, int bin_index, double lob, double z) const
@@ -251,7 +255,10 @@ public:
     if (!(R > 0.0))
       throw std::invalid_argument("BselDeltaSigmaOperator requires R > 0");
 
+    // Local term: B_sel(R), multiplies delta_sigma below.
     double const b_val = model_(R, bin_index, lob, z);
+    // Non-local term: GL sum over u in [0, 1] of
+    //   u^2 * barSigma(<u R) * dB_sel/dR'(u R).
     double m_sel_over_pi_r2 = 0.0;
     for (std::size_t i = 0; i != n_gl_; ++i) {
       double const r_prime = u_[i] * R;
@@ -259,10 +266,11 @@ public:
       double const mean_sig = mean_sigma_fn(r_prime);
       m_sel_over_pi_r2 += w_[i] * (u_[i] * u_[i]) * mean_sig * d_bsel;
     }
-    m_sel_over_pi_r2 *= R;
+    m_sel_over_pi_r2 *= R;  // Jacobian dR' = R du
     return b_val * delta_sigma - m_sel_over_pi_r2;
   }
 
+  // Local-only limit (drops M_sel): B_sel(R) * DeltaSigma(R).
   double operator()(double delta_sigma, double R, int bin_index,
                     double lob, double z) const
   {
