@@ -197,7 +197,7 @@ $\le 10^{-6}$; the `3d` C++/CUDA rows were re-measured on the reduced
 | `0d` | Python | `shear1h_explicit_gl.py` — explicit fixed-GL 3-dim grid | 149 ms | 4.9e-5 |
 | `0d` | **C++ (this page)**, Python | `Shear1hGl.so` / `shear1h_gl.py` — exact redshift contraction, 1-dim GL mass sum; bitwise-equivalent to `Shear1hMisSel.so` | 9 ms (Python 74 ms) | 8.4e-4 (identity with production) |
 | `0d` | Python, C++ | `Shear1hRadialSeries.so` — offline $U_\ell$ radial-series tables plus per-sample population moments | 6–7 ms | 56–86% raw amplitude (open fixed-$c{=}4$ defect); 3.7e-3 internal fixed-profile consistency |
-| `0d` | Python, C++, CUDA | `Shear1h2hMax` — traditional $\max(1h,b\,2h)$ model, $z$-resolved 2-dim GL sum; a model option, not in the reference pipeline ({doc}`second_halo_term`) | 11 ms (CUDA 8 ms) | 8.3e-4 |
+| `0d` | Python, C++, CUDA | `Shear1h2hMax` — traditional 3D halo-exclusion max model (3-pillar bridging), $z$-resolved 2-dim GL sum; a model option, not in the reference pipeline ({doc}`second_halo_term`) | 11 ms (CUDA 8 ms) | 8.3e-4 |
 
 The radial-series tables are versioned under `data/radial_series` and
 are loaded, never regenerated, during sampling; the family is not a

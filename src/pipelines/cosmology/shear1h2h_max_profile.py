@@ -78,6 +78,12 @@ class Shear1h2hMaxProfile:
         self._dsigma_hh = _dm.Bilinear2D(
             source, "halomodel", "r_sigma", "z", "dsigma_hh",
             nan_fill=0.0)
+        self._has_max1h2h = source.has("halomodel", "r_trans")
+        if self._has_max1h2h:
+            self._r_trans_table = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "r_trans")
+            self._c0_trans_table = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "c0_trans")
+            self._delta_gap_0_table = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "delta_gap_0")
+            self._delta_gap_1_table = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "delta_gap_1")
         self._r_xi = source.array("xi_nl", "r")
         self._r_sigma = source.array("halomodel", "r_sigma")
         self._c = (np.asarray(source.array("halomodel", "concentration"),
@@ -325,6 +331,15 @@ class Shear1h2hMaxProfile:
         sigma_2h = bias * (
             float(np.asarray(self._sigma_bar_hh(R, z)).item())
             - float(np.asarray(self._dsigma_hh(R, z)).item()))
+        if getattr(self, "_has_max1h2h", False):
+            rt = float(np.asarray(self._r_trans_table(lnM, z)).item())
+            if R >= rt:
+                return sigma_2h
+            else:
+                s1h = self._nfw_surface_density(R, lnM)
+                gap0 = float(np.asarray(self._delta_gap_0_table(lnM, z)).item())
+                gap1 = float(np.asarray(self._delta_gap_1_table(lnM, z)).item())
+                return s1h + gap0 + 2.0 * gap1 * (1.0 - (R / rt)**2)
         return sigma_2h + self._projection_corrections(R, lnM, z)[0]
 
     def mean_surface_density(self, r_perp, lnM, z):
@@ -333,6 +348,8 @@ class Shear1h2hMaxProfile:
         bias = float(np.asarray(self._bias(lnM, z)).item())
         mean_2h = bias * float(np.asarray(
             self._sigma_bar_hh(R, z)).item())
+        if getattr(self, "_has_max1h2h", False):
+            return self.surface_density(r_perp, lnM, z) + self.excess_surface_density(r_perp, lnM, z)
         return mean_2h + self._projection_corrections(R, lnM, z)[1]
 
     def excess_surface_density(self, r_perp, lnM, z):
@@ -340,6 +357,15 @@ class Shear1h2hMaxProfile:
         R = max(float(r_perp), self._r_sigma[0])
         bias = float(np.asarray(self._bias(lnM, z)).item())
         dsigma_2h = bias * float(np.asarray(self._dsigma_hh(R, z)).item())
+        if getattr(self, "_has_max1h2h", False):
+            rt = float(np.asarray(self._r_trans_table(lnM, z)).item())
+            if R >= rt:
+                c0 = float(np.asarray(self._c0_trans_table(lnM, z)).item())
+                return dsigma_2h + (c0 / (R * R)) * 1.0e-12
+            else:
+                dsigma_1h = self._nfw_excess_surface_density(R, lnM)
+                gap1 = float(np.asarray(self._delta_gap_1_table(lnM, z)).item())
+                return dsigma_1h + gap1 * (R / rt)**2
         return dsigma_2h + self._projection_corrections(R, lnM, z)[2]
 
     def tangential_shear(self, r_perp, lnM, z, sigma_crit_inv):

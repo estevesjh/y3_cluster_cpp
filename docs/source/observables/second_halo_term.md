@@ -100,29 +100,26 @@ population; and there is no halo exclusion, so $\Sigma_{2h}$ is
 unphysically large inside the halo boundary — which is exactly what the
 max composition below is designed to hide.
 
-### The max composition (DES Y1 prescription)
+### The 3D halo-exclusion and 3-pillar bridging max model
 
-The one-halo and two-halo profiles are not added. Following Hayashi &
-White (2008) as adopted in the DES Y1 lensing analysis
-([McClintock et al. 2019, MNRAS 482, 1352](https://ui.adsabs.harvard.edu/abs/2019MNRAS.482.1352M/abstract),
-arXiv:[1805.00039](https://arxiv.org/abs/1805.00039)), the total
-profile is the **pointwise maximum**:
+The one-halo and two-halo profiles are not combined via a naive 2D pointwise maximum or sum. Instead, the model is physically formulated in 3D real space with halo exclusion and assembled via 3-pillar smooth bridging:
 
-$$\Delta\Sigma_{\max}(R \mid M, z) = \max\!\Big[
-\Delta\Sigma_{1h}(R \mid M, z),\;
-b(M, z)\,\Delta\Sigma_{\rm hh}(R, z)\Big],$$
+1. In 3D real space, halo exclusion is defined on the correlation function:
 
-with $\Delta\Sigma_{1h}$ the centred + miscentred one-halo mixture of
-{doc}`shear_halo`. The max is a crude but effective stand-in for halo
-exclusion and the 1h–2h transition: inside the halo the steep NFW wins,
-far outside the linear-bias two-halo term wins, and there is no
-double-counting in between. It is nonlinear in the profiles, which has
-two consequences for the pipeline: (i) the composition must be applied
-*inside* the population integral, at each $(M, z)$, not to the stacked
-profiles; (ii) because the two-halo term depends on $z$, the redshift
-integral can no longer be contracted past the profile the way the
-one-halo `0d` path does — `Shear1h2hMax` keeps a $z$-resolved
-selection weight and performs a double $(\ln M, z)$ fixed-GL sum:
+$$\xi_{\rm hm}(r \mid M, z) = \max\!\Big[\xi_{1h}(r \mid M, z),\; b(M, z)\,\xi_{\rm mm}(r, z)\Big],$$
+
+with transition radius $r_{\rm trans}$ defined by $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
+
+2. The projected excess surface density $\Delta\Sigma_{\max}$ is assembled via the 3-pillar bridging operators:
+
+$$\Delta\Sigma_{\max}(R \mid M, z) = \begin{cases}
+\Delta\Sigma_{1h}(R \mid M, z) + \Delta_{\rm gap}^1 \left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
+b(M, z)\,\Delta\Sigma_{\rm hh}(R, z) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans},
+\end{cases}$$
+
+where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and $\Delta_{\rm gap}^1 = \Delta\Sigma_{\max}(r_{\rm trans}) - \Delta\Sigma_{1h}(r_{\rm trans})$, with $\Delta\Sigma_{1h}$ the centred + miscentred one-halo mixture of {doc}`shear_halo`.
+
+The transition and bridging terms depend on $M$ and $z$, which has two consequences for the pipeline: (i) the composition must be applied *inside* the population integral, at each $(M, z)$, not to the stacked profiles; (ii) because the two-halo term depends on $z$, the redshift integral can no longer be contracted past the profile the way the one-halo `0d` path does — `Shear1h2hMax` keeps a $z$-resolved selection weight and performs a double $(\ln M, z)$ fixed-GL sum:
 
 $$N_i[\Delta\Sigma_{\max}](R) = \int d\ln M \int dz\;
 \Omega(z)\,\frac{dV}{d\Omega\,dz}\,\frac{dn}{d\ln M}(M,z)\,

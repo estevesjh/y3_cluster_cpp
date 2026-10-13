@@ -15,10 +15,13 @@
 // gamma_T only when the caller supplies Sigma_crit^{-1}.  The profile never
 // hides lens/source geometry or silently converts DeltaSigma into shear.
 //
-// For R >= r_trans the line of sight is entirely in the two-halo regime and
-// the exact DeltaSigma result is DeltaSigma_2h + C0/R^2.  For R < r_trans,
-// nonsingular fixed-order GL integrals after y = R sinh(u) provide the Sigma
-// and barSigma corrections.
+// Assembled via the 3-pillar smooth bridging operators:
+//   For R < r_trans:  DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
+//   For R >= r_trans: b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+// where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
+// Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
+// For R < r_trans, nonsingular fixed-order GL integrals after y = R sinh(u)
+// also provide the underlying Sigma and barSigma corrections.
 #ifndef Y3_CLUSTER_CPP_SHEAR1H2H_MAX_PROFILE_HH
 #define Y3_CLUSTER_CPP_SHEAR1H2H_MAX_PROFILE_HH
 
@@ -67,6 +70,10 @@ class Shear1h2hMaxProfile {
   std::size_t n_aperture_;
   double q_max_;
   double rho_ref_;
+  std::optional<Interp2D> r_trans_;
+  std::optional<Interp2D> c0_trans_;
+  std::optional<Interp2D> delta_gap_0_;
+  std::optional<Interp2D> delta_gap_1_;
   mutable std::map<std::pair<double, double>, double> transition_cache_;
 
   struct ProjectionCorrections {
@@ -371,6 +378,16 @@ public:
     if (sample.has_val("haloModel", "concentration"))
       concentration_.emplace(y3_cluster::make_Interp1D(
         sample, "haloModel", "lnM", "concentration"));
+    if (sample.has_val("haloModel", "r_trans")) {
+      r_trans_.emplace(y3_cluster::make_Interp2D(
+        sample, "haloModel", "lnM", "z", "r_trans"));
+      c0_trans_.emplace(y3_cluster::make_Interp2D(
+        sample, "haloModel", "lnM", "z", "c0_trans"));
+      delta_gap_0_.emplace(y3_cluster::make_Interp2D(
+        sample, "haloModel", "lnM", "z", "delta_gap_0"));
+      delta_gap_1_.emplace(y3_cluster::make_Interp2D(
+        sample, "haloModel", "lnM", "z", "delta_gap_1"));
+    }
   }
 
   double
@@ -428,10 +445,22 @@ public:
   surface_density(double R, double lnM, double z) const
   {
     double const radius = std::max(R, r_sigma_.front());
-    double const r_trans = transition_radius(lnM, z);
     double const bias = bias_.clamp(lnM, z);
     double const sigma_2h = bias * (sigma_bar_hh_.clamp(radius, z) -
                                     dsigma_hh_.clamp(radius, z));
+    if (r_trans_ && delta_gap_0_ && delta_gap_1_) {
+      double const rt = r_trans_->clamp(lnM, z);
+      if (radius >= rt) {
+        return sigma_2h;
+      } else {
+        double const s1h = nfw_surface_density(radius, lnM);
+        double const gap0 = delta_gap_0_->clamp(lnM, z);
+        double const gap1 = delta_gap_1_->clamp(lnM, z);
+        double const r_ratio = radius / rt;
+        return s1h + gap0 + 2.0 * gap1 * (1.0 - r_ratio * r_ratio);
+      }
+    }
+    double const r_trans = transition_radius(lnM, z);
     return sigma_2h + projection_corrections(
       radius, lnM, z, r_trans).sigma;
   }
@@ -440,6 +469,9 @@ public:
   mean_surface_density(double R, double lnM, double z) const
   {
     double const radius = std::max(R, r_sigma_.front());
+    if (r_trans_ && delta_gap_0_ && delta_gap_1_ && c0_trans_) {
+      return surface_density(radius, lnM, z) + excess_surface_density(radius, lnM, z);
+    }
     double const r_trans = transition_radius(lnM, z);
     double const bias = bias_.clamp(lnM, z);
     double const mean_sigma_2h = bias * sigma_bar_hh_.clamp(radius, z);
@@ -451,9 +483,21 @@ public:
   excess_surface_density(double R, double lnM, double z) const
   {
     double const radius = std::max(R, r_sigma_.front());
-    double const r_trans = transition_radius(lnM, z);
     double const bias = bias_.clamp(lnM, z);
     double const dsigma_2h = bias * dsigma_hh_.clamp(radius, z);
+    if (r_trans_ && c0_trans_ && delta_gap_1_) {
+      double const rt = r_trans_->clamp(lnM, z);
+      if (radius >= rt) {
+        double const c0 = c0_trans_->clamp(lnM, z);
+        return dsigma_2h + (c0 / (radius * radius)) * MSUN_PER_MPC2_TO_MSUN_PER_PC2;
+      } else {
+        double const dsigma_1h = nfw_excess_surface_density(radius, lnM);
+        double const gap1 = delta_gap_1_->clamp(lnM, z);
+        double const r_ratio = radius / rt;
+        return dsigma_1h + gap1 * r_ratio * r_ratio;
+      }
+    }
+    double const r_trans = transition_radius(lnM, z);
     return dsigma_2h + projection_corrections(
       radius, lnM, z, r_trans).delta_sigma;
   }

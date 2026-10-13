@@ -1,12 +1,18 @@
 // Traditional 1h+2h excess surface density via the max model — C++ backend.
 //
-//   DeltaSigma_tot(R, lnM, z | bin) = max(
-//       DeltaSigma_cl(R, lnM | bin),
-//       b(lnM, z) * DeltaSigma_hh(R, z) )
+// Formulated via 3D halo exclusion and 3-pillar smooth bridging:
+// 1. In 3D real space, halo exclusion is defined on the correlation function:
+//      xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
+//    with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
+// 2. The projected excess surface density DeltaSigma_max is assembled via 3-pillar bridging:
+//      For R < r_trans:
+//        DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
+//      For R >= r_trans:
+//        b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+//    where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
+//    Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
 //
-// the Y1-era SIG_MAX/KAPPA_MAX/GAMMA_MAX composition on the modern
-// haloModel tables (same observable as the Python
-// ../python/shear1h2h_max.py), stacked with the selection weight
+// Stacked with the selection weight
 //
 //   O_ij(R) = int dz int dlnM  n dV/dOmegadz Omega Sigma_crit^-1
 //             S_ij(lnM, z) DeltaSigma_tot(R, lnM, z).
@@ -211,6 +217,34 @@ public:
       for (std::size_t q = 0; q != N_z_; ++q)
         bias_kq_[k * N_z_ + q] = bias_->clamp(lnm_x_[k], z_x_[q]);
 
+    if (s.has_val("haloModel", "r_trans")) {
+      r_trans_.emplace(y3_cluster::make_Interp2D(
+        s, "haloModel", "lnM", "z", "r_trans"));
+      c0_trans_.emplace(y3_cluster::make_Interp2D(
+        s, "haloModel", "lnM", "z", "c0_trans"));
+      delta_gap_1_.emplace(y3_cluster::make_Interp2D(
+        s, "haloModel", "lnM", "z", "delta_gap_1"));
+
+      r_trans_kq_.assign(N_lnm_ * N_z_, 0.0);
+      c0_trans_kq_.assign(N_lnm_ * N_z_, 0.0);
+      delta_gap_1_kq_.assign(N_lnm_ * N_z_, 0.0);
+      for (std::size_t k = 0; k != N_lnm_; ++k) {
+        for (std::size_t q = 0; q != N_z_; ++q) {
+          std::size_t const idx = k * N_z_ + q;
+          r_trans_kq_[idx] = r_trans_->clamp(lnm_x_[k], z_x_[q]);
+          c0_trans_kq_[idx] = c0_trans_->clamp(lnm_x_[k], z_x_[q]);
+          delta_gap_1_kq_[idx] = delta_gap_1_->clamp(lnm_x_[k], z_x_[q]);
+        }
+      }
+    } else {
+      r_trans_.reset();
+      c0_trans_.reset();
+      delta_gap_1_.reset();
+      r_trans_kq_.clear();
+      c0_trans_kq_.clear();
+      delta_gap_1_kq_.clear();
+    }
+
     r_mis_.assign(n_bins_, 0.0);
     for (std::size_t b = 0; b != n_bins_; ++b)
       r_mis_[b] = tau_mis * w::R_lambda(
@@ -287,8 +321,25 @@ public:
         double const* wrow = w2 + k * N_z_;
         double const* brow = &bias_kq_[k * N_z_];
         double const one_k = one[k];
-        for (std::size_t q = 0; q != N_z_; ++q)
-          acc += wrow[q] * std::max(one_k, brow[q] * two[q]);
+        for (std::size_t q = 0; q != N_z_; ++q) {
+          if (r_trans_) {
+            std::size_t const idx = k * N_z_ + q;
+            double const rt = r_trans_kq_[idx];
+            double const d_2h = brow[q] * two[q];
+            double d_tot;
+            if (R >= rt) {
+              double const c0 = c0_trans_kq_[idx];
+              d_tot = d_2h + (c0 / (R * R)) * 1.0e-12;
+            } else {
+              double const gap1 = delta_gap_1_kq_[idx];
+              double const r_ratio = R / rt;
+              d_tot = one_k + gap1 * r_ratio * r_ratio;
+            }
+            acc += wrow[q] * d_tot;
+          } else {
+            acc += wrow[q] * std::max(one_k, brow[q] * two[q]);
+          }
+        }
       }
       return {acc};
     }
@@ -306,7 +357,23 @@ public:
           dsigma_mis_(R * qf, r_mis_[b] * qf, lnm_x_[k]);
         double const one_kq =
           (qf * qf) * ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
-        acc += wrow[q] * std::max(one_kq, brow[q] * two[q]);
+        if (r_trans_) {
+          std::size_t const idx = k * N_z_ + q;
+          double const rt = r_trans_kq_[idx];
+          double const d_2h = brow[q] * two[q];
+          double d_tot;
+          if (R >= rt) {
+            double const c0 = c0_trans_kq_[idx];
+            d_tot = d_2h + (c0 / (R * R)) * 1.0e-12;
+          } else {
+            double const gap1 = delta_gap_1_kq_[idx];
+            double const r_ratio = R / rt;
+            d_tot = one_kq + gap1 * r_ratio * r_ratio;
+          }
+          acc += wrow[q] * d_tot;
+        } else {
+          acc += wrow[q] * std::max(one_kq, brow[q] * two[q]);
+        }
       }
     }
     return {acc};
@@ -359,6 +426,7 @@ private:
   std::vector<double> lnm_x_, lnm_w_, z_x_, z_w_, lob_centers_;
 
   std::optional<y3_cluster::Interp2D> dsigma_nfw_, bias_, dsigma_hh_;
+  std::optional<y3_cluster::Interp2D> r_trans_, c0_trans_, delta_gap_1_;
   double f_mis_{0.0};
   std::size_t n_bins_{0};
   bool phys_density_{false};
@@ -367,6 +435,7 @@ private:
   bool use_nfw_table_residual_{true};
   std::optional<Shear1h2hMaxProfile> profile_;
   std::vector<double> w2d_, bias_kq_, r_mis_;
+  std::vector<double> r_trans_kq_, c0_trans_kq_, delta_gap_1_kq_;
 };
 
 #endif

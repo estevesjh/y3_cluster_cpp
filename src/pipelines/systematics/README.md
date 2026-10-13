@@ -54,10 +54,13 @@ bias on the projected density profile is a multiplicative double power law
 with a smooth transition at the comoving cluster radius,
 
 ```text
-Sigma_corr(R) = B_prj(R) Sigma_max(R),       Sigma_max = max(Sigma_1h, Sigma_2h)
+Sigma_corr(R) = B_prj(R) Sigma_max(R),  DeltaSigma_corr(R) = B_prj(R) DeltaSigma_max(R)
 B_prj(R)      = A (R/R0)^alpha [1 + (R/R0)^gamma]^((beta - alpha)/gamma) + 1
 R0            = R_lambda(lob) (1 + z)         [comoving Mpc/h; R in the same units]
 ```
+
+where Sigma_max and DeltaSigma_max are formulated via 3D halo exclusion
+(xi_hm = max(xi_1h, b*xi_mm)) and assembled via 3-pillar smooth bridging.
 
 The same form fits the bias on DeltaSigma(R) with different values. Both
 implementations evaluate `B(R, lob, z)` and read the four parameters from a

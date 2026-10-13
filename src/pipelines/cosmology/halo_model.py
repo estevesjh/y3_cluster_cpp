@@ -126,6 +126,213 @@ class lensingModel(object):
         return self.c
 
 
+class max1h2hOperators(object):
+    """Operators for 3D halo-exclusion max(1h, 2h) profile assembly.
+
+    Computes the 2D matching tables (shape: (n_z, n_M)) that bridge the
+    1-halo core and the decoupled 2-halo outer tail:
+        - rtrans: 3D crossing scale where xi_1h = b * xi_nl
+        - c0: Decoupled 3D spherical core mass difference / pi
+        - delta_gap_0: Surface density boundary gap at rtrans (Delta_gap^0)
+        - delta_gap_1: Excess surface density boundary gap at rtrans (Delta_gap^1)
+    """
+
+    def __init__(self, lens_model):
+        self.lens_model = lens_model
+
+    @staticmethod
+    def _interp_2d_log_r(ln_rq, ln_r_grid, data_2d):
+        """Piecewise-linear interpolation along log(r) for 2D arrays shape (n_z, n_M)."""
+        d = np.diff(ln_r_grid)
+        dln_r = d[0]
+        rows = np.arange(ln_rq.shape[0])[:, None]
+        # Fast path: uniform log-spaced grid (standard in cosmology pipelines)
+        if np.all(np.abs(d - dln_r) < 1e-6 * np.abs(dln_r)):
+            fj = (ln_rq - ln_r_grid[0]) / dln_r
+            j = np.clip(fj.astype(int), 0, len(ln_r_grid) - 2)
+            w = fj - j
+            y0 = data_2d[rows, j]
+            y1 = data_2d[rows, j + 1]
+            out = y0 + w * (y1 - y0)
+        else:
+            j = np.clip(np.searchsorted(ln_r_grid, ln_rq) - 1, 0, len(ln_r_grid) - 2)
+            x0 = ln_r_grid[j]
+            x1 = ln_r_grid[j + 1]
+            y0 = data_2d[rows, j]
+            y1 = data_2d[rows, j + 1]
+            slope = (y1 - y0) / (x1 - x0)
+            out = y0 + slope * (ln_rq - x0)
+        out = np.where(ln_rq < ln_r_grid[0], data_2d[rows, 0], out)
+        out = np.where(ln_rq > ln_r_grid[-1], data_2d[rows, -1], out)
+        return out
+
+    def compute_rtrans(self, M, z, bias, r_xi, xi_nl, conc=None):
+        """Compute the 2D crossing scale r_trans(M, z) where xi_1h = b * xi_nl.
+
+        Parameters
+        ----------
+        M : array_like, shape (n_M,)
+            Halo masses (Msun/h).
+        z : array_like, shape (n_z,)
+            Redshifts.
+        bias : array_like, shape (n_z, n_M)
+            Halo bias b(M, z).
+        r_xi : array_like, shape (n_r,)
+            Comoving radial grid (Mpc/h).
+        xi_nl : array_like, shape (n_z, n_r)
+            Nonlinear matter correlation function xi_nl(r, z).
+        conc : array_like, shape (n_M,), optional
+            Halo concentrations. If None, uses self.lens_model.c.
+
+        Returns
+        -------
+        r_trans : ndarray, shape (n_z, n_M)
+            Crossing radius in Mpc/h.
+        """
+        M_arr = np.atleast_1d(M)
+        bias_arr = np.atleast_2d(bias)
+        r_arr = np.asarray(r_xi, dtype=float)
+        xi_arr = np.atleast_2d(xi_nl)
+
+        if conc is None:
+            conc = getattr(self.lens_model, 'c', None)
+            if conc is None:
+                conc = child18_mass_concentration(M_arr, 0.0, halo_sample='stacked_nfw')
+        c_arr = np.asarray(conc, dtype=float)
+        if c_arr.ndim == 0 or c_arr.size == 1:
+            c_arr = np.full(M_arr.size, float(c_arr))
+
+        rho_m = self.lens_model.rhom0
+        r200 = (3.0 * M_arr / (800.0 * np.pi * rho_m))**(1.0 / 3.0)
+        rs = r200 / c_arr
+        delta_c = (200.0 / 3.0) * c_arr**3 / (np.log(1.0 + c_arr) - c_arr / (1.0 + c_arr))
+        rho_s = delta_c * rho_m
+
+        # Window optimization: crossing r_trans lies strictly in [0.2, 50.0] Mpc/h
+        # across all cluster masses (10^12 to 10^16 Msun/h) and redshifts (0 to 3)
+        mask = (r_arr >= 0.2) & (r_arr <= 50.0)
+        if np.any(mask):
+            idx_win = np.where(mask)[0]
+            i0 = max(0, idx_win[0] - 1)
+            i1 = min(len(r_arr), idx_win[-1] + 2)
+        else:
+            i0, i1 = 0, len(r_arr)
+        r_sub = r_arr[i0:i1]
+
+        # xi_1h on subgrid has shape (1, n_M, n_sub)
+        x_sub = r_sub[None, :] / rs[:, None]
+        xi_1h_sub = rho_s[:, None] / (rho_m * x_sub * (1.0 + x_sub)**2) - 1.0
+
+        # xi_2h on subgrid has shape (n_z, n_M, n_sub)
+        diff_sub = xi_1h_sub[None, :, :] - (bias_arr[:, :, None] * xi_arr[:, None, i0:i1])
+
+        # Bracket crossing detection on subgrid
+        is_crossing = (diff_sub[:, :, :-1] >= 0) & (diff_sub[:, :, 1:] <= 0)
+        idx_cross = np.argmax(is_crossing, axis=-1) + i0
+        ra = r_arr[idx_cross]
+        rb = r_arr[idx_cross + 1]
+
+        has_cross = np.any(is_crossing, axis=-1)
+        ra = np.where(has_cross, ra, np.maximum(r_arr[0], 0.25 * r200[None, :]))
+        rb = np.where(has_cross, rb, np.minimum(r_arr[-1], 4.0 * r200[None, :]))
+
+        # Vectorized bisection over (n_z, n_M) with O(1) grid interpolation
+        ln_r_arr = np.log(r_arr)
+        for _ in range(5):
+            rmid = np.sqrt(ra * rb)
+            xmid = rmid / rs[None, :]
+            x1h_mid = rho_s[None, :] / (rho_m * xmid * (1.0 + xmid)**2) - 1.0
+            x2h_mid = bias_arr * self._interp_2d_log_r(np.log(rmid), ln_r_arr, xi_arr)
+            f_mid = x1h_mid - x2h_mid
+            ra = np.where(f_mid > 0, rmid, ra)
+            rb = np.where(f_mid <= 0, rmid, rb)
+
+        return np.sqrt(ra * rb)
+
+    def compute_c0(self, r_trans, M, z, bias, r_xi, m3d_hh, conc=None):
+        """Compute the 2D core mass decoupling constant C_0(M, z) in (Msun/h).
+
+        C_0(M, z) = [M_3D,1h(<r_trans) - b(M, z) * M_3D,2h(<r_trans)] / pi
+        """
+        M_arr = np.atleast_1d(M)
+        bias_arr = np.atleast_2d(bias)
+        r_arr = np.asarray(r_xi, dtype=float)
+        m3d_2h_arr = np.atleast_2d(m3d_hh)
+
+        if conc is None:
+            conc = getattr(self.lens_model, 'c', None)
+            if conc is None:
+                conc = child18_mass_concentration(M_arr, 0.0, halo_sample='stacked_nfw')
+        c_arr = np.asarray(conc, dtype=float)
+        if c_arr.ndim == 0 or c_arr.size == 1:
+            c_arr = np.full(M_arr.size, float(c_arr))
+
+        rho_m = self.lens_model.rhom0
+        r200 = (3.0 * M_arr / (800.0 * np.pi * rho_m))**(1.0 / 3.0)
+        rs = r200 / c_arr
+        delta_c = (200.0 / 3.0) * c_arr**3 / (np.log(1.0 + c_arr) - c_arr / (1.0 + c_arr))
+        rho_s = delta_c * rho_m
+
+        ln_r_arr = np.log(r_arr)
+        xk = r_trans / rs[None, :]
+        m1h = (4.0 * np.pi * rho_s[None, :] * (rs[None, :]**3) * (np.log(1.0 + xk) - xk / (1.0 + xk))
+               - (4.0 / 3.0) * np.pi * rho_m * r_trans**3)
+        m2h = self._interp_2d_log_r(np.log(r_trans), ln_r_arr, m3d_2h_arr)
+
+        return (m1h - bias_arr * m2h) / np.pi
+
+    def compute_delta_gap_0(self, r_trans, M, z, bias, conc=None, z_density=0.0):
+        """Compute the 2D surface density boundary gap Delta_gap^0(M, z) in (Msun/pc^2).
+
+        Delta_gap^0(M, z) = b(M, z) * Sigma_hh(r_trans, z) - Sigma_1h(r_trans, M)
+        """
+        M_arr = np.atleast_1d(M)
+        bias_arr = np.atleast_2d(bias)
+
+        if conc is None:
+            conc = getattr(self.lens_model, 'c', None)
+            if conc is None:
+                conc = child18_mass_concentration(M_arr, 0.0, halo_sample='stacked_nfw')
+        c_arr = np.asarray(conc, dtype=float)
+        if c_arr.ndim == 0 or c_arr.size == 1:
+            c_arr = np.full(M_arr.size, float(c_arr))
+
+        rho_c_z = self.lens_model.rhom0 * (1.0 + z_density)**3
+        ln_R_2h = np.log(self.lens_model.R)
+        sig_2h = np.atleast_2d(self.lens_model.Sigma['2h'])
+
+        s2h = self._interp_2d_log_r(np.log(r_trans), ln_R_2h, sig_2h)
+        s1h = sigmaNFW_Analytical(r_trans, M_arr[None, :], c_arr[None, :], rho_c=rho_c_z) / 1e12
+
+        return bias_arr * s2h - s1h
+
+    def compute_delta_gap_1(self, r_trans, c0, M, z, bias, conc=None, z_density=0.0):
+        """Compute the 2D excess surface density boundary gap Delta_gap^1(M, z) in (Msun/pc^2).
+
+        Delta_gap^1(M, z) = [b(M, z) * DeltaSigma_hh(r_trans, z) + c0 / r_trans^2] - DeltaSigma_1h(r_trans, M)
+        """
+        M_arr = np.atleast_1d(M)
+        bias_arr = np.atleast_2d(bias)
+
+        if conc is None:
+            conc = getattr(self.lens_model, 'c', None)
+            if conc is None:
+                conc = child18_mass_concentration(M_arr, 0.0, halo_sample='stacked_nfw')
+        c_arr = np.asarray(conc, dtype=float)
+        if c_arr.ndim == 0 or c_arr.size == 1:
+            c_arr = np.full(M_arr.size, float(c_arr))
+
+        rho_c_z = self.lens_model.rhom0 * (1.0 + z_density)**3
+        ln_R_2h = np.log(self.lens_model.R)
+        dsig_2h = np.atleast_2d(self.lens_model.dSigma['2h'])
+
+        ds2h = self._interp_2d_log_r(np.log(r_trans), ln_R_2h, dsig_2h)
+        ds1h = deltaSigmaNFW_Analytical(r_trans, M_arr[None, :], c_arr[None, :], rho_c=rho_c_z) / 1e12
+        c0_term = (c0 / (r_trans * r_trans)) / 1e12
+
+        return (bias_arr * ds2h + c0_term) - ds1h
+
+
 class biasModel:
     """ Compute the Bias Tinker et al. 2010 model
         for a given linear power-spectrum
@@ -704,6 +911,36 @@ def execute(block, config):
         block[section_name, "Sigma_hh"]     = lensModel.Sigma['2h']
         block[section_name, "dSigma_hh"]    = lensModel.dSigma['2h']
         block[section_name, "Sigma_bar_hh"] = lensModel.sigma_bar['2h']
+
+    # ----- max(1h, 2h) bridging operators: optional ----------------------
+    # How to compute unified DeltaSigma and Sigma from these operators:
+    #   r_trans(M, z): 3D crossing scale where xi_1h(r) = b * xi_nl(r).
+    #   c0_trans(M, z): [M_3D,1h(<r_trans) - b * M_3D,2h(<r_trans)] / pi.
+    #   delta_gap_0(M, z): b * Sigma_hh(r_trans) - Sigma_1h(r_trans).
+    #   delta_gap_1(M, z): b * dSigma_hh(r_trans) + c0 / (pi * r_trans^2) - dSigma_1h(r_trans).
+    #
+    # Unified Surface Density Sigma(R | M, z):
+    #   R <= r_trans : Sigma(R) = Sigma_1h(R, M)
+    #   R >  r_trans : Sigma(R) = b * Sigma_hh(R, z) - delta_gap_0
+    #
+    # Unified Excess Surface Density DeltaSigma(R | M, z):
+    #   R <= r_trans : DeltaSigma(R) = dSigma_1h(R, M)
+    #   R >  r_trans : DeltaSigma(R) = b * dSigma_hh(R, z) + c0 / (pi * R^2) - delta_gap_1 * (r_trans / R)^2
+    #
+    # Both profiles are strictly C^0 continuous at R = r_trans:
+    #   Sigma(r_trans^+) = b * Sigma_hh(r_trans) - delta_gap_0 = Sigma_1h(r_trans)
+    #   DeltaSigma(r_trans^+) = b * dSigma_hh(r_trans) + c0 / (pi * r_trans^2) - delta_gap_1 = dSigma_1h(r_trans).
+    if compute_lensing_1h and compute_lensing_2h:
+        ops = max1h2hOperators(lensModel)
+        r_trans = ops.compute_rtrans(M, z, Bias, r_xi, xi_NL)
+        c0_trans = ops.compute_c0(r_trans, M, z, Bias, r_xi, m3d_hh)
+        delta_gap_0 = ops.compute_delta_gap_0(r_trans, M, z, Bias, z_density=z_density)
+        delta_gap_1 = ops.compute_delta_gap_1(r_trans, c0_trans, M, z, Bias, z_density=z_density)
+
+        block[section_name, "r_trans"]     = r_trans
+        block[section_name, "c0_trans"]    = c0_trans
+        block[section_name, "delta_gap_0"] = delta_gap_0
+        block[section_name, "delta_gap_1"] = delta_gap_1
 
     return 0
 

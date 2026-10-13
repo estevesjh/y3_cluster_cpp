@@ -6,13 +6,16 @@ The Costanzi et al. (2026) **multiplicative correction for the optical
 selection bias on the lensing profile** of the traditional max model:
 instead of propagating the selection-affected bias $b_{\rm sel}(\theta)$
 through the two-halo integral (the $\Sigma^{\rm prj}$ route of
-{doc}`../observables/shear_projection`), the conventional
-$\max(1h, b\,2h)$ profile is multiplied by a calibrated
+{doc}`../observables/shear_projection`), the traditional max model profile — formulated via 3D halo exclusion
+on the correlation function,
+$\xi_{\rm hm}(r) = \max[\xi_{1h}(r),\, b(M, z)\,\xi_{\rm mm}(r, z)]$,
+and assembled into $\Delta\Sigma_{\max}(R)$ (or $\Sigma_{\max}(R)$) via
+3-pillar smooth bridging — is multiplied by a calibrated
 scale-dependent factor,
 
 $$\Sigma_{\rm corr}(R) = \mathcal B_{\rm prj}(R)\;\Sigma_{\max}(R),
 \qquad
-\Sigma_{\max} = \max\big(\Sigma_{1h},\, \Sigma_{2h}\big),$$
+\Delta\Sigma_{\rm corr}(R) = \mathcal B_{\rm prj}(R)\;\Delta\Sigma_{\max}(R),$$
 
 Appendix C of
 [Costanzi et al. 2026, PhRvD 113, 103508](https://ui.adsabs.harvard.edu/abs/2026PhRvD.113j3508C/abstract)
