@@ -142,13 +142,13 @@ class Shear1h2hMaxProfile:
         rs, rho_s, _ = self._nfw_parameters(lnM)
         x = np.atleast_1d(np.asarray(r_perp, dtype=float) / rs)
         value = 2.0 * rho_s * rs * f_nfw(x) * 1.0e-12
-        return float(value) if np.ndim(r_perp) == 0 else value
+        return float(value.item()) if np.ndim(r_perp) == 0 else value
 
     def _nfw_excess_surface_density(self, r_perp, lnM):
         rs, rho_s, _ = self._nfw_parameters(lnM)
         x = np.atleast_1d(np.asarray(r_perp, dtype=float) / rs)
         value = rs * rho_s * g_nfw(x) * 1.0e-12
-        return float(value) if np.ndim(r_perp) == 0 else value
+        return float(value.item()) if np.ndim(r_perp) == 0 else value
 
     def _residual_surface_density(self, r_perp, lnM, z):
         """Signed ``Sigma_max_cen - Sigma_NFW_cen``."""

@@ -272,19 +272,16 @@ class ct_2hTerm(object):
         w_nodes = 0.5 * dlnr[:, None] * wg[None, :]
         exp_3t = np.exp(3.0 * t_nodes)
 
-        # The quadrature only needs values inside each tabulated interval.
-        # Piecewise-linear interpolation is sufficient here and avoids making
-        # the cumulative integral depend on a cubic spline's extrapolation or
-        # overshoot between correlation-function knots.
-        flat_t = t_nodes.ravel()
-        interval = np.searchsorted(lnr, flat_t, side="right") - 1
-        interval = np.clip(interval, 0, lnr.size - 2)
-        frac = ((flat_t - lnr[interval]) /
-                (lnr[interval + 1] - lnr[interval]))
-        xi_left = xi_arr[:, interval]
-        xi_right = xi_arr[:, interval + 1]
-        xi_eval = (xi_left + (xi_right - xi_left) * frac[None, :])
-        xi_eval = xi_eval.reshape(xi_arr.shape[0], len(dlnr), n_gl)
+        # Gauss-Legendre quadrature on logarithmic intervals. Within interval i
+        # [lnr[i], lnr[i+1]], quadrature nodes are t = lnr[i] + u * dlnr[i]
+        # where u = 0.5 * (xg + 1). Direct linear interpolation between knots:
+        #   xi(t) = xi_i + u * (xi_{i+1} - xi_i)
+        # evaluates in pure NumPy vectorization with zero spline overhead or
+        # knot search.
+        u = 0.5 * (xg + 1.0)
+        xi_left = xi_arr[:, :-1, np.newaxis]
+        xi_right = xi_arr[:, 1:, np.newaxis]
+        xi_eval = xi_left + (xi_right - xi_left) * u[np.newaxis, np.newaxis, :]
         integrand = exp_3t[None, :, :] * xi_eval
         steps = np.sum(w_nodes[None, :, :] * integrand, axis=-1)
 
@@ -650,11 +647,6 @@ def execute(block, config):
     for iz, zz in enumerate(z):
         xi_NL[iz] = ct.xi.xi_mm_at_r(r_xi, k_nl, P_k_nl[iz])
 
-    RHOC_HUNITS = 2.77533742639e+11
-    rho_m_comoving = omega_m * RHOC_HUNITS
-    m3d_hh = ct_2hTerm.m3d_at_r(r_xi, xi_NL, rho_m=rho_m_comoving)
-    int_r2_xi_nl = ct_2hTerm.m3d_at_r(r_xi, xi_NL, rho_m=1.0)
-
     # ----- always-on datablock writes (consumed by bsel + shear_prj) -----
     block[section_name, "m_h"] = M
     block[section_name, "lnM"] = logM
@@ -666,8 +658,12 @@ def execute(block, config):
     # decision 2026-08-24). h-unit convention: masses Msun/h, radii Mpc/h,
     # so rho_ref is the h-unit critical density -- the SAME constant
     # lensingModel.rhoc0 uses for the centred tables.
+    RHOC_HUNITS = 2.77533742639e+11
     block[section_name, "rho_m_ref"] = (omega_m * RHOC_HUNITS
                                         * (1.0 + z_density) ** 3)
+    rho_m_comoving = omega_m * RHOC_HUNITS
+    m3d_hh = ct_2hTerm.m3d_at_r(r_xi, xi_NL, rho_m=rho_m_comoving)
+    int_r2_xi_nl = ct_2hTerm.m3d_at_r(r_xi, xi_NL, rho_m=1.0)
     # 0/1 flag for the rigorous physical-density treatment (see setup).
     block[section_name, "one_halo_physical_density"] = int(physical_density)
     block[section_name, "bias"] = Bias
