@@ -78,7 +78,9 @@ and piecewise approximation:
    Gauss–Legendre nodes (see
    [the max-model section](#traditional-1h2h-max-model-z-resolved-gl)).
    In the max model $\xi_{1h}$ / $\Delta\Sigma_{1h}$ is the **centred**
-   NFW profile: `Shear1h2hMax` carries no miscentering term.
+   NFW profile; `Shear1h2hMax` adds gamma miscentering of the whole
+   profile as an option (`miscentering = T`, see
+   [Miscentering](#miscentering-of-the-max-model)).
 
 The dims tag of each backend counts its **adaptive** integration
 dimensions, and the physics dictates which reductions are legal:
@@ -230,7 +232,52 @@ Optional selection boost (`bsel = T`, `bsel_model = Costanzi26 |
 Sunayama23`) gives $\Delta\Sigma_{\rm sel} = \mathcal{B}\,\Delta\Sigma
 - M_{\rm sel}/(\pi R^2)$ per $(\ln M, z)$ node; see
 `../../systematics/README.md` and the Sphinx page
-`systematics/bsel_profile`.
+`systematics/bsel_profile`.  On the `r_perp` wall the Bsel factors are
+evaluated once per sample at the operator's quadrature nodes, so the
+piecewise path with Bsel costs ~22 ms (was 563 ms Costanzi26, 231 ms
+Sunayama23; bit-identical output).
+
+#### Miscentering of the max model
+
+`miscentering = T` translates the whole centred profile (max model, after
+Bsel) by a gamma-distributed offset,
+$P(R_s\mid\sigma) = R_s\sigma^{-2}e^{-R_s/\sigma}$ with
+$\sigma_b = \tau_{\rm mis}R_\lambda(\lambda_b)$, and mixes after the stack:
+
+$$
+O = (1-f_{\rm mis})\,O_{\rm cen} + f_{\rm mis}\,O_{\rm mis},\qquad
+\Sigma_{\rm mis}(R) = \int dR_s\,P\,\frac{1}{\pi}\!\int_0^\pi\! d\theta\;
+\Sigma\big(\sqrt{R^2+R_s^2+2RR_s\cos\theta}\big),\qquad
+\Delta\Sigma_{\rm mis} = \bar\Sigma_{\rm mis}(<R) - \Sigma_{\rm mis}(R).
+$$
+
+`f_mis`, `tau_mis` are **required** from `[miscentering]`.  The module
+calls `y3_cluster::Miscentering` (`../../systematics/miscentering/`) with
+its stack and centred profile; the integral is chosen by `mis_method`:
+
+- **`gauss_legendre` (default)** — fixed GL offset / angle / aperture
+  nodes collapsed to one weight row per (richness slot, $R$) on a log
+  grid of $\Sigma(r\mid\ln M,z)$, so `evaluate` is a dot product with
+  $g_b[m] = \sum_q B(r_m;z_q)\sum_k W_2\,\Sigma(r_m\mid k,q)$.
+- **`cuhre`** — the adaptive full integral of the same $\Sigma(r)$
+  (`MiscenteringCuhre`); the reference, `piecewise_approx` and C++ only,
+  slow (use a coarse `n_lnm` × `n_z`).
+
+`piecewise_approx` builds $\Sigma_{\max}$ from `Sigma_nfw` / `Sigma_hh`
+(natural cubic splines in $\ln r$) and `delta_gap_0/1`, with the core
+below `r_sigma[0]` a uniform disk of mass `haloModel/m2d_core`.  The
+core radius must be small (1.4e-5 at 1e-3, 3e-2 at 0.1): the des_y3 0d
+inis add a sparse core segment to `halo_model` (`R_perp_core = 0.001`,
+`R_perp_core_bins = 8` knots below the unchanged 0.1–20 grid; 0.001–0.2
+is not fitted, it only carries the profile to the core).  `gauss_legendre` tabulates
+the GL projection from $10^{-4}$.  Measured on the real block: Cuhre vs
+GL on the stacked $O_{\rm mis}$ (8 × 4 grid, 12 bins × 10 R) 2.5e-5 max
+(5.5e-6 median), at both methods' own error level; N_r 1024 → 2048
+1.6e-5; Python vs C++ 6e-14.  Cost (warm): +17 ms (`piecewise_approx`),
++330 ms (`gauss_legendre`).  Options: `n_mis_offset`, `n_mis_theta`,
+`n_mis_aperture` (32), `n_r_mis` (1024), `mis_cuhre_epsrel` (1e-6),
+`mis_cuhre_maxeval` (5e7).  The numerical design is in
+`../../systematics/README.md`.
 
 Measured on the real `des_y3_cpp0d_fast_apriori.ini` block (stacked
 $O_{ij}(R)$, 12 bins × 10 `r_perp`, one sample, Apple M5):
@@ -250,14 +297,14 @@ integral at $R_0$; 2.9% before). Python vs C++ parity: ~5e-15
 (`piecewise_approx`), ~1e-7 (`gauss_legendre`, scipy vs GSL bicubic).
 Run instructions: [How to run `Shear1h2hMax`](#how-to-run-shear1h2hmax).
 
-`Shear1h2hMax` no longer has a miscentering term, a `max_xi` path,
-`one_halo_physical_density` handling, or a multiply-only Bsel consumer;
-`Shear1h2hMaxProfile` was removed. The CUDA backend
-(`cuda/0d/Shear1h2hMaxGpu.cu`, 8 ms/sample on A100) still implements
-the older miscentred piecewise model (`include_miscentering`,
-`miscentering/{f_mis,tau_mis}`) and has no `profile_method`, so it is no
-longer a twin of the current C++ class; its recorded 6.4e-15 agreement
-was with the earlier, miscentred C++.
+`Shear1h2hMax` no longer has the old 1-halo-only miscentering term
+(`include_miscentering`), a `max_xi` path, `one_halo_physical_density`
+handling, or a multiply-only Bsel consumer; `Shear1h2hMaxProfile` was
+removed. The CUDA backend (`cuda/0d/Shear1h2hMaxGpu.cu`, 8 ms/sample on
+A100) still implements that older miscentred piecewise model and has no
+`profile_method` or `miscentering` option, so it is no longer a twin of
+the current C++ class; its recorded 6.4e-15 agreement was with the
+earlier, miscentred C++.
 
 The separate reference backends — the [3d backends](#the-3d-backends)
 (`Shear1h2hMax3d` C++) and the
