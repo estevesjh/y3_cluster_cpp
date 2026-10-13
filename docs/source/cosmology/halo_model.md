@@ -1,6 +1,7 @@
 # Halo Model
 
-`Python` · `y3_cluster_cpp` (`y3_buzzard/halo_model_cosmosis.py`, physics in `src/pipelines/cosmology/`) · `Halo population` · module `halo_model` · `141 ms/sample`
+`Python` · `y3_cluster_cpp` (`y3_buzzard/halo_model_cosmosis.py`, physics in `src/pipelines/cosmology/`) ·
+`Halo population` · module `halo_model` · `141 ms/sample`
 
 Publishes the halo-model ingredients consumed by half the downstream
 pipeline: the Tinker-2010 halo bias $b(M,z)$, the nonlinear matter
@@ -10,9 +11,11 @@ tables $\Sigma_{\rm NFW}$, $\Delta\Sigma_{\rm NFW}$ read by
 
 ## Script
 
-- Source: [`y3_buzzard/halo_model_cosmosis.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/y3_buzzard/halo_model_cosmosis.py)
+- Source:
+  [`y3_buzzard/halo_model_cosmosis.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/y3_buzzard/halo_model_cosmosis.py)
 
-- Physics library (canonical, survey-agnostic): [`src/pipelines/cosmology/`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/cosmology/README.md)
+- Physics library (canonical, survey-agnostic):
+  [`src/pipelines/cosmology/`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/cosmology/README.md)
   — `halo_model.py` (classes `biasModel`, `lensingModel`, `ct_2hTerm`,
   `scaleShiftCosmo`), `concentration.py` (Child18/Duffy $c(M,z)$),
   `nfw_model.py` (analytic Wright & Brainerd $\Sigma/\Delta\Sigma$),
@@ -119,7 +122,7 @@ compute_lensing_2h = F
 | `Radii_min/max/bins` | radius grid of the 2h $W_p$ tables | cMpc/$h$ | 1.0, 35.0, 128 |
 | `M_min/max/bins` | halo-mass grid | $M_\odot/h$ | $10^{12}$, $10^{16}$, 100 |
 | `compute_lensing_1h` | publish NFW $\Sigma/\Delta\Sigma$ tables (needed by `Shear1hGl`) | — | T |
-| `compute_lensing_2h` | publish two-halo `Sigma_hh/dSigma_hh` tables (needed by `Shear1h2hMax`) | — | F |
+| `compute_lensing_2h` | publish two-halo `Sigma_hh/dSigma_hh/Sigma_bar_hh` tables; with `compute_lensing_1h = T` also the max-model `r_trans`, `c0_trans`, `delta_gap_0`, `delta_gap_1` (both needed by `Shear1h2hMax`) | — | F |
 | `z_halo` | redshift at which the 1-halo concentration is evaluated (deprecated alias `one_halo_z`) | — | 0.4 (extract fixtures pin 0.0) |
 | `one_halo_z_density` | $(1+z)^3$ power folded into `rho_m_ref` | — | 0 |
 | `one_halo_physical_density` | flag consumers read to apply the exact $(1+z)^2\,\Delta\Sigma(R(1+z))$ identity | — | F |
@@ -143,7 +146,8 @@ compute_lensing_2h = F
 | `haloModel/bias` | Tinker-2010 halo bias $b(M,z)$ | `(50, 100)` | `b_sel_marg`, `ShearPrjGl`, `bsel`, `Shear1h2hMax` — see {doc}`halo_bias` |
 | `haloModel/rho_m_ref` | reference density $\Omega_m\rho_{\rm crit,0}(1+z_{\rm dens})^3$ of every NFW boundary and amplitude (unified $\rho_m$ convention) | scalar | `Shear1hGl`, `Shear1h2hMax`, `ShearPrjGl` |
 | `haloModel/rhoc` | critical density $\rho_c(z)$ | `(50,)` | diagnostics |
-| `xi_nl/{r, z, xi_nl}` | nonlinear matter correlation function | $r$: `(128,)` cMpc/$h$; `(50, 128)` | `b_sel_marg`, `ShearPrjGl` |
+| `xi_nl/{r, z, xi_nl}` | nonlinear matter correlation function | $r$: `(128,)` cMpc/$h$; `(50, 128)` | `b_sel_marg`, `ShearPrjGl`, `Shear1h2hMax` (`gauss_legendre`, read bicubic) |
 | `haloModel/{r_sigma, Sigma_nfw, dSigma_nfw, concentration, scale_shift, hubble_shift, k}` | NFW 1h lensing tables (`compute_lensing_1h = T`) | `r_sigma`: `(128,)` cMpc/$h$; tables `(100, 128)` | `Shear1hGl`, `Shear1h2hMax`; `concentration` also by `ShearPrjGl` |
 | `haloModel/{Sigma_hh, dSigma_hh}` | two-halo lensing tables, bias not applied — **not written** in the reference run (`compute_lensing_2h = F`) | `(50, 128)` | `Shear1h2hMax` — {doc}`../observables/second_halo_term` |
+| `haloModel/{r_trans, c0_trans, delta_gap_0, delta_gap_1}` | max-model transition radius and piecewise matching terms on the `(lnM, z)` grid (`compute_lensing_1h = compute_lensing_2h = T`, or `compute_max1h2h = T`) | — | `Shear1h2hMax` (`piecewise_approx`; `delta_gap_0` only with `bsel = T`) |
 

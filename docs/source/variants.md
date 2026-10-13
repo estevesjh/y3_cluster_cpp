@@ -34,7 +34,7 @@ explicitly ({doc}`observables/likelihood`).
 | Adaptive projection backends (`ShearPrjGsl`, `ShearPrjCuhre`, `ShearPrjFrozenCuhre`) | projection stage | same, adaptive quadrature | validation-only |
 | Centred one-halo (`Shear1hSel`) | `Shear1hMisSel` → `Shear1hSel` | $\gamma_t^{1h}$ without miscentering | historical / validation |
 | PAGANI selection-bias benchmarks (`P1/I1/I2PaganiIntegrand`) | `b_sel_marg` → 3 GPU modules | same $(P_1, I_1, I_2)$ | validation-only |
-| **Traditional $1h{+}2h$ max model** (`Shear1h2hMax`) | `+ halo_model` 2h branch, no projection stage | 3D halo exclusion $\xi_{\rm hm}=\max(\xi_{1h}, b\,\xi_{\rm mm})$ with 3-pillar bridging | **model option** (see below) |
+| `Shear1h2hMax` ($1h{+}2h$) | `+ halo_model` 2h | 3D exclusion $\max(\xi_{1h}, b\,\xi_{\rm mm})$ | **model option** |
 | Population diagnostics (`MassWeightedSel`, `BiasWeightedSel`, `n_operator_ratios`) | added after `NumCountsSel` | adds $\langle M\rangle_i$, $\langle b\rangle_i$ | diagnostics |
 
 ## widePlanck self-closure — `mock_mcmc_cp_camb.ini`
@@ -118,30 +118,41 @@ inherits the $I_2 - I_1$ cancellation the production module avoids.
 The pre-projection shear model: run `halo_model` with
 `compute_lensing_2h = T` ({doc}`observables/second_halo_term`), and
 formulate the one-halo and biased two-halo terms via 3D halo exclusion and
-3-pillar smooth bridging (rather than a 2D pointwise maximum or sum):
+piecewise approximation (rather than a 2D pointwise maximum or sum):
 
 1. In 3D real space, halo exclusion is defined on the correlation function:
    $$\xi_{\rm hm}(r) = \max\left[\xi_{1h}(r),\; b(M, z)\,\xi_{\rm mm}(r, z)\right],$$
    with transition radius $r_{\rm trans}$ where $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
-2. Projected excess surface density $\Delta\Sigma_{\max}$ is assembled via 3-pillar bridging:
+2. The projected excess surface density $\Delta\Sigma_{\max}$ is approximated around transition radius and is assembled
+   by building a piecewise function:
    $$\Delta\Sigma_{\max}(R \mid M, z) = \begin{cases}
    \Delta\Sigma_{1h}(R) + \Delta_{\rm gap}^1 \left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
    b(M, z)\,\Delta\Sigma_{\rm hh}(R) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans},
    \end{cases}$$
-   where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and $\Delta_{\rm gap}^1 = \Delta\Sigma_{\max}(r_{\rm trans}) - \Delta\Sigma_{1h}(r_{\rm trans})$.
+   where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and
+   $\Delta_{\rm gap}^1 = \Delta\Sigma_{\max}(r_{\rm trans}) - \Delta\Sigma_{1h}(r_{\rm trans})$.
+   This is `profile_method = piecewise_approx` (default), a fast and
+   precise approximation; `profile_method = gauss_legendre` computes the
+   full integral of $\xi_{\max}$ on Gauss–Legendre nodes (~1e-5
+   precision at ~100× the cost; {doc}`observables/second_halo_term`).
+   $\Delta\Sigma_{1h}$ is the centred NFW profile — the max model has no
+   miscentering term.
 
 $$\gamma_t^{\rm theory}(R \mid i) =
 N_i[\Delta\Sigma_{\max}](R)\,\langle\Sigma_{\rm crit}^{-1}\rangle / N_i[1].$$
 
-Implemented by
-[`Shear1h2hMax`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py)
-(`shear1h2h_max.py`, C++ `Shear1h2hMax.cc`, CUDA
-`Shear1h2hMaxGpu.cu`) — a **model option**, not part of the reference
-pipeline ({doc}`../running`, {doc}`observables/second_halo_term`).
+Implemented by [`Shear1h2hMax`][shear1h2h_max_src] (C++ `Shear1h2hMax.cc` / `shear1h2h_max_t.hh`
+and its Python twin `shear1h2h_max.py`, which write the same `shear1h2h_max/vals` and must
+not both run in one pipeline; the CUDA `Shear1h2hMaxGpu.cu` still implements the older
+miscentred piecewise model) — a **model option**, not part of the reference pipeline
+({doc}`../running`, {doc}`observables/second_halo_term`).
 Unlike the one-halo operator, the two-halo term is $z$-dependent, so the
-redshift integral cannot be contracted past the profile the way
-the one-halo $z$-contracted `0d` path does elsewhere — `Shear1h2hMax` (also `0d`: fixed-GL only) keeps a $z$-resolved
+redshift integral cannot be contracted past the profile the way the one-halo $z$-contracted `0d`
+path does elsewhere — `Shear1h2hMax` (also `0d`: fixed-GL only) keeps a $z$-resolved
 tabulated weight and does a double fixed-GL contraction instead.
+
+[shear1h2h_max_src]:
+  https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py
 
 vs the reference's $1h^{\rm mis} + {\rm prj}$: no miscentering
 suppression at small $R$ and no $b_{\rm sel}$ boost at large $R$
@@ -154,13 +165,10 @@ note). Status: **model option** — and the wired production
 
 Likelihood wiring: `src/pipelines/buzzard/likelihoods/likelihood_cp.py` consumes the max model
 with `shear_max_section = shear1h2h_max` (theory =
-`shear1h2h_max/vals` / $N_i$, no projection term). Setting
-`is_b_proj_costanzi26 = T` multiplies that theory by the Costanzi-2026
-$\mathcal{B}_{\rm prj}(R)$ selection-bias correction
-(`src/pipelines/systematics/costanzi_bprj/`, App. C of arXiv:2604.05833),
-with its parameters read from the values-file section `[costanzi_bprj]`,
-the bin centres `lob_centers`/`zob_centers` published into that section by
-the `costanzi_bprj` module stage, and the radii from `shear_r_perp`.
+`shear1h2h_max/vals` / $N_i$, no projection term). Selection-bias
+corrections for the max profile are enabled with `bsel = T` and
+`bsel_model = Costanzi26 | Sunayama23` on `Shear1h2hMax`
+({doc}`systematics/bsel_profile`).
 
 ## Population diagnostics
 

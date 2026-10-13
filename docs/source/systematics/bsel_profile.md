@@ -15,10 +15,13 @@ code changes, so this page can be checked before the pull request is merged.
 
 ## Tagged implementations
 
-| Tag | Python kernel | C++ profile | Max-model consumer |
+| Tag | Python kernel | C++ kernel | Values section |
 |---|---|---|---|
-| `Costanzi26` | `src/pipelines/systematics/selection_boost/BselCostanzi26.py` (`BselCostanzi26`) | `BselCostanzi26` in `src/pipelines/systematics/selection_boost/Bsel.hh` | `Shear1h2hMaxSelCostanzi26` |
-| `Sunayama23` | `src/pipelines/systematics/selection_boost/BselSunayama23.py` (`BselSunayama23`) | `BselSunayama23` in `src/pipelines/systematics/selection_boost/Bsel.hh` | `Shear1h2hMaxSelSunayama23` |
+| `Costanzi26` | `BselCostanzi26.py` (`BselCostanzi26`) | `BselCostanzi26` in `Bsel.hh` | `boost_selection_costanzi26` |
+| `Sunayama23` | `BselSunayama23.py` (`BselSunayama23`) | `BselSunayama23` in `Bsel.hh` | `boost_selection_sunayama23` |
+
+The legacy section names `bsel_profile_costanzi26` and
+`bsel_profile_sunayama23` are still accepted.
 
 `BselModels` in `selection_boost/Bsel.py` and `selection_boost/Bsel.hh` is the shared
 tag dispatcher. It accepts exactly `Costanzi26` or `Sunayama23`; the two
@@ -66,6 +69,41 @@ for Sunayama23, with black for the no-Bsel baseline and each uncertainty band
 matching its corresponding mean curve.
 ```
 
+## The Bsel operator on $\Delta\Sigma$
+
+$\mathcal{B}_{\rm sel}(R)$ multiplies the surface density $\Sigma$, so
+the excess surface density picks up a non-local term. For each
+$(\ln M, z)$ node of the `Shear1h2hMax` sum,
+
+$$
+\Delta\Sigma_{\rm sel}(R) = \mathcal{B}_{\rm sel}(R)\,\Delta\Sigma(R)
+- \frac{M_{\rm sel}(R)}{\pi R^2},
+\qquad
+\frac{M_{\rm sel}(R)}{\pi R^2} = R\int_0^1 u^2\,
+\bar\Sigma(<uR)\,\mathcal{B}_{\rm sel}'(uR)\,du .
+$$
+
+How it is evaluated depends on the `Shear1h2hMax` `profile_method`
+({doc}`../observables/second_halo_term`):
+
+- `piecewise_approx`: `BselDeltaSigmaOperator` (`Bsel.py` / `Bsel.hh`)
+  integrates over $u$ with `n_gl = 20` Gauss–Legendre nodes, using
+  $\bar\Sigma(<r)$ built from `haloModel/{Sigma_bar_nfw, Sigma_bar_hh,
+  delta_gap_0}`. The Sunayama23 derivative jumps at $R_0$
+  ($\Pi_0/R_0 \to c/R$), so the integral is split at $u = R_0/R$
+  (`BselModels.break_radius`: $R_0$ for Sunayama23, 0 for the smooth
+  Costanzi26).
+- `gauss_legendre`: the equivalent local form
+  $\Delta\Sigma_{\rm sel} = \frac{2}{R^2}\int_0^R R'\,\mathcal{B}\,\Sigma\,dR'
+  - \mathcal{B}(R)\,\Sigma(R)$, i.e. $\mathcal{B}$ weights the aperture
+  nodes of the full integral; no extra tables.
+
+Measured on the real `des_y3_cpp0d_fast_apriori.ini` block (12 bins ×
+10 radii), `piecewise_approx` agrees with `gauss_legendre` to ≤ 0.41%
+with Costanzi26 and to 0.56% at $R = 5$ Mpc/$h$ with Sunayama23 ($\Pi_0 = 0.45$,
+$R_0 = 3.5$, $c = -0.1$; 2.9% before the split at $R_0$). Python and C++
+agree to ~5e-15 (`piecewise_approx`) and ~1e-7 (`gauss_legendre`).
+
 ## CosmoSIS configuration
 
 The `[Shear1h2hMax]` section selects the profile and its numerical settings.
@@ -80,17 +118,23 @@ zt_low = 0.05
 zt_high = 0.80
 lnm_low = 29.9336
 lnm_high = 36.7300
+profile_method = piecewise_approx   ; or gauss_legendre
 
 bsel = T
 bsel_model = Costanzi26
 ```
+
+The Python module takes the same options under `[shear1h2h_max]`
+(`file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py`).
+Run one or the other, never both: they write the same
+`shear1h2h_max/vals`.
 
 The corresponding values section for the Costanzi tag is:
 
 ```ini
 [boost_selection_costanzi26]
 ; Raw-Sigma calibration from Costanzi et al. (2026), App. C.
-A = 0.10
+A = 0.03
 alpha = 0.92
 beta = -0.53
 gamma = 4.1
@@ -103,20 +147,41 @@ For a Sunayama23 run, change only the selected tag and section:
 bsel = T
 bsel_model = Sunayama23
 
-[bsel_profile_sunayama23]
-; One Pi0 and R0 value per richness-bin row; c is shared.
-lambda_bin = 0 1 2 3
-pi0 = <Pi0_bin0> <Pi0_bin1> <Pi0_bin2> <Pi0_bin3>
-r0 = <R0_bin0> <R0_bin1> <R0_bin2> <R0_bin3>
-c = <shared_c>
+[boost_selection_sunayama23]
+; Scalars apply to every richness bin; c is shared.
+pi0 = 0.45
+r0 = 3.5
+c = -0.1
+; Per-bin rows instead:
+; lambda_bin = 0 1 2 3
+; pi0 = <Pi0_bin0> <Pi0_bin1> <Pi0_bin2> <Pi0_bin3>
+; r0 = <R0_bin0> <R0_bin1> <R0_bin2> <R0_bin3>
 ```
 
-The Sunayama values above are a configuration template, not calibrated
+The Sunayama values above are an example, not calibrated
 defaults. The final values must match the approved richness-bin wall and the
 units used by the lensing profile.
 
 The existing `[bsel]` section must not be renamed or reused: it belongs to
 the angular selection-bias module.
+
+### Quick run
+
+With the CosmoSIS environment loaded (`source ~/cosmosis_y3/cosmosis_init_macos.sh`
+on macOS, {doc}`../building_macos`), the test sampler runs one point.
+`-p` overrides module options; `-v` sets (or adds) values-file entries:
+
+```bash
+cosmosis cosmosis-models/des_y3_cpp0d_fast_apriori.ini -p runtime.sampler=test test.save_dir=out \
+  "pipeline.modules=consistency GrowthFactor cp_camb MfTinker halo_model \
+    average_sigma_crit_inv sel_function Shear1h2hMax" \
+  Shear1h2hMax.bsel=T Shear1h2hMax.bsel_model=Sunayama23 \
+  -v boost_selection_sunayama23.pi0=0.45 boost_selection_sunayama23.r0=3.5 boost_selection_sunayama23.c=-0.1
+```
+
+`[halo_model]` must set `compute_lensing_1h = T` and
+`compute_lensing_2h = T` (as `des_y3_cpp0d_fast_apriori.ini` does). The
+result is in `out/shear1h2h_max/vals.txt`.
 
 ## Options
 
@@ -124,6 +189,7 @@ the angular selection-bias module.
 |---|---|---|
 | `bsel` | Enables the tagged Bsel profile | Optional; defaults to `F` |
 | `bsel_model` | Model tag: `Costanzi26` or `Sunayama23` | `bsel = T` |
+| `lob_centers` | Richness centres for Costanzi26 scale $R_\lambda(\lambda_{\rm ob})$ | Defaults to `25 37.5 52.5 130` |
 
 Configuration errors should be explicit: an unknown tag, a missing
 model-specific values section, or incompatible wall lengths must stop the module rather than
@@ -135,23 +201,29 @@ silently falling back to the unselected profile.
 
 - `BselCostanzi26.__call__`, `derivative`, `from_source`, and `validate_wall`.
 - `BselSunayama23.__call__`, `derivative`, `from_source`, and `validate_wall`.
-- `BselModels.from_source`, `__call__`, and `derivative` for explicit tag
-  dispatch.
-- `Shear1h2hMaxSelCostanzi26` and `Shear1h2hMaxSelSunayama23` as the tagged
-  selected-profile consumers.
+- `BselModels.from_source`, `__call__`, `derivative`, and `break_radius`
+  for explicit tag dispatch.
+- `BselDeltaSigmaOperator.apply(delta_sigma, mean_sigma_fn, R, ...)` — the
+  non-local $\Delta\Sigma$ operator used by `Shear1h2hMax`.
+- `Shear1h2hMaxSelCostanzi26` / `Shear1h2hMaxSelSunayama23` — multiply-only
+  helpers kept in the library and its tests; `Shear1h2hMax` no longer
+  uses them (they omit the $M_{\rm sel}/(\pi R^2)$ term).
 
 ### C++
 
 - `y3_cluster::BselCostanzi26` and `y3_cluster::BselSunayama23` for the two
   kernels.
-- `y3_cluster::BselModels` for explicit tag parsing and dispatch.
-- `Shear1h2hMaxSelCostanzi26` and `Shear1h2hMaxSelSunayama23` for the selected
-  profile consumers.
-- `Shear1h2hMax` remains the CosmoSIS module entry point and writes the
-  existing `shear1h2h_max/vals` output.
+- `y3_cluster::BselModels` for explicit tag parsing, dispatch, and
+  `break_radius`.
+- `y3_cluster::BselDeltaSigmaOperator` for the non-local $\Delta\Sigma$
+  operator (`n_gl = 20`, split at the break radius).
+- `Shear1h2hMaxSelCostanzi26` / `Shear1h2hMaxSelSunayama23` and
+  `make_shear1h2h_max_selected_profile` — multiply-only helpers, not used
+  by `Shear1h2hMax`.
+- `Shear1h2hMax` is the CosmoSIS module entry point and writes
+  `shear1h2h_max/vals`.
 
-See {doc}`../observables/second_halo_term` for the max-model context and
-the selected-profile consumers described above.
+See {doc}`../observables/second_halo_term` for the max-model context.
 
 ## References
 

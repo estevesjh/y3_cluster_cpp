@@ -31,18 +31,21 @@ distribution. The $\Sigma_{\rm crit}^{-1}$ factor is optional: set it to
 unity to compute $\Delta\Sigma$; include the lensing-geometry factor to
 return the tangential shear $\gamma_T$. The optional traditional max
 model retains the redshift-dependent two-halo term via 3D halo exclusion
-and 3-pillar smooth bridging:
+and piecewise approximation:
 
 1. In 3D real space, halo exclusion is defined on the correlation function:
    $$
    \xi_{\rm hm}(r) = \max\left[\xi_{1h}(r),\; b(M, z)\,\xi_{\rm mm}(r, z)\right],
    $$
-   with transition radius $r_{\rm trans}$ defined by $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
-2. Enforcing the quadratic gap bridge for $\Delta\Sigma$ uniquely determines the exact unified profiles for $\Sigma$, $\bar{\Sigma}$, and $\Delta\Sigma$:
+   with transition radius $r_{\rm trans}$ defined by
+   $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
+2. The projected excess surface density $\Delta\Sigma_{\rm max}$ is approximated around transition radius and is
+   assembled by building a piecewise function:
    - **Projected Surface Density $\Sigma(R)$**:
      $$
      \Sigma_{\rm hm}(R, M, z) = \begin{cases}
-       \Sigma_{1h}(R, M) + \Delta_{\rm gap}^{(\Sigma)}(M, z) + 2\,\Delta_{\rm gap}(M, z)\left[1 - \left(\frac{R}{r_{\rm trans}}\right)^2\right], & R < r_{\rm trans}, \\[6pt]
+       \Sigma_{1h}(R, M) + \Delta_{\rm gap}^{(\Sigma)}(M, z) + 2\,\Delta_{\rm gap}(M, z)\left[1
+         - \left(\frac{R}{r_{\rm trans}}\right)^2\right], & R < r_{\rm trans}, \\[6pt]
        b(M, z)\,\Sigma_{\rm hh}(R, z), & R \ge r_{\rm trans},
      \end{cases}
      $$
@@ -50,18 +53,32 @@ and 3-pillar smooth bridging:
    - **Enclosed Mean Surface Density $\bar{\Sigma}(<R)$**:
      $$
      \bar{\Sigma}_{\rm hm}(<R, M, z) = \begin{cases}
-       \bar{\Sigma}_{1h}(<R, M) + \Delta_{\rm gap}^{(\Sigma)} + 2\,\Delta_{\rm gap} - \Delta_{\rm gap}\left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
+       \bar{\Sigma}_{1h}(<R, M) + \Delta_{\rm gap}^{(\Sigma)} + 2\,\Delta_{\rm gap}
+         - \Delta_{\rm gap}\left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
        b(M, z)\,\bar{\Sigma}_{\rm hh}(<R, z) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans}.
      \end{cases}
      $$
    - **Excess Surface Density $\Delta\Sigma(R) = \bar{\Sigma}(<R) - \Sigma(R)$**:
      $$
      \Delta\Sigma_{\rm hm}(R, M, z) = \begin{cases}
-       \Delta\Sigma_{1h}(R, M) + \Delta_{\rm gap}(M, z) \left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
+       \Delta\Sigma_{1h}(R, M) + \Delta_{\rm gap}(M, z) \left(\frac{R}{r_{\rm trans}}\right)^2,
+         & R < r_{\rm trans}, \\[6pt]
        b(M, z)\,\Delta\Sigma_{\rm hh}(R, z) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans},
      \end{cases}
      $$
-     where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and $\Delta_{\rm gap}(M, z) = [b(M, z)\,\Delta\Sigma_{\rm hh}(r_{\rm trans}, z) + (C_0 / r_{\rm trans}^2)\times 10^{-12}] - \Delta\Sigma_{1h}(r_{\rm trans}, M)$. Both $\Sigma$, $\bar{\Sigma}$, and $\Delta\Sigma$ are strictly $C^0$ continuous at $R = r_{\rm trans}$.
+     where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and
+     $$\Delta_{\rm gap}(M, z) = \left[b(M, z)\,\Delta\Sigma_{\rm hh}(r_{\rm trans}, z) +
+     \frac{C_0}{r_{\rm trans}^2}\times 10^{-12}\right] - \Delta\Sigma_{1h}(r_{\rm trans}, M).$$
+     Both $\Sigma$, $\bar{\Sigma}$, and $\Delta\Sigma$ are strictly $C^0$ continuous at $R = r_{\rm trans}$.
+
+   This piecewise form is `profile_method = piecewise_approx` (the
+   default), a fast and precise approximation of the max model.
+   `profile_method = gauss_legendre` instead integrates
+   $\xi_{\max} = \max(\xi_{1h}, b\,\xi_{\rm mm})$ in full on
+   Gauss–Legendre nodes (see
+   [the max-model section](#traditional-1h2h-max-model-z-resolved-gl)).
+   In the max model $\xi_{1h}$ / $\Delta\Sigma_{1h}$ is the **centred**
+   NFW profile: `Shear1h2hMax` carries no miscentering term.
 
 The dims tag of each backend counts its **adaptive** integration
 dimensions, and the physics dictates which reductions are legal:
@@ -91,11 +108,12 @@ baselines are stated in-cell.
 | `3d` | [PAGANI CUDA/A100](#the-3d-backends) | 32 s | 3.0e-4 direct vs the 3d Python reference (re-measured 2026-08-26); CUDA vs C++ twin 4.3e-5 (separate baseline, shared A100) |
 | `0d` | [explicit Python (3-dim GL)](#explicit-fixed-gl-python-references) | 149 ms | 4.9e-5 |
 | `0d` | [one-halo Python/C++ (1-dim GL, z contracted)](#one-halo-z-contracted-gl) | 74 / 9 ms | 8.4e-4; also identity with production (separate baseline) |
-| `0d` | [max C++/CUDA/A100 (2-dim GL, z-resolved)](#traditional-1h2h-max-model-z-resolved-gl) | 11 / 8 ms | 8.3e-4; CUDA agrees with C++ to 6.4e-15 (twin baseline) |
+| `0d` | [max model (piecewise)](#traditional-1h2h-max-model-z-resolved-gl) | 3 / 14 ms | Within 0.43% of GL |
+| `0d` | [max model (GL 64/32)](#traditional-1h2h-max-model-z-resolved-gl) | 0.12 / 0.35 s | 5.8e-5 vs 128/64 nodes |
 | `0d` | [radial series Python/C++ (tables + moments)](#moment-expanded-radial-series) | 6--7 ms | 56--86% vs 3d (known fixed-c=4 defect); 3.7e-3 internal fixed-profile consistency |
 
-The traditional max model is provisional because its two-halo input has
-a separate `haloModel/dSigma_hh` data defect. All backends read their
+The traditional max model is a model option, not part of the reference
+pipeline. All backends read their
 lensing profile tables (`dSigma_nfw`, `dSigma_hh`, `bias`,
 `concentration`) from the `haloModel` datablock section, whose
 halo-model physics lives in the cosmology layer:
@@ -154,31 +172,99 @@ includes no production operator headers); the Python twin is
 ### Traditional 1h+2h max model, z-resolved GL
 
 (Formerly the max-model half of `fast_mass`.) The biased two-halo term
-$b(M,z)\,\Delta\Sigma_{hh}(R,z)$ is $z$-dependent and the max is
-nonlinear, so the redshift integral cannot be contracted past the
-profile. The backend keeps the $z$-resolved weight — a double fixed-GL
+$b(M,z)\,\xi_{\rm mm}(r,z)$ is $z$-dependent and the max is nonlinear,
+so the redshift integral cannot be contracted past the profile. The
+backend keeps the $z$-resolved weight — a double fixed-GL
 $(\ln M, z)$ sum per (bin, R), still zero adaptive dimensions:
 
 $$
-O_{ij}^{\rm max}(R)=\int dz\,d\ln M\;W_{ij}(M,z)\,
-\Sigma_{\rm crit}^{-1}(z)\,\Delta\Sigma_{\rm max}(R,M,z),
+O_{ij}^{\rm max}(R)=\sum_{k,q} W_2(b;\ln M_k,z_q)\,
+\Delta\Sigma_{\rm max}(R\mid \ln M_k,z_q),
+\qquad
+W_2 = w^{\ln M}_k\,w^z_q\,\frac{dV}{d\Omega dz}\,\Omega\,
+\Sigma_{\rm crit}^{-1}\,\frac{dn}{d\ln M}\,S_b ,
 $$
 
-with $W_{ij}(M,z)$ the $z$-resolved selection weight (same term
-composition as the one-halo GL core, without the $z$ sum) and
-$\Delta\Sigma_{1h}$ the production miscentred mixture. The $S_{ij}$
-tabulation is still the fast-path hallmark.
+with $W_2$ the $z$-resolved selection weight (same term composition as
+the one-halo GL core, without the $z$ sum). The output
+`shear1h2h_max/vals` is this stacked numerator ($\Sigma_{\rm crit}^{-1}$
+weighted, **not** normalised); the likelihood divides by the number
+counts.
 
-| Dims | Backend | Cost | Precision vs 3d |
-| --- | --- | ---: | --- |
-| `0d` | Max model C++ (2-dim GL, z-resolved) | 11 ms/sample | $8.3\times10^{-4}$; also $6.0\times10^{-15}$ vs Python twin (separate baseline) |
-| `0d` | Max model CUDA / A100 (2-dim GL, z-resolved) | 8 ms/sample | $6.4\times10^{-15}$ vs C++ twin (separate baseline); vs-3d inherited through the C++ row |
+The C++ class `Shear1h2hMax` (`cpp/0d/shear1h2h_max_t.hh`, module
+`Shear1h2hMax.so`) and its Python twin (`python/0d/shear1h2h_max.py`,
+same class structure, options, and DataBlock readers) offer two ways to
+compute $\Delta\Sigma_{\rm max}(R\mid \ln M, z)$, selected by
+`profile_method`:
 
-The explicit references this algorithm validates against are the
-[3d backends](#the-3d-backends) (`Shear1h2hMax3d` C++) and the
+- **`piecewise_approx` (default)** — a fast and precise approximation:
+  $\Delta\Sigma_{1h} + \Delta_{\rm gap}^1 (R/r_{\rm trans})^2$ for
+  $R < r_{\rm trans}$ and $b\,\Delta\Sigma_{hh} + (C_0/R^2)\times10^{-12}$
+  for $R \ge r_{\rm trans}$ (see [The physics](#the-physics)).
+  `r_trans`, `c0_trans` and `delta_gap_1` are **required** from
+  `haloModel` (published by `halo_model` when
+  `compute_lensing_1h = compute_lensing_2h = T`); there is no
+  $\max(1h, 2h)$ fallback.
+- **`gauss_legendre`** — the full integral of
+  $\xi_{\max}(r) = \max[\xi_{\rm nfw}(r\mid\ln M),\, b(\ln M,z)\,\xi_{\rm nl}(r,z)]$
+  on Gauss–Legendre nodes (`OperatorMax1h2h_gl`,
+  `pipelines/cosmology/operator_max1h2h_gl.{hh,py}`):
+
+  $$
+  \Sigma(R) = 2\rho_m\!\int_0^{l_{\max}}\!\xi_{\max}\big(\sqrt{R^2+l^2}\big)\,dl,\quad
+  \bar\Sigma(<R) = \frac{2}{R^2}\!\int_0^R\! R'\,\Sigma(R')\,dR',\quad
+  \Delta\Sigma = \bar\Sigma(<R) - \Sigma(R),
+  $$
+
+  with `n_los` line-of-sight and `n_aperture` aperture nodes,
+  $\xi_{\rm nfw} = \rho_{\rm NFW}/\rho_m - 1$ (M200m, from
+  `haloModel/concentration` and `rho_m_ref`) and $\xi_{\rm nl}$ read
+  from `xi_nl/{r, z, xi_nl}` with a **bicubic** spline
+  (`Interp2D(..., bicubic)` in C++, `dm.Bilinear2D(..., cubic=True)` in
+  Python). The profile is bin-independent, so $\Sigma$ is tabulated once
+  per sample at every `r_perp` radius and its aperture nodes. It needs
+  no piecewise tables. About $10^{-5}$ precision at roughly 100 times
+  the cost.
+
+Optional selection boost (`bsel = T`, `bsel_model = Costanzi26 |
+Sunayama23`) gives $\Delta\Sigma_{\rm sel} = \mathcal{B}\,\Delta\Sigma
+- M_{\rm sel}/(\pi R^2)$ per $(\ln M, z)$ node; see
+`../../systematics/README.md` and the Sphinx page
+`systematics/bsel_profile`.
+
+Measured on the real `des_y3_cpp0d_fast_apriori.ini` block (stacked
+$O_{ij}(R)$, 12 bins × 10 `r_perp`, one sample, Apple M5):
+
+| `profile_method` (`n_los`/`n_aperture`) | C++ | Python | Precision |
+| --- | ---: | ---: | --- |
+| `piecewise_approx` | 0.003 s | 14 ms | Agrees with `gauss_legendre` to $\le 0.43\%$ across all radii |
+| `gauss_legendre` 64/32 (default) | 0.12 s (~40×) | 0.35 s | 5.8e-5 vs 128/64 |
+| `gauss_legendre` 128/64 | 0.41 s (~140×) | — | 1.7e-5 vs 256/128 |
+| `gauss_legendre` 256/128 | 1.5 s | — | 8.9e-6 vs 512/256 |
+
+With bicubic $\xi_{\rm nl}$; bilinear interpolation stalled the node
+convergence at ~4e-5 and biased the stack by 6e-4. With Bsel,
+`piecewise_approx` vs `gauss_legendre` is ≤ 0.41% (Costanzi26) and up
+to 0.56% at $R = 5$ Mpc/h (Sunayama23, after splitting the $B'$
+integral at $R_0$; 2.9% before). Python vs C++ parity: ~5e-15
+(`piecewise_approx`), ~1e-7 (`gauss_legendre`, scipy vs GSL bicubic).
+Run instructions: [How to run `Shear1h2hMax`](#how-to-run-shear1h2hmax).
+
+`Shear1h2hMax` no longer has a miscentering term, a `max_xi` path,
+`one_halo_physical_density` handling, or a multiply-only Bsel consumer;
+`Shear1h2hMaxProfile` was removed. The CUDA backend
+(`cuda/0d/Shear1h2hMaxGpu.cu`, 8 ms/sample on A100) still implements
+the older miscentred piecewise model (`include_miscentering`,
+`miscentering/{f_mis,tau_mis}`) and has no `profile_method`, so it is no
+longer a twin of the current C++ class; its recorded 6.4e-15 agreement
+was with the earlier, miscentred C++.
+
+The separate reference backends — the [3d backends](#the-3d-backends)
+(`Shear1h2hMax3d` C++) and the
 [explicit fixed-GL section](#explicit-fixed-gl-python-references)
-(`shear1h2h_max_explicit_gl.py`). Treat the max-model two-halo term as
-provisional before using it as a scientific reference.
+(`shear1h2h_max_explicit_gl.py`, `validate_shear1h2h_max.py`) — keep the
+miscentred one-halo arm, so they are not like-for-like references for
+the current `Shear1h2hMax`.
 
 ### Explicit fixed-GL Python references
 
@@ -192,7 +278,7 @@ dimensions. Their adaptive C++/CUDA twins are the
 | Dims | Module | Observable | Output | Cost / accuracy |
 | --- | --- | --- | --- | --- |
 | `0d` | `python/0d/shear1h_explicit_gl.py` (3-dim GL) | one-halo shear | `shear1h_explicit_gl/vals` | 149 ms/sample; $4.9\times10^{-5}$ vs the adaptive reference |
-| `0d` | `python/0d/shear1h2h_max_explicit_gl.py` (3-dim GL) | 1h+2h max model | `shear1h2h_max_explicit_gl/vals` | z-RESOLVED weight (`explicit_mass_z_weights`) × `MaxMixtureProfile`; the explicit reference the max-model GL backends validate against |
+| `0d` | `python/0d/shear1h2h_max_explicit_gl.py` (3-dim GL) | 1h+2h max model | `shear1h2h_max_explicit_gl/vals` | z-RESOLVED weight (`explicit_mass_z_weights`) × `MaxMixtureProfile`; miscentred max-model reference (not like-for-like with the current `Shear1h2hMax`, which has no miscentering) |
 | `0d` | `python/0d/validate_explicit_vs_production.py` | validator | — | explicit fixed-GL vs production |
 
 Both read `miscentering/{f_mis,tau_mis}` strictly — no in-code default
@@ -318,7 +404,8 @@ subdivides the outer mass integral (reported error at or below 1e-6).
 The max-model observable has its explicit adaptive reference here too
 (`Shear1h2hMax3d`): because the two-halo term is $z$-dependent
 and the max nonlinear, the whole integrand rides inside the adaptive
-volume with $d_{\rm tot} = \Delta\Sigma_{\rm max}$ assembled via the 3D halo-exclusion bridging operators. Both max backends require
+volume with $d_{\rm tot} = \Delta\Sigma_{\rm max}$ assembled via 3D halo exclusion and piecewise approximation. Both
+max backends require
 `compute_lensing_2h = T` and sanitize `dSigma_hh` NaNs to 0 before
 interpolation (exact under the max), and all backends here read
 `miscentering/{f_mis,tau_mis}` strictly.
@@ -339,8 +426,9 @@ production timing is supplied by the `0d` fixed-GL C++ backends.
 | `0d` | Python | `python/0d/shear1h_gl.py` (+ `validate_fast_vs_production.py`) | `shear1h_gl/vals` |
 | `0d` | C++ | `cpp/0d/Shear1hGl.cc` (physics `cpp/0d/shear1h_gl_t.hh`) | `Shear1hGl.so`, section `shear1h_gl` |
 | `0d` | Python | `python/0d/shear1h2h_max_explicit_gl.py` (+ `validate_shear1h2h_max.py`) | `shear1h2h_max_explicit_gl/vals` |
-| `0d` | C++ | `cpp/0d/Shear1h2hMax.cc` (physics `cpp/0d/shear1h2h_max_t.hh`) | `Shear1h2hMax.so`, section `shear1h2h_max` |
-| `0d` | CUDA | `cuda/0d/Shear1h2hMaxGpu.cu` (physics `cuda/0d/shear1h2h_max_gpu_t.cuh`) | `Shear1h2hMaxGpu.so` in `des_y3_shear1h_0d_cuda/`, section `shear1h2h_max_gpu` |
+| `0d` | C++ | `cpp/0d/Shear1h2hMax.cc` (`shear1h2h_max_t.hh`) | `Shear1h2hMax.so`, output `shear1h2h_max/vals` |
+| `0d` | Python | `python/0d/shear1h2h_max.py` (twin of C++) | ini `[shear1h2h_max]`, output `shear1h2h_max/vals` |
+| `0d` | CUDA | `cuda/0d/Shear1h2hMaxGpu.cu` (physics `cuda/0d/shear1h2h_max_gpu_t.cuh`; older miscentred piecewise model) | `Shear1h2hMaxGpu.so` in `des_y3_shear1h_0d_cuda/`, section `shear1h2h_max_gpu` |
 | `0d` | Python | `python/0d/shear1h_explicit_gl.py`, `python/0d/shear1h2h_max_explicit_gl.py` (+ `validate_explicit_vs_production.py`) | `shear1h_explicit_gl/vals`, `shear1h2h_max_explicit_gl/vals` |
 | `0d` | Python/C++ | radial series: `python/0d/{generate_radial_series_tables,nfw_profile_family,shear1h_radial_series,validate_radial_series}.py`; `cpp/0d/Shear1hRadialSeries.cc` (physics `cpp/0d/shear1h_radial_series_t.hh`) | `shear1h_radial_series/vals` |
 | `3d` | C++ | `cpp/3d/Shear1h3d.cc`, `cpp/3d/Shear1h2hMax3d.cc` (physics `cpp/3d/shear1h_3d_t.hh`, `cpp/3d/shear1h2h_max_3d_t.hh`) | `shear1h3d/…`, `shear1h2hmax3d/…` in `des_y3_shear1h_3d_cpp/` |
@@ -353,3 +441,124 @@ CUDA backend exists for the 1h z-contracted path or the radial series
 Module labels are the ini `[section]` names (`[Shear1hGl]`,
 `[Shear1h2hMax]`, `[Shear1hRadialSeries]`, ...), so pipelines drive
 these backends by pointing those sections at the `.so` paths above.
+
+## How to run `Shear1h2hMax`
+
+The C++ module (`[Shear1h2hMax]`, `Shear1h2hMax.so`) and the Python
+module (`[shear1h2h_max]`, `python/0d/shear1h2h_max.py`) take the same
+options and both write `shear1h2h_max/vals`. Use one or the other —
+**never both in one pipeline** (the second would overwrite the first).
+Worked examples: `cosmosis-models/des_y3_cpp0d_fast_apriori.ini` (C++)
+and `cosmosis-models/des_y3_python0d_fast_apriori.ini` (Python).
+
+### Pipeline and upstream modules
+
+```ini
+[pipeline]
+; last module: Shear1h2hMax (C++) or shear1h2h_max (Python), not both
+modules = consistency GrowthFactor cp_camb MfTinker halo_model
+          average_sigma_crit_inv sel_function
+          Shear1h2hMax
+
+[halo_model]
+file = ${Y3_CLUSTER_CPP_DIR}/y3_buzzard/halo_model_cosmosis.py
+; 1h: dSigma_nfw, Sigma_bar_nfw, concentration; 2h: dSigma_hh, Sigma_bar_hh;
+; both together also publish r_trans, c0_trans, delta_gap_0, delta_gap_1
+compute_lensing_1h = T
+compute_lensing_2h = T
+```
+
+DataBlock inputs (all read every sample):
+
+| Needed by | Inputs |
+| --- | --- |
+| always | cosmology, HMF, distances; `average_sigma_crit_inv`; `haloModel/{r_sigma, lnM, z, bias}` |
+| `piecewise_approx` | `haloModel/{dSigma_nfw, dSigma_hh, r_trans, c0_trans, delta_gap_1}` |
+| `piecewise_approx` + `bsel = T` | also `haloModel/{Sigma_bar_nfw, Sigma_bar_hh, delta_gap_0}` |
+| `gauss_legendre` | `haloModel/{concentration, rho_m_ref}` and `xi_nl/{r, z, xi_nl}` (no piecewise tables) |
+| `bsel = T` | `boost_selection_costanzi26/*` or `boost_selection_sunayama23/*` (values file) |
+
+### Module options
+
+```ini
+; C++ module. For Python use [shear1h2h_max] with
+; file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py
+[Shear1h2hMax]
+file = ${Y3_CLUSTER_CPP_DIR}/release-build/src/modules/des_y3_shear1h_0d_cpp/Shear1h2hMax.so
+bin_index = 0 1 2 3 4 5 6 7 8 9 10 11      ; wall = bin_index x r_perp (bin slow, R fast)
+r_perp = 0.20000 0.28599 0.40896 0.58480 0.83625 1.19581 1.70998 2.44521 3.49658 5.00000
+zt_low  = 0.05            ; required: true-z GL range
+zt_high = 0.80
+lnm_low  = 29.9336        ; required: ln M GL range
+lnm_high = 36.7300
+n_lnm = 96                ; default 96
+n_z   = 64                ; default 64
+lob_centers = 25 37.5 52.5 130    ; default; Bsel richness anchor
+bsel = F                  ; default F
+; bsel_model = Costanzi26 ; Costanzi26 | Sunayama23, required if bsel = T
+profile_method = piecewise_approx ; default; or gauss_legendre
+n_los = 64                ; gauss_legendre line-of-sight nodes (default 64)
+n_aperture = 32           ; gauss_legendre aperture nodes (default 32)
+```
+
+Switching to the full integral is a one-line change:
+
+```ini
+[Shear1h2hMax]
+profile_method = gauss_legendre
+; n_los = 128             ; optional: doubles the nodes (1.7e-5, ~140x piecewise)
+; n_aperture = 64
+```
+
+### Enabling the selection boost
+
+```ini
+[Shear1h2hMax]
+bsel = T
+bsel_model = Costanzi26   ; or Sunayama23
+```
+
+and, in the values file,
+
+```ini
+[boost_selection_costanzi26]
+A = 0.03
+alpha = 0.92
+beta = -0.53
+gamma = 4.1
+
+[boost_selection_sunayama23]
+pi0 = 0.45                ; scalar applies to every bin; or one value per bin
+r0 = 3.5                  ; Mpc/h
+c = -0.1
+; lambda_bin = 0 1 2 3    ; optional row labels when pi0/r0 are vectors
+```
+
+### Quick single-point run
+
+On macOS, first `source ~/cosmosis_y3/cosmosis_init_macos.sh` (see
+`docs/source/building_macos.md`). Then run the test sampler with
+command-line overrides:
+
+```bash
+cosmosis cosmosis-models/des_y3_cpp0d_fast_apriori.ini -p runtime.sampler=test test.save_dir=out \
+  "pipeline.modules=consistency GrowthFactor cp_camb MfTinker halo_model \
+    average_sigma_crit_inv sel_function Shear1h2hMax" \
+  Shear1h2hMax.profile_method=gauss_legendre
+```
+
+The stacked profile is written to `out/shear1h2h_max/vals.txt`. Bsel can
+be switched on from the command line too; `-v` overrides (or adds)
+values-file entries:
+
+```bash
+cosmosis cosmosis-models/des_y3_cpp0d_fast_apriori.ini -p runtime.sampler=test test.save_dir=out \
+  "pipeline.modules=consistency GrowthFactor cp_camb MfTinker halo_model \
+    average_sigma_crit_inv sel_function Shear1h2hMax" \
+  Shear1h2hMax.bsel=T Shear1h2hMax.bsel_model=Sunayama23 \
+  -v boost_selection_sunayama23.pi0=0.45 boost_selection_sunayama23.r0=3.5 boost_selection_sunayama23.c=-0.1
+```
+
+For the Python module use `cosmosis-models/des_y3_python0d_fast_apriori.ini`,
+`shear1h2h_max` in the module list, and `shear1h2h_max.<option>=...`
+overrides.

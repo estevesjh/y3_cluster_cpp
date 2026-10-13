@@ -23,6 +23,29 @@ and compatibility rules.
 | `shared/sel_kernels.py` | Cached loader and HOD/richness-kernel adapters for the shared selection module |
 | `shared/z_kernel.py` | Projection photo-$z$ kernel conventions |
 
+### Tagged Bsel profile layer
+
+The following APIs provide the optional optical selection-bias correction
+for `Shear1h2hMax`, applied as
+$\Delta\Sigma_{\rm sel} = \mathcal{B}\,\Delta\Sigma - M_{\rm sel}/(\pi R^2)$.
+They are documented in {doc}`../systematics/bsel_profile`; the existing angular
+`bsel` module is a separate API.
+
+| File | Main types | Role |
+|---|---|---|
+| `BselCostanzi26.py` | `BselCostanzi26` | Costanzi26 kernel, derivative, loader, and validation |
+| `BselSunayama23.py` | `BselSunayama23` | Sunayama23 kernel, derivative, loader, and validation |
+| `Bsel.py` | `BselModels`, `BselDeltaSigmaOperator` | Python dispatcher and non-local $\Delta\Sigma$ operator |
+| `Bsel.hh` | `BselModels`, `BselDeltaSigmaOperator` | C++ kernels, dispatcher, and non-local $\Delta\Sigma$ operator |
+| `operator_max1h2h_gl` | `OperatorMax1h2h_gl` | Full Gauss–Legendre integral of $\max(\xi_{1h}, b\,\xi_{\rm mm})$ |
+| `shear1h2h_max.py` | `Shear1h2hMax` | Python max-model module, `shear1h2h_max/vals` producer |
+| `shear1h2h_max_t.hh` | `Shear1h2hMax` | C++ max-model module, `shear1h2h_max/vals` producer |
+
+The Costanzi26 implementation follows Costanzi et al. (2026),
+[arXiv:2604.05833](https://arxiv.org/abs/2604.05833), Appendix C. The
+Sunayama23 implementation follows Sunayama et al. (2023),
+[arXiv:2309.13025](https://arxiv.org/abs/2309.13025), Section 4.2.
+
 ### Observable products
 
 Timing: per-MCMC-sample wall-clock at the fiducial widePlanck point, from
@@ -34,7 +57,7 @@ own accuracy/timing matrix (also surfaced in {doc}`../numerics/index`).
 | `number_counts/3d` | Python reference, `NumCounts3d.so`, `NumCounts3dGpu.so` | Python 25 s (adaptive) / 83 ms (fixed GL); C++ 3.1 s; CUDA 2.0 s |
 | `number_counts/0d` (fast sum) | Python production-algorithm replica, `NumCountsSijGl.so` | Python 5 ms; C++ 6 ms (= DES Y1 `NumCountsSel.so` by identity) |
 | `shear_1h2h/3d` | Python reference, `Shear1h3d.so`, `Shear1h3dGpu.so` | Python 35 s (adaptive) / 149 ms (fixed GL); C++ 51 s; CUDA 32 s |
-| `shear_1h2h/0d` (GL paths) | Python references, `Shear1hGl.so`, `Shear1h2hMax.so`, `Shear1h2hMaxGpu.so` | `Shear1hGl` Python 74 ms / C++ 9 ms; `Shear1h2hMax` C++ 11 ms / CUDA 8 ms |
+| `shear_1h2h/0d` (GL paths) | Python references, `Shear1hGl.so`, `Shear1h2hMax.so`, `Shear1h2hMaxGpu.so` | `Shear1hGl` Python 74 ms / C++ 9 ms; `Shear1h2hMax` piecewise C++ 3 ms / Python 14 ms, `gauss_legendre` C++ 0.12 s (Apple M5); `Shear1h2hMaxGpu` (older miscentred model) 8 ms |
 | `shear_1h2h/0d` | Python offline generator/evaluator and `Shear1hRadialSeries.so` | Python 6 ms; C++ 7 ms |
 | `shear_projection/2d` + `shear_projection/3d` | `ShearPrjCuhre.so` (2d), `DSigmaPrj3dGpu.so` (3d) | CUDA 95 s |
 | `shear_projection/0d` | Python exact-$z$ reference, `ShearPrjGl.so`, `ShearPrjFrozenGpu.so` | Python 270 ms; C++ 154 ms; CUDA (frozen) 8.3 ms |
@@ -148,7 +171,7 @@ Timing: per-sample, `timing = T` on the DES Y1 reference pipeline
 
 (The remaining Python steps live outside `src/modules/`:
 `halo_model_cosmosis.py` in `y3_buzzard/`; `bsel.py`, `prj_params.py`,
-`costanzi_bprj.py`, `apply_boost_factor.py` under
+`apply_boost_factor.py` under
 `src/pipelines/systematics/`; `likelihood_cp.py` under
 `src/pipelines/buzzard/likelihoods/`.)
 

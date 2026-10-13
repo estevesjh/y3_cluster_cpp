@@ -912,8 +912,8 @@ def execute(block, config):
         block[section_name, "dSigma_hh"]    = lensModel.dSigma['2h']
         block[section_name, "Sigma_bar_hh"] = lensModel.sigma_bar['2h']
 
-    # ----- max(1h, 2h) bridging operators: optional ----------------------
-    # How to compute unified DeltaSigma and Sigma from these operators:
+    # ----- max(1h, 2h) piecewise approximation terms: optional ------------
+    # How to compute unified DeltaSigma and Sigma from these terms:
     #   r_trans(M, z): 3D crossing scale where xi_1h(r) = b * xi_nl(r).
     #   c0_trans(M, z): [M_3D,1h(<r_trans) - b * M_3D,2h(<r_trans)] / pi.
     #   delta_gap_0(M, z): b * Sigma_hh(r_trans) - Sigma_1h(r_trans).

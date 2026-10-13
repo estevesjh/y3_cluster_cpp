@@ -10,13 +10,15 @@ profile and adds the projection term.
 
 ## Script
 
-- Model: [`src/pipelines/shared/sel_gl_weights.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/shared/sel_gl_weights.hh)
+- Model:
+  [`src/pipelines/shared/sel_gl_weights.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/shared/sel_gl_weights.hh)
   (`y3_pipelines::SelGlWeights`, shared with {doc}`number_counts` and
   identity-certified against the production `SelGLCore`) +
   [`src/pipelines/shared/lensing_helpers.hh`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/shared/lensing_helpers.hh)
   (pipeline-owned lensing helpers; production `Shear1hMisSel.so` keeps
   its own `SelGLCore` + `lensing_weights.hh` pair, untouched).
-- Module driver: [`src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hGl.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hGl.cc)
+- Module driver:
+  [`src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hGl.cc`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/cpp/0d/Shear1hGl.cc)
   (`DEFINE_COSMOSIS_SCALAR_EVALUATOR_MODULE`) — bitwise-equivalent to
   DES Y1's `Shear1hMisSel.so` ({doc}`../variants`), own module label
   and output section.
@@ -115,8 +117,10 @@ $(1+z)^2$. Opt-in via `[halo_model] one_halo_physical_density = T`
 `z_amp_power=2` folded into the $z$-integration weight
 (`sel_gl_weights.hh::build_weights`) and the `R\to R(1+z)` query
 rescale at the bin's $z_{\rm eff}$ (`shear1h_gl_t.hh::evaluate`). Not
-yet implemented for `Shear1h2hMaxGpu` or the Python explicit/max
-mirrors (fails loudly there). See GitHub issue #22 for the Buzzard
+yet implemented for `Shear1h2hMaxGpu` or the Python explicit
+mirrors (fails loudly there); `Shear1h2hMax` (C++ and Python) does not
+use it — its one-halo arm is the centred NFW table at the frozen
+reference density. See GitHub issue #22 for the Buzzard
 validation this identity answers.
 
 ## CosmoSIS setup
@@ -197,7 +201,8 @@ $\le 10^{-6}$; the `3d` C++/CUDA rows were re-measured on the reduced
 | `0d` | Python | `shear1h_explicit_gl.py` — explicit fixed-GL 3-dim grid | 149 ms | 4.9e-5 |
 | `0d` | **C++ (this page)**, Python | `Shear1hGl.so` / `shear1h_gl.py` — exact redshift contraction, 1-dim GL mass sum; bitwise-equivalent to `Shear1hMisSel.so` | 9 ms (Python 74 ms) | 8.4e-4 (identity with production) |
 | `0d` | Python, C++ | `Shear1hRadialSeries.so` — offline $U_\ell$ radial-series tables plus per-sample population moments | 6–7 ms | 56–86% raw amplitude (open fixed-$c{=}4$ defect); 3.7e-3 internal fixed-profile consistency |
-| `0d` | Python, C++, CUDA | `Shear1h2hMax` — traditional 3D halo-exclusion max model (3-pillar bridging), $z$-resolved 2-dim GL sum; a model option, not in the reference pipeline ({doc}`second_halo_term`) | 11 ms (CUDA 8 ms) | 8.3e-4 |
+| `0d` | Python, C++ | `Shear1h2hMax` — traditional 3D halo-exclusion max model, centred one-halo arm, $z$-resolved 2-dim GL sum; `profile_method = piecewise_approx` (default) or `gauss_legendre` (full integral); a model option, not in the reference pipeline ({doc}`second_halo_term`) | piecewise 3 ms (Python 14 ms); GL 64/32 0.12 s (Python 0.35 s); Apple M5 | not compared with 3d (the 3d max reference keeps miscentering); piecewise within 0.43% of GL, GL 5.8e-5 node convergence |
+| `0d` | CUDA | `Shear1h2hMaxGpu.so` — older miscentred piecewise max model (no `profile_method`) | 8 ms | historical: agreed with the earlier miscentred C++ to 6.4e-15 |
 
 The radial-series tables are versioned under `data/radial_series` and
 are loaded, never regenerated, during sampling; the family is not a
