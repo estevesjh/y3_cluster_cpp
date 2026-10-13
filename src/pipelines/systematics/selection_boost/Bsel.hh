@@ -315,32 +315,44 @@ public:
   double apply(double delta_sigma, MeanSigmaFn&& mean_sigma_fn,
                double R, int bin_index, double lob, double z) const
   {
-    if (!(R > 0.0))
-      throw std::invalid_argument("BselDeltaSigmaOperator requires R > 0");
-
     // Local term: B_sel(R), multiplies delta_sigma below.
     double const b_val = model_(R, bin_index, lob, z);
-    // Non-local term: GL sum over u in [0, 1] of
-    //   u^2 * barSigma(<u R) * dB_sel/dR'(u R).
-    // dB/dR jumps at the model's break radius (Sunayama23 R0): an n_gl rule
-    // across the jump is only O(1/n_gl) accurate (~2.5% at R = 5, R0 = 3.5
-    // Mpc/h, n_gl = 20), so integrate [0, u_b] and [u_b, 1] separately.
+    std::vector<double> r, c;
+    nodes(R, bin_index, r, c);
+    double m_sel_over_pi_r2 = 0.0;
+    for (std::size_t j = 0; j != r.size(); ++j)
+      m_sel_over_pi_r2 += c[j] * mean_sigma_fn(r[j]) *
+                          model_.derivative(r[j], bin_index, lob, z);
+    m_sel_over_pi_r2 *= R;  // Jacobian dR' = R du
+    return b_val * delta_sigma - m_sel_over_pi_r2;
+  }
+
+  // Quadrature of the non-local term, independent of the profile:
+  //   M_sel / (pi R^2) = R sum_j c_j barSigma(<r_j) dB_sel/dR'(r_j),
+  // r_j = u_j R, c_j = len w_j u_j^2 over GL panels on u in [0, 1].
+  // dB/dR jumps at the model's break radius (Sunayama23 R0): an n_gl rule
+  // across the jump is only O(1/n_gl) accurate (~2.5% at R = 5, R0 = 3.5
+  // Mpc/h, n_gl = 20), so [0, u_b] and [u_b, 1] are separate panels.
+  // The nodes depend only on (R, bin_index), so callers on a fixed radial
+  // wall can tabulate barSigma and dB/dR at them once per sample.
+  void nodes(double R, int bin_index, std::vector<double>& r,
+             std::vector<double>& c) const
+  {
+    if (!(R > 0.0))
+      throw std::invalid_argument("BselDeltaSigmaOperator requires R > 0");
+    r.clear();
+    c.clear();
     double const u_b = model_.break_radius(bin_index) / R;
     double const edges[3] = {0.0, (u_b > 0.0 && u_b < 1.0) ? u_b : 1.0, 1.0};
-    double m_sel_over_pi_r2 = 0.0;
     for (int panel = 0; panel != 2; ++panel) {
       double const a = edges[panel], len = edges[panel + 1] - edges[panel];
       if (!(len > 0.0)) continue;
       for (std::size_t i = 0; i != n_gl_; ++i) {
         double const u = a + len * u_[i];
-        double const r_prime = u * R;
-        double const d_bsel = model_.derivative(r_prime, bin_index, lob, z);
-        double const mean_sig = mean_sigma_fn(r_prime);
-        m_sel_over_pi_r2 += len * w_[i] * (u * u) * mean_sig * d_bsel;
+        r.push_back(u * R);
+        c.push_back(len * w_[i] * (u * u));
       }
     }
-    m_sel_over_pi_r2 *= R;  // Jacobian dR' = R du
-    return b_val * delta_sigma - m_sel_over_pi_r2;
   }
 
   // Local-only limit (drops M_sel): B_sel(R) * DeltaSigma(R).

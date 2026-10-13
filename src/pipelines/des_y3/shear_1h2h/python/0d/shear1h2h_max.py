@@ -37,8 +37,15 @@ Optional bsel (bsel_model = Costanzi26 or Sunayama23), for a given (lnM, z):
 
 Options: bin_index x r_perp cartesian grid (bin slow / R fast),
 zt_low/zt_high/lnm_low/lnm_high (required), n_lnm (96), n_z (64),
-lob_centers (bsel richness anchor), bsel (default F), bsel_model,
-profile_method (piecewise_approx), n_los (64), n_aperture (32).
+lob_centers (bsel/miscentering richness anchor), bsel (default F),
+bsel_model, profile_method (piecewise_approx), n_los (64), n_aperture (32),
+miscentering (default F), n_mis_offset / n_mis_theta / n_mis_aperture (32),
+n_r_mis (1024), mis_method (gauss_legendre; cuhre is C++ only).
+
+Optional miscentering (miscentering = T, [miscentering] f_mis / tau_mis
+required): the whole centred profile (after Bsel) is gamma-miscentred by
+systematics.miscentering.MiscenteringOperator and mixed after the stack,
+O = (1 - f_mis) O_cen + f_mis O_mis; see the C++ header for the method.
 Output: shear1h2h_max/vals  (n_bins * n_r,)
 """
 from __future__ import annotations
@@ -48,6 +55,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+from scipy.interpolate import CubicSpline
 
 for _p in Path(__file__).resolve().parents:
     if (_p / "shared" / "datablock_models.py").is_file():
@@ -59,6 +67,7 @@ from cosmology.operator_max1h2h_gl import OperatorMax1h2h_gl  # noqa: E402
 from shared import datablock_models as dm                     # noqa: E402
 from systematics.selection_richness.python import sel_kernels  # noqa: E402
 from systematics.selection_boost.Bsel import BselDeltaSigmaOperator  # noqa: E402
+from systematics.miscentering.Miscentering import Miscentering      # noqa: E402
 
 OUTPUT_SECTION = "shear1h2h_max"
 PROFILE_METHODS = ("piecewise_approx", "gauss_legendre")
@@ -87,6 +96,7 @@ class Shear1h2hMax:
                                   "piecewise_approx")
         self.n_los = int(opt(options.get_int, "n_los", 64))
         self.n_aperture = int(opt(options.get_int, "n_aperture", 32))
+        self.mis_enabled = bool(opt(options.get_bool, "miscentering", False))
 
         self.lnm_x, self.lnm_w = dm.gl_nodes(self.lnm_lo, self.lnm_hi, self.n_lnm)
         self.z_x, self.z_w = dm.gl_nodes(self.zt_lo, self.zt_hi, self.n_z)
@@ -97,6 +107,10 @@ class Shear1h2hMax:
             raise RuntimeError("Shear1h2hMax: lob_centers is empty")
         if self.profile_method not in PROFILE_METHODS:
             raise ValueError("Shear1h2hMax: unknown profile_method")
+        # Validates the miscentering options even when miscentering = F.
+        self.mis = Miscentering.from_options(options, section, self.r_perp, self.lob_centers)
+        if not self.mis_enabled:
+            self.mis = None
 
     def set_sample(self, s):
         self._bsel_op = (BselDeltaSigmaOperator.from_source(s, self.bsel_model)
@@ -127,13 +141,20 @@ class Shear1h2hMax:
         else:
             self._set_sample_piecewise(s, bias)
 
+        if self.mis is not None:
+            self._set_sample_miscentering(s)
+
     def evaluate(self, b, R):
         if b < 0 or b >= self.n_bins:
             raise IndexError("Shear1h2hMax: bin_index out of range")
         lob = self.lob_centers[b % self.lob_centers.size]
         if self.profile_method == "gauss_legendre":
-            return self._evaluate_gauss_legendre(self.w2d[b], b, R, lob)
-        return self._evaluate_piecewise(self.w2d[b], b, R, lob)
+            acc_cen = self._evaluate_gauss_legendre(self.w2d[b], b, R, lob)
+        else:
+            acc_cen = self._evaluate_piecewise(self.w2d[b], b, R, lob)
+        if self.mis is None:
+            return acc_cen
+        return self.mis.apply(acc_cen, self.mis.evaluate(b, R))
 
     # ---- piecewise_approx -------------------------------------------------
 
@@ -156,7 +177,24 @@ class Shear1h2hMax:
         self._delta_gap_1_kq = dm.Bilinear2D(s, "halomodel", "lnm", "z", "delta_gap_1")(lnm, z)
         self._delta_gap_0_kq = (
             dm.Bilinear2D(s, "halomodel", "lnm", "z", "delta_gap_0")(lnm, z)
-            if self.bsel_enabled else np.zeros_like(self._bias_kq))
+            if (self.bsel_enabled or self.mis_enabled) else np.zeros_like(self._bias_kq))
+        # Miscentering: Sigma_max from the Sigma tables as natural cubic
+        # splines in ln r through the r_sigma knots (one per lnM node for
+        # Sigma_1h, one per z node for Sigma_hh; knot values interpolated in
+        # lnM / z only), core disk below r_core = r_sigma[0] from
+        # halomodel/m2d_core (Msun/h).
+        if self.mis_enabled:
+            r_sigma = s.array("halomodel", "r_sigma")
+            self._r_core, self._r_sigma_hi = float(r_sigma[0]), float(r_sigma[-1])
+            sig_nfw = dm.Bilinear2D(s, "halomodel", "r_sigma", "lnm", "sigma_nfw")
+            sig_hh = dm.Bilinear2D(s, "halomodel", "r_sigma", "z", "sigma_hh", nan_fill=0.0)
+            ln_knots = np.log(r_sigma)
+            self._spl_nfw = CubicSpline(
+                ln_knots, np.stack([sig_nfw(r, self.lnm_x) for r in r_sigma]), bc_type="natural")
+            self._spl_hh = CubicSpline(
+                ln_knots, np.stack([sig_hh(r, self.z_x) for r in r_sigma]), bc_type="natural")
+            m2d = dm.Bilinear2D(s, "halomodel", "lnm", "z", "m2d_core")(lnm, z)
+            self._sigma_core_kq = m2d / (np.pi * self._r_core**2 * 1.0e12)
 
     def _evaluate_piecewise(self, w2, b, R, lob):
         # Per-(bin, R) profile rows: the 1-halo term is z-free (one value per
@@ -248,6 +286,39 @@ class Shear1h2hMax:
             coef = coef * np.broadcast_to(B, (radii.size, self.z_x.size))
         coef = np.broadcast_to(coef, (radii.size, self.z_x.size))
         return float(np.einsum("sq,skq,kq->", coef, sig, w2))
+
+    # ---- miscentering -----------------------------------------------------
+
+    MIS_R_LO = 1.0e-4  # h^-1 Mpc, GL profile grid floor
+
+    def _set_sample_miscentering(self, s):
+        """Hand systematics.miscentering.Miscentering the stack and the
+        centred profile: piecewise_approx Sigma_max from the Sigma splines
+        from r_sigma[0] with the m2d_core disk below it; gauss_legendre the GL
+        projection from MIS_R_LO."""
+        bsel = self._bsel_op.model if self._bsel_op is not None else None
+        if self.profile_method != "gauss_legendre":
+            self.mis.set_sample(
+                s, weights=self.w2d, z=self.z_x, bsel=bsel,
+                r_lo=self._r_core, r_max=self._r_sigma_hi, core=self._sigma_core_kq,
+                grid=lambda r: np.stack([self._surface_density_node(rm) for rm in r]))
+        else:
+            self.mis.set_sample(
+                s, weights=self.w2d, z=self.z_x, bsel=bsel,
+                r_lo=self.MIS_R_LO, r_max=np.inf, core=None,
+                grid=lambda r: self._gl_op.surface_density(r, self.lnm_x, self.z_x))
+
+    def _surface_density_node(self, r):
+        """Piecewise Sigma_max(r) on the (lnM, z) node grid (r >= r_core):
+          r <  r_trans : Sigma_1h(r) + Delta_gap^0 + 2 Delta_gap^1 (1 - (r/r_trans)^2)
+          r >= r_trans : b Sigma_hh(r)
+        """
+        rt = self._r_trans_kq
+        ln_r = np.clip(np.log(r), np.log(self._r_core), np.log(self._r_sigma_hi))
+        inner = (self._spl_nfw(ln_r)[:, None] + self._delta_gap_0_kq
+                 + 2.0 * self._delta_gap_1_kq * (1.0 - (r / rt) ** 2))
+        outer = self._bias_kq * self._spl_hh(ln_r)[None, :]
+        return np.where(r >= rt, outer, inner)
 
     @staticmethod
     def module_label():

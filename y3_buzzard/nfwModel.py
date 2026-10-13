@@ -24,8 +24,7 @@ def sigmaNFW_Analytical(radii, m200, c, rho_c=0.0):
 
     # eqn 15 an 16
     # interpolation avoid numerical issues
-    xvec = np.logspace(-3.,4.,1000)
-    xvec = np.append(0,xvec)
+    xvec = _x_nodes()
     fx = interp1d(xvec, f_nfw(xvec))(radii/rs)
     return 2*rs*deltac*rho_c*fx
 
@@ -45,10 +44,18 @@ def deltaSigmaNFW_Analytical(radii, m200, c, rho_c=0.0):
 
     # eqn 15 an 16
     # interpolation avoid numerical issues
-    xvec = np.logspace(-3.,4.,1000)
-    xvec = np.append(0, xvec)
+    xvec = _x_nodes()
     gx = interp1d(xvec, g_nfw(xvec))(radii/rs)
     return rs*deltac*rho_c*gx
+
+
+def _x_nodes():
+    """Interpolation nodes in x = R/r_s: 0, then [1e-5, 1e-3) (added so tables
+    reaching r_sigma ~ 1e-3 Mpc/h stay finite for massive halos), then the
+    original logspace(-3, 4, 1000) unchanged (values for x >= 1e-3 are
+    bit-identical to before)."""
+    return np.concatenate([[0.0], np.logspace(-5., -3., 200, endpoint=False),
+                           np.logspace(-3., 4., 1000)])
 
 
 ### Compute \Sigma Helper Functions
@@ -83,8 +90,9 @@ def f_nfw(x, eps=1e-9):
     return res
 
 ### Compute \Delta \Sigma Helper Functions
-def g_less_than(x,core=4e-3):
-    # below core the solution fails numereically
+def g_less_than(x,core=1e-5):
+    # below core the cancellation between term1 and term2 (~eps ln(2/x) / x^2)
+    # loses precision: ~1e-9 relative at x = 1e-3, ~1e-5 at x = 1e-5
     x = np.where(x<core, core, x)
     term1 = 8.0*np.arctanh(np.sqrt((1.0-x)/(1.0+x)))/(x**2*np.sqrt(1.0-x**2))
     term2 = 4.0/x**2 * np.log(x/2.0)

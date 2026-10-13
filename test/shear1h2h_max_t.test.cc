@@ -421,6 +421,32 @@ TEST_CASE("Shear1h2hMax applies the Sunayama23 Bsel operator with non-local corr
     }
 }
 
+TEST_CASE("Shear1h2hMax piecewise Bsel: tabulated r_perp wall == per-node apply()")
+{
+  // With r_perp set, set_sample tabulates B, dB/dR and barSigma at the
+  // apply() nodes of every (bin, wall R); without it, evaluate() calls
+  // BselDeltaSigmaOperator::apply per (lnM, z) node.  Same nodes, same
+  // operation order: bit-identical.  R = 5 > r0 = 3.5 exercises the
+  // break-radius panel split.
+  std::vector<double> const wall{0.5, 1.0, 2.0, 5.0};
+  auto cfg_wall = make_bsel_cfg_block();
+  cfg_wall.put_val(Shear1h2hMax::module_label(), "r_perp", wall);
+  auto cfg_nodes = make_bsel_cfg_block();
+  auto sample = make_sample_block(SampleOpts{1.5, false, /*sigma_bar=*/true});
+  put_sunayama23(sample, 0.45, -0.1);
+
+  Shear1h2hMax tabulated(cfg_wall);
+  Shear1h2hMax per_node(cfg_nodes);
+  tabulated.set_sample(sample);
+  per_node.set_sample(sample);
+  for (int bin : {0, 1})
+    for (double R : {0.5, 1.0, 2.0, 5.0, 3.0 /* off-wall: fallback */}) {
+      auto const pt = Shear1h2hMax::grid_point_t{static_cast<double>(bin), R};
+      INFO("bin " << bin << " R " << R);
+      CHECK(tabulated.evaluate(pt)[0] == per_node.evaluate(pt)[0]);
+    }
+}
+
 TEST_CASE("Shear1h2hMax ini-option contract: [Shear1h2hMax] required vs optional")
 {
   // Cross-checked against cosmosis-models/real_pipeline_extract_max2h.ini:

@@ -96,6 +96,24 @@ class TestOptionContract(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.setup(make_options(dict(_base_options(), profile_method="bad")))
 
+    def test_miscentering_options(self):
+        m = mod.setup(make_options(_base_options()))
+        self.assertFalse(m.mis_enabled)
+        self.assertIsNone(m.mis)
+        m = mod.setup(make_options(dict(_base_options(), miscentering=True)))
+        self.assertEqual((m.mis.n_offset, m.mis.n_theta, m.mis.n_aperture, m.mis.n_r),
+                         (32, 32, 32, 1024))
+        self.assertEqual(m.mis.method, "gauss_legendre")
+        m = mod.setup(make_options(dict(_base_options(), miscentering=True,
+                                        n_r_mis=512, n_mis_theta=48)))
+        self.assertEqual((m.mis.n_r, m.mis.n_theta), (512, 48))
+
+    def test_mis_method_cuhre_is_cpp_only(self):
+        with self.assertRaises(NotImplementedError):
+            mod.setup(make_options(dict(_base_options(), mis_method="cuhre")))
+        with self.assertRaises(ValueError):
+            mod.setup(make_options(dict(_base_options(), mis_method="bad")))
+
     def test_missing_bin_index_or_r_perp_fails_loudly(self):
         for missing in ("bin_index", "r_perp"):
             entries = {k: v for k, v in _base_options().items() if k != missing}
@@ -104,6 +122,41 @@ class TestOptionContract(unittest.TestCase):
 
     def test_cleanup_is_a_no_op(self):
         self.assertEqual(mod.cleanup({}), 0)
+
+
+@unittest.skipUnless(HAS_PIPELINE, _SKIP_MSG)
+class TestMiscenteringPythonMatchesCpp(unittest.TestCase):
+    """miscentering = T (f_mis = 0.22, tau_mis = 0.17 from the values file):
+    systematics.miscentering.Miscentering (Python) vs y3_cluster::Miscentering
+    (C++), mis_method = gauss_legendre, both profile methods."""
+
+    @staticmethod
+    def _run(backend, **overrides):
+        block = _run_pipeline_block(backend, miscentering="T", **overrides)
+        return np.array(block["shear1h2h_max", "vals"]).reshape(12, 10)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.py_pw = cls._run("python", profile_method="piecewise_approx")
+        cls.cpp_pw = cls._run("cpp", profile_method="piecewise_approx")
+        cls.py_gl = cls._run("python", profile_method="gauss_legendre")
+        cls.cpp_gl = cls._run("cpp", profile_method="gauss_legendre")
+        cls.cpp_cen = TestPythonMatchesCpp._run("cpp", profile_method="piecewise_approx")
+
+    def test_piecewise_python_equals_cpp(self):
+        # measured 5.3e-15.
+        np.testing.assert_allclose(self.py_pw, self.cpp_pw, rtol=1e-12, atol=0)
+
+    def test_gauss_legendre_python_equals_cpp(self):
+        # measured 1.0e-7 (scipy vs GSL bicubic xi_nl, as without miscentering).
+        np.testing.assert_allclose(self.py_gl, self.cpp_gl, rtol=1e-6, atol=0)
+
+    def test_miscentering_suppresses_small_radii_only(self):
+        # O = 0.78 O_cen + 0.22 O_mis with O_mis / O_cen ~ 0.14-0.22 at
+        # R = 0.2 and ~0.998 at R = 5 (measured).
+        ratio = self.cpp_pw / self.cpp_cen
+        self.assertTrue(np.all(ratio[:, 0] < 0.85))
+        np.testing.assert_allclose(ratio[:, -1], 1.0, rtol=2e-3, atol=0)
 
 
 @unittest.skipUnless(HAS_PIPELINE, _SKIP_MSG)
