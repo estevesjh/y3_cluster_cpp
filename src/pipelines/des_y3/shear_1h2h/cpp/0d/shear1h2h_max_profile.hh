@@ -1,19 +1,37 @@
 // Lensing observables for the Shear1h2hMax profile.
 //
-// Assembled via the 3-pillar smooth bridging operators:
+// The profile constructs
+//   xi_hm(r) = max[xi_1h(r), b(M,z) xi_nl(r,z)]
+// with transition radius r_trans defined by:
+//   xi_1h(r_trans) = b(M,z) xi_nl(r_trans, z).
+//
+// Line-of-sight projection yields the comoving lensing observables:
+//   Sigma(R)      = 2 rho_m \int_0^\infty xi_hm(sqrt(R^2 + y^2)) dy
+//   barSigma(<R)  = (2 / R^2) \int_0^R Sigma(R') R' dR'
+//   DeltaSigma(R) = barSigma(<R) - Sigma(R)
+//   gamma_T(R)    = DeltaSigma(R) Sigma_crit^{-1}.
+//
+// Evaluating the exact line-of-sight projection of the non-linear 3D maximum
+// at every radial scale is computationally expensive during MCMC.
+// Therefore, we approximate the projected profile via the 3-pillar smooth bridging operators:
+//
 //   For R < r_trans:
 //     DeltaSigma(R) = DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
 //     Sigma(R)      = Sigma_1h(R) + Delta_gap^0 + 2 * Delta_gap^1 * (1 - (R / r_trans)^2)
+//
 //   For R >= r_trans:
 //     DeltaSigma(R) = b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
 //     Sigma(R)      = b * (Sigma_bar_hh(R) - DeltaSigma_hh(R))
-// Mean surface density:
-//   barSigma(<R) = Sigma(R) + DeltaSigma(R)
 //
-// where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
+//   Mean surface density:
+//     barSigma(<R)  = Sigma(R) + DeltaSigma(R)
+//
+// where C_0 = Delta M_3D(r_trans) / pi (in Msun/h),
+// Delta_gap^0 = Sigma_max(r_trans) - Sigma_1h(r_trans), and
 // Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
+//
 // If r_trans is not in the datablock, the profile falls back to the pointwise
-// max(1h, 2h) model, exactly matching the Python MaxMixtureProfile implementation.
+// max(1h, 2h) model, matching Python's MaxMixtureProfile.
 #ifndef Y3_CLUSTER_CPP_SHEAR1H2H_MAX_PROFILE_HH
 #define Y3_CLUSTER_CPP_SHEAR1H2H_MAX_PROFILE_HH
 
