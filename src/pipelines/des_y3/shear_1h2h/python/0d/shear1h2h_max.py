@@ -1,33 +1,45 @@
-"""Traditional 1h+2h excess surface density via ``Shear1h2hMax``.
+"""Traditional 1h+2h excess surface density via the max model — Python backend.
 
-The traditional-pipeline counterpart of the projection treatment (plan
-owner, 2026-08-12: "two pipelines — one with traditional shear and one
-with prj"). The radial profile is formulated via 3D halo exclusion and 3-pillar
-smooth bridging:
+Python twin of ``shear_1h2h/cpp/0d/shear1h2h_max_t.hh`` (class ``Shear1h2hMax``,
+same options, same DataBlock readers, same output section); the two are
+interchangeable — never run both in one pipeline.
 
-1. In 3D real space, halo exclusion is defined on the correlation function:
-       xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
-   with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
-2. The projected excess surface density DeltaSigma_max is assembled via the 3-pillar bridging operators:
-   - For R < r_trans:
-       DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
-   - For R >= r_trans:
-       b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
-   where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
-   Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
+Formulated via 3D halo exclusion:
 
-DataBlock contract
-------------------
-Reads (options): bin_index, r_perp (cartesian, bin slow / R fast),
-    lob_centers (default 25 37.5 52.5 130), zt_low/zt_high/
-    lnm_low/lnm_high (required), n_lnm (96), n_z (64),
-    include_miscentering (default T).
-Reads (datablock): the Shear1hMisSel contract plus
-    halomodel/{r_sigma, z, dSigma_hh, bias, r_trans, c0_trans, delta_gap_1}
-Writes: shear1h2h_max/vals  (n_bins * n_r,)   [hardcoded section]
+    xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
 
-Status: reference implementation of the traditional-shear model
-(validated against its explicit-3d z-resolved reference; see README.md).
+profile_method selects how DeltaSigma_max(R | lnM, z) is computed:
+  piecewise_approx (default): around the transition radius r_trans,
+      R <  r_trans : DeltaSigma_1h(R) + Delta_gap^1 (R / r_trans)^2
+      R >= r_trans : b DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+    with r_trans, c0_trans, delta_gap_1 read from halomodel.
+  gauss_legendre: exact GL projection of xi_max
+    (cosmology.operator_max1h2h_gl.OperatorMax1h2h_gl), with
+    xi_nfw = rho_NFW / rho_m - 1 from halomodel/concentration and
+    rho_m = halomodel/rho_m_ref, and xi_nl read with a bicubic spline.
+    The profile is bin-independent, so set_sample tabulates Sigma at every
+    r_perp radius and its aperture nodes once.
+
+Stacked with the selection weight
+
+    O_ij(R) = sum_{k,q} W2d(b; lnM_k, z_q) DeltaSigma(R | lnM_k, z_q),
+    W2d     = w_k^lnM w_q^z dV/dz dOmega Omega Sigma_crit^-1 dn/dlnM S_b.
+
+The output is the stacked numerator O_ij(R) (not normalised).
+
+Optional bsel (bsel_model = Costanzi26 or Sunayama23), for a given (lnM, z):
+  piecewise_approx: BselDeltaSigmaOperator, B DeltaSigma - M_sel/(pi R^2),
+    which additionally requires halomodel sigma_bar_nfw, sigma_bar_hh and
+    delta_gap_0 for barSigma(<r).
+  gauss_legendre: the equivalent local form
+    (2/R^2) int_0^R R' B Sigma dR' - B(R) Sigma(R), i.e. B weights the
+    aperture nodes — no extra tables.
+
+Options: bin_index x r_perp cartesian grid (bin slow / R fast),
+zt_low/zt_high/lnm_low/lnm_high (required), n_lnm (96), n_z (64),
+lob_centers (bsel richness anchor), bsel (default F), bsel_model,
+profile_method (piecewise_approx), n_los (64), n_aperture (32).
+Output: shear1h2h_max/vals  (n_bins * n_r,)
 """
 from __future__ import annotations
 
@@ -43,130 +55,220 @@ for _p in Path(__file__).resolve().parents:
             sys.path.insert(0, str(_p))
         break
 
-from shared import datablock_models as dm
-from shared import lensing_profiles as lp
-from systematics.selection_richness.python import sel_kernels
+from cosmology.operator_max1h2h_gl import OperatorMax1h2h_gl  # noqa: E402
+from shared import datablock_models as dm                     # noqa: E402
+from systematics.selection_richness.python import sel_kernels  # noqa: E402
+from systematics.selection_boost.Bsel import BselDeltaSigmaOperator  # noqa: E402
 
 OUTPUT_SECTION = "shear1h2h_max"
+PROFILE_METHODS = ("piecewise_approx", "gauss_legendre")
 
 
-def z_resolved_weights(source, *, n_lnm, n_z, zt_lo, zt_hi, lnm_lo, lnm_hi):
-    """W2d[b, k, q] = zfac_q sci_q hmf(k,q) S_stack(b; k, q) on GL nodes.
+class Shear1h2hMax:
+    """Stacked max-model DeltaSigma; mirrors the C++ Shear1h2hMax."""
 
-    The z-resolved sibling of MassZWeights (which contracts z because
-    the 1h profile is z-free); summing over q with the lnM weights left
-    out reproduces MassZWeights.W exactly.
-    """
-    lnm_x, lnm_w = dm.gl_nodes(lnm_lo, lnm_hi, n_lnm)
-    z_x, z_w = dm.gl_nodes(zt_lo, zt_hi, n_z)
-    hmf = dm.HMF(source)
-    dv = dm.DVDoDz(source)
-    sel = dm.SelStack(source)
-    zfac = z_w * dv(z_x) * dm.omega_z_des(z_x) * dm.SigmaCritInv(source)(z_x)
-    base = hmf(lnm_x[:, None], z_x[None, :]) * zfac[None, :]
-    w2d = np.empty((sel.n_bins, n_lnm, n_z))
-    for b in range(sel.n_bins):
-        w2d[b] = base * sel(b, lnm_x[:, None], z_x[None, :])
-    return lnm_x, lnm_w, z_x, w2d
+    def __init__(self, options, section):
+        def opt(get, key, default):
+            return get(section, key) if options.has_value(section, key) else default
 
+        sf = sel_kernels.load()
+        self.bin_index = sf._read_array(options, section, "bin_index").astype(int)
+        self.r_perp = sf._read_array(options, section, "r_perp")
+        self.n_lnm = int(opt(options.get_int, "n_lnm", 96))
+        self.n_z = int(opt(options.get_int, "n_z", 64))
+        self.zt_lo = options.get_double(section, "zt_low")
+        self.zt_hi = options.get_double(section, "zt_high")
+        self.lnm_lo = options.get_double(section, "lnm_low")
+        self.lnm_hi = options.get_double(section, "lnm_high")
+        self.bsel_enabled = bool(opt(options.get_bool, "bsel", False))
+        self.bsel_model = (options.get_string(section, "bsel_model")
+                           if self.bsel_enabled else "")
+        self.profile_method = opt(options.get_string, "profile_method",
+                                  "piecewise_approx")
+        self.n_los = int(opt(options.get_int, "n_los", 64))
+        self.n_aperture = int(opt(options.get_int, "n_aperture", 32))
 
-def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
-                      physical=False):
-    """O(R) = sum_kq lnm_w_k W2d[b,k,q] DSigma_max(b, R, lnM_k, z_q).
+        self.lnm_x, self.lnm_w = dm.gl_nodes(self.lnm_lo, self.lnm_hi, self.n_lnm)
+        self.z_x, self.z_w = dm.gl_nodes(self.zt_lo, self.zt_hi, self.n_z)
+        self.lob_centers = (sf._read_array(options, section, "lob_centers")
+                            if options.has_value(section, "lob_centers")
+                            else np.asarray(dm.DEFAULT_LOB_CENTERS, dtype=float))
+        if self.lob_centers.size == 0:
+            raise RuntimeError("Shear1h2hMax: lob_centers is empty")
+        if self.profile_method not in PROFILE_METHODS:
+            raise ValueError("Shear1h2hMax: unknown profile_method")
 
-    physical: fold one_halo_physical_density's exact identity
-    DSigma_phys(R|z) = (1+z)^2 DSigma_frozen(R(1+z)) into the 1-halo
-    term. Unlike the z-contracted 0d Shear1hGl (where the (1+z)^2 must
-    ride in the z-integration WEIGHT because the redshift sum happens
-    before the profile is known), this model's z-axis is already
-    resolved -- the 2-halo term forces it (see module docstring). So
-    the 1-halo term just needs to be evaluated PER z-node with q=1+z
-    instead of once at q=1; no weight restructuring needed.
-    """
-    r_perp = np.asarray(r_perp, dtype=float)
-    n_r = r_perp.size
-    n_z = z_x.size
-    vals = np.empty(len(bin_index) * n_r)
-    for i, b in enumerate(bin_index):
-        if physical:
-            DSigma_1h = np.empty((n_r, lnm_x.size, n_z))
-            for iq, z in enumerate(z_x):
-                qf = 1.0 + z
-                DSigma_1h[:, :, iq] = profile._one(
-                    b, r_perp[:, None], lnm_x[None, :], q=qf) * qf**2
+    def set_sample(self, s):
+        self._bsel_op = (BselDeltaSigmaOperator.from_source(s, self.bsel_model)
+                         if self.bsel_enabled else None)
+        hmf = dm.HMF(s)
+        dv = dm.DVDoDz(s)
+        sci = dm.SigmaCritInv(s)
+        sel = dm.SelStack(s)
+        bias = dm.Bilinear2D(s, "halomodel", "lnm", "z", "bias")
+
+        # z-only factors (Sigma_crit_inv folded in, as the shear weight
+        # requires) and the z-RESOLVED weight W2d(bin; lnM, z).
+        zfac = self.z_w * dv(self.z_x) * dm.omega_z_des(self.z_x) * sci(self.z_x)
+
+        # W2d(b; lnM_k, z_q) = w_k^lnM * zfac(z_q) * dn/dlnM(M_k, z_q)
+        #                      * S_b(M_k, z_q),
+        # with S_b the probability a halo of (M, z) lands in observed bin b.
+        # R-independent, so built once per sample; evaluate() then reduces the
+        # (lnM, z) integral to acc = sum_{k,q} W2d * DeltaSigma(R | lnM_k, z_q).
+        # Layout (b, k, q).  Not normalised here.
+        lnm, z = self.lnm_x[:, None], self.z_x[None, :]
+        base = self.lnm_w[:, None] * zfac[None, :] * hmf(lnm, z)
+        self.n_bins = sel.n_bins
+        self.w2d = np.stack([base * sel(b, lnm, z) for b in range(self.n_bins)])
+
+        if self.profile_method == "gauss_legendre":
+            self._set_sample_gauss_legendre(s, bias)
         else:
-            DSigma_1h = profile._one(
-                b, r_perp[:, None], lnm_x[None, :])[:, :, None]
-        DSigma_2h = (profile._bias(lnm_x[:, None], z_x[None, :])[None, :, :]
-                    * profile._hh(r_perp[:, None], z_x[None, :])[:, None, :])
-        if getattr(profile, "_has_max1h2h", False):
-            rt = profile._r_trans(lnm_x[:, None], z_x[None, :])[None, :, :]
-            c0 = profile._c0_trans(lnm_x[:, None], z_x[None, :])[None, :, :]
-            gap1 = profile._delta_gap_1(lnm_x[:, None], z_x[None, :])[None, :, :]
-            r_arr = r_perp[:, None, None]
-            c0_term = (c0 / (r_arr * r_arr)) * 1.0e-12
-            outer = DSigma_2h + c0_term
-            inner = DSigma_1h + gap1 * (r_arr / rt)**2
-            DSigma_max = np.where(r_arr < rt, inner, outer)
-        else:
-            DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
-        vals[i * n_r:(i + 1) * n_r] = np.einsum(
-            "rkq,kq->r", DSigma_max, w2d[b] * lnm_w[:, None])
-    return vals
+            self._set_sample_piecewise(s, bias)
+
+    def evaluate(self, b, R):
+        if b < 0 or b >= self.n_bins:
+            raise IndexError("Shear1h2hMax: bin_index out of range")
+        lob = self.lob_centers[b % self.lob_centers.size]
+        if self.profile_method == "gauss_legendre":
+            return self._evaluate_gauss_legendre(self.w2d[b], b, R, lob)
+        return self._evaluate_piecewise(self.w2d[b], b, R, lob)
+
+    # ---- piecewise_approx -------------------------------------------------
+
+    def _set_sample_piecewise(self, s, bias):
+        self._sigma_bar_nfw = self._sigma_bar_hh = None
+        if self.bsel_enabled:
+            self._sigma_bar_nfw = dm.Bilinear2D(
+                s, "halomodel", "r_sigma", "lnm", "sigma_bar_nfw")
+            self._sigma_bar_hh = dm.Bilinear2D(
+                s, "halomodel", "r_sigma", "z", "sigma_bar_hh", nan_fill=0.0)
+        self._dsigma_nfw = dm.Bilinear2D(s, "halomodel", "r_sigma", "lnm", "dsigma_nfw")
+        self._dsigma_hh = dm.Bilinear2D(s, "halomodel", "r_sigma", "z", "dsigma_hh",
+                                        nan_fill=0.0)
+        # Piecewise max-model terms: required, no max(1h, 2h) fallback.
+        # (lnM, z)-only terms on the node grid — bin- and R-independent.
+        lnm, z = self.lnm_x[:, None], self.z_x[None, :]
+        self._bias_kq = bias(lnm, z)
+        self._r_trans_kq = dm.Bilinear2D(s, "halomodel", "lnm", "z", "r_trans")(lnm, z)
+        self._c0_trans_kq = dm.Bilinear2D(s, "halomodel", "lnm", "z", "c0_trans")(lnm, z)
+        self._delta_gap_1_kq = dm.Bilinear2D(s, "halomodel", "lnm", "z", "delta_gap_1")(lnm, z)
+        self._delta_gap_0_kq = (
+            dm.Bilinear2D(s, "halomodel", "lnm", "z", "delta_gap_0")(lnm, z)
+            if self.bsel_enabled else np.zeros_like(self._bias_kq))
+
+    def _evaluate_piecewise(self, w2, b, R, lob):
+        # Per-(bin, R) profile rows: the 1-halo term is z-free (one value per
+        # mass node), the 2-halo table row is mass-free (one per z node).
+        one = self._dsigma_nfw(R, self.lnm_x)[:, None]       # (k, 1)
+        two = self._dsigma_hh(R, self.z_x)[None, :]          # (1, q)
+        d_max = self._excess_surface_density_node(R, one, two)
+        if self._bsel_op is not None:
+            # For a given (lnM, z): B_sel(R) d_max - M_sel(R) / (pi R^2), with
+            # barSigma(<r) from the same piecewise profile.
+            d_max = self._bsel_op.apply(
+                d_max, self._mean_surface_density_node, R,
+                bin_index=b, lob=lob, z=self.z_x[None, :])
+        return float(np.sum(w2 * d_max))
+
+    def _excess_surface_density_node(self, R, one, two):
+        """Piecewise DeltaSigma_max(R) on the (lnM, z) node grid:
+          R <  r_trans : DeltaSigma_1h(R) + Delta_gap^1 (R / r_trans)^2
+          R >= r_trans : b DeltaSigma_hh(R) + C_0 / R^2
+        """
+        rt = self._r_trans_kq
+        outer = self._bias_kq * two + (self._c0_trans_kq / (R * R)) * 1.0e-12
+        inner = one + self._delta_gap_1_kq * (R / rt) ** 2
+        return np.where(R >= rt, outer, inner)
+
+    def _mean_surface_density_node(self, r):
+        """barSigma(<r) = Sigma(r) + DeltaSigma(r) of the same piecewise
+        profile on the (lnM, z) node grid; the mean_sigma_fn input to
+        BselDeltaSigmaOperator.apply.  Only built when bsel is enabled.
+          r <  r_trans : barSigma_1h(r) + Delta_gap^0 + 2 Delta_gap^1
+                         - Delta_gap^1 (r / r_trans)^2
+          r >= r_trans : b barSigma_hh(r) + C_0 / r^2
+        """
+        rt = self._r_trans_kq
+        gap1 = self._delta_gap_1_kq
+        outer = (self._bias_kq * self._sigma_bar_hh(r, self.z_x)[None, :]
+                 + (self._c0_trans_kq / (r * r)) * 1.0e-12)
+        inner = (self._sigma_bar_nfw(r, self.lnm_x)[:, None] + self._delta_gap_0_kq
+                 + 2.0 * gap1 - gap1 * (r / rt) ** 2)
+        return np.where(r >= rt, outer, inner)
+
+    # ---- gauss_legendre ---------------------------------------------------
+
+    def _set_sample_gauss_legendre(self, s, bias):
+        # xi_nfw(r, lnM) = rho_NFW / rho_m - 1 with M = M200m, the same
+        # convention halo_model uses for xi_1h (rho_s / rho_m = delta_c).
+        rho_m = s.scalar("halomodel", "rho_m_ref")
+        conc_lnm = s.array("halomodel", "lnm")
+        conc = s.array("halomodel", "concentration")
+
+        def xi_nfw(r, lnM):
+            c = np.interp(lnM, conc_lnm, conc)
+            r200 = np.cbrt(3.0 * np.exp(lnM) / (800.0 * np.pi * rho_m))
+            x = r * c / r200
+            delta_c = (200.0 / 3.0) * c ** 3 / (np.log1p(c) - c / (1.0 + c))
+            return delta_c / (x * (1.0 + x) ** 2) - 1.0
+
+        # Bicubic: bilinear kinks at every r knot stall the GL convergence.
+        xi_nl = dm.Bilinear2D(s, "xi_nl", "r", "z", "xi_nl", cubic=True)
+        r_max = s.array("xi_nl", "r")[-1]
+        self._gl_op = OperatorMax1h2h_gl(
+            xi_nfw, bias, xi_nl, rho_m, r_max,
+            n_los=self.n_los, n_aperture=self.n_aperture)
+        self._gl_aperture_weights = self._gl_op.aperture_weights()
+
+        # Bin-independent: tabulate every wall radius once per sample.
+        self._gl_sigma = {float(R): self._gl_sigma_slots(R) for R in self.r_perp}
+
+    def _gl_sigma_slots(self, R):
+        """Sigma on the (lnM, z) grid at R (slot 0) and at the aperture radii
+        R t_j^2 (slot j + 1): shape (n_aperture + 1, n_lnM, n_z)."""
+        t = self._gl_op.aperture_nodes()
+        radii = np.concatenate(([R], R * t * t))
+        return self._gl_op.surface_density(radii, self.lnm_x, self.z_x)
+
+    def _evaluate_gauss_legendre(self, w2, b, R, lob):
+        """DeltaSigma = sum_j a_j B(R t_j^2) Sigma(R t_j^2) - B(R) Sigma(R),
+        with a_j = 4 w_j t_j^3 and B = 1 without bsel.  With bsel this is
+        exactly B DeltaSigma - M_sel / (pi R^2) (integration by parts)."""
+        sig = self._gl_sigma.get(float(R))
+        if sig is None:
+            sig = self._gl_sigma_slots(R)
+        t = self._gl_op.aperture_nodes()
+        radii = np.concatenate(([R], R * t * t))
+        coef = np.concatenate(([-1.0], self._gl_aperture_weights))[:, None]
+        if self._bsel_op is not None:
+            B = self._bsel_op.model(radii[:, None], bin_index=b, lob=lob,
+                                    z=self.z_x[None, :])
+            coef = coef * np.broadcast_to(B, (radii.size, self.z_x.size))
+        coef = np.broadcast_to(coef, (radii.size, self.z_x.size))
+        return float(np.einsum("sq,skq,kq->", coef, sig, w2))
+
+    @staticmethod
+    def module_label():
+        return "Shear1h2hMax"
 
 
 def setup(options):
     from cosmosis.datablock import option_section
-    sf = sel_kernels.load()
-    cfg = {}
-    cfg["bin_index"] = sf._read_array(options, option_section,
-                                      "bin_index").astype(int)
-    cfg["r_perp"] = sf._read_array(options, option_section, "r_perp")
-    try:
-        cfg["lob_centers"] = sf._read_array(options, option_section,
-                                            "lob_centers")
-    except Exception:
-        cfg["lob_centers"] = np.asarray(dm.DEFAULT_LOB_CENTERS)
-    for key in ("zt_low", "zt_high", "lnm_low", "lnm_high"):
-        cfg[key] = float(options.get_double(option_section, key))
-    for key, default in (("n_lnm", 96), ("n_z", 64)):
-        try:
-            cfg[key] = int(options.get_int(option_section, key))
-        except Exception:
-            cfg[key] = default
-    try:
-        cfg["include_miscentering"] = bool(
-            options.get_bool(option_section, "include_miscentering"))
-    except Exception:
-        cfg["include_miscentering"] = True
-    return cfg
+    return Shear1h2hMax(options, option_section)
 
 
-def execute(block, cfg):
+def execute(block, mod):
     t0 = time.perf_counter()
-    source = dm.DataBlockSource(block)
-    physical = dm.physical_density_flag(source)
-    profile = lp.MaxMixtureProfile(
-        source=source,
-        lob_centers=cfg["lob_centers"],
-        # Required: no fallback to the fiducial defaults — a pipeline
-        # missing the miscentering section must fail loudly.
-        f_mis=source.scalar("miscentering", "f_mis"),
-        tau_mis=source.scalar("miscentering", "tau_mis"),
-        omega_m=source.scalar("cosmological_parameters", "omega_m"),
-        include_miscentering=cfg["include_miscentering"],
-    )
-    lnm_x, lnm_w, z_x, w2d = z_resolved_weights(
-        source, n_lnm=cfg["n_lnm"], n_z=cfg["n_z"],
-        zt_lo=cfg["zt_low"], zt_hi=cfg["zt_high"],
-        lnm_lo=cfg["lnm_low"], lnm_hi=cfg["lnm_high"])
-    block[OUTPUT_SECTION, "vals"] = compute_shear_max(
-        profile, lnm_x, lnm_w, z_x, w2d, cfg["bin_index"], cfg["r_perp"],
-        physical=physical)
+    mod.set_sample(dm.DataBlockSource(block))
+    # Cartesian bin_index x r_perp wall, bin slow / R fast.
+    vals = np.array([mod.evaluate(int(b), float(R))
+                     for b in mod.bin_index for R in mod.r_perp])
+    block[OUTPUT_SECTION, "vals"] = vals
     dt_ms = 1000.0 * (time.perf_counter() - t0)
-    print(f"[shear1h2h_max] {cfg['bin_index'].size} bins x "
-          f"{cfg['r_perp'].size} radii (max 1h/2h) — {dt_ms:.0f} ms",
-          flush=True)
+    print(f"[shear1h2h_max] {mod.bin_index.size} bins x {mod.r_perp.size} "
+          f"radii ({mod.profile_method}) — {dt_ms:.0f} ms", flush=True)
     return 0
 
 

@@ -1,28 +1,30 @@
 // Traditional 1h+2h excess surface density via the max model — C++ backend.
 //
-// Formulated via 3D halo exclusion and 3-pillar smooth bridging:
+// Formulated via 3D halo exclusion and piecewise approximation:
 // 1. In 3D real space, halo exclusion is defined on the correlation function:
 //      xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
 //    with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
-// 2. The projected excess surface density DeltaSigma_max is assembled via 3-pillar bridging:
+// 2. The projected excess surface density DeltaSigma_max is approximated around transition
+// radius and is assembled by building a piecewise function:
 //      For R < r_trans:
 //        DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
 //      For R >= r_trans:
 //        b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
 //    where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
 //    Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
+//    r_trans, c0_trans and delta_gap_1 are read from haloModel (published
+//    by halo_model when compute_lensing_1h = compute_lensing_2h = T).
 //
 // Stacked with the selection weight
 //
 //   O_ij(R) = int dz int dlnM  n dV/dOmegadz Omega Sigma_crit^-1
-//             S_ij(lnM, z) DeltaSigma_tot(R, lnM, z).
+//             S_ij(lnM, z) DeltaSigma_max(R, lnM, z).
 //
 // The output `shear1h2h_max/vals` is a stacked DeltaSigma, not Sigma and not
 // gamma_T.  Tangential shear is obtained by applying the lens/source
 // geometry: gamma_T(R) = DeltaSigma(R) Sigma_crit^{-1}.  This module already
 // includes Sigma_crit^{-1} in its stack weight, as required by its historical
-// observable contract; the profile helper exposes
-// Sigma, barSigma, DeltaSigma, and gamma_T separately.
+// observable contract.
 //
 // Structure note: the two-halo term is z-dependent, so — unlike
 // Shear1hGl, which reuses SelGlWeights's z-contracted weight — the
@@ -33,25 +35,32 @@
 //
 // Every table is read through the project's interpolation primitives
 // (Interp2D / Interp1D with clamped queries): haloModel dSigma_nfw,
-// bias and dSigma_hh, average_sigma_crit_inv, the selection tensor via
-// SelFunction_t, and the miscentred NFW look-up via NFW_DSIGMA_MIS.
+// bias, dSigma_hh, r_trans, c0_trans, delta_gap_1, average_sigma_crit_inv,
+// and the selection tensor via SelFunction_t.
 //
-// dSigma_hh historically carried NaN over part of its (R, z) table
-// (docs/known_issues/dsigma_hh_debug_flag.md — since FIXED in the
-// producer); the sanitize-to-0 step is kept as a defensive guard, which
-// is exact for a max model (max(1h, 0) = 1h wherever the 2h term were
-// undefined). Requires compute_lensing_2h = T.
+// profile_method selects how DeltaSigma_max(R | lnM, z) is computed:
+//   piecewise_approx (default): the r_trans / C_0 / Delta_gap^1 form above.
+//   gauss_legendre: exact GL projection of
+//     xi_max(r) = max(xi_nfw(r, lnM), b(lnM, z) xi_nl(r, z))
+//     (OperatorMax1h2h_gl, pipelines/cosmology/operator_max1h2h_gl.hh),
+//     with xi_nfw = rho_NFW / rho_m - 1 from haloModel/concentration and
+//     rho_m = haloModel/rho_m_ref.  Needs xi_nl/{r, z, xi_nl}; does NOT
+//     need the piecewise tables.  The profile is bin-independent, so
+//     set_sample tabulates Sigma at every r_perp wall radius and its
+//     aperture nodes once.
+//
+// Optional bsel (bsel_model = Costanzi26 or Sunayama23) applies, for a
+// given (lnM, z), DeltaSigma_sel = B_sel * DeltaSigma_max - M_sel/(pi R^2).
+//   piecewise_approx: BselDeltaSigmaOperator, which additionally requires
+//     haloModel Sigma_bar_nfw, Sigma_bar_hh and delta_gap_0 for barSigma(<r).
+//   gauss_legendre: the same quantity in its equivalent local form
+//     DeltaSigma_sel = (2/R^2) int_0^R R' B Sigma dR' - B(R) Sigma(R),
+//     i.e. B weights the aperture nodes — no extra tables.
 //
 // Options: bin_index x r_perp cartesian grid (bin slow / R fast),
 // zt_low/zt_high/lnm_low/lnm_high (required), n_lnm (96), n_z (64),
-// lob_centers, include_miscentering (default T), max_xi (default F),
-// n_gl (20), n_root (96) for the opt-in max_xi path, n_offset (24),
-// n_phi (64), n_aperture (8), q_max (12),
-// miscentering_method ("table" or "direct", default "table"), and
-// use_nfw_table_residual (default T).
-// f_mis and tau_mis are REQUIRED datablock values (miscentering/f_mis,
-// miscentering/tau_mis): set_sample throws if the section is missing —
-// no silent fallback to the Y3 fiducial defaults.
+// lob_centers (bsel richness anchor), bsel (default F), bsel_model,
+// profile_method (piecewise_approx), n_los (64), n_aperture (32).
 // Output: shear1h2h_max/vals — same section as the Python backend
 // (interchangeable; never run both in one pipeline).
 // Status: reference implementation of the traditional-shear arm.
@@ -64,15 +73,16 @@
 #include "models/dv_do_dz_t.hh"
 #include "models/hmf_t.hh"
 #include "pipelines/shared/sel_gl_weights.hh"
-#include "models/nfw_dsigma_mis.hh"
 #include "models/omega_z_des.hh"
 #include "models/sel_function_t.hh"
-#include "shear1h2h_max_profile.hh"
+#include "pipelines/cosmology/operator_max1h2h_gl.hh"
 #include "pipelines/shared/lensing_helpers.hh"
+#include "pipelines/systematics/selection_boost/Bsel.hh"
 #include "utils/datablock_reader.hh"
 #include "utils/interp_1d.hh"
 #include "utils/interp_2d.hh"
 #include "utils/make_grid_points.hh"
+#include "utils/make_interp_1d.hh"
 #include "utils/make_interp_2d.hh"
 
 #include <algorithm>
@@ -89,6 +99,25 @@ public:
   using grid_point_t = grid_t::value_type;
   static constexpr std::size_t n_outputs = 1;
 
+  static bool read_bool_opt(cosmosis::DataBlock& cfg,
+                            char const* sec,
+                            char const* key,
+                            bool default_val)
+  {
+    if (!cfg.has_val(sec, key))
+      return default_val;
+    try {
+      return cfg.view<bool>(sec, key);
+    } catch (...) {
+      try {
+        return cfg.view<int>(sec, key) != 0;
+      } catch (...) {
+        auto const str = cfg.view<std::string>(sec, key);
+        return str == "T" || str == "true" || str == "True" || str == "1";
+      }
+    }
+  }
+
   explicit Shear1h2hMax(cosmosis::DataBlock& cfg)
     : N_lnm_(cfg.has_val(module_label(), "n_lnm")
                ? cfg.view<int>(module_label(), "n_lnm") : 96)
@@ -98,63 +127,30 @@ public:
     , zt_hi_(cfg.view<double>(module_label(), "zt_high"))
     , lnm_lo_(cfg.view<double>(module_label(), "lnm_low"))
     , lnm_hi_(cfg.view<double>(module_label(), "lnm_high"))
-    , include_mis_(cfg.has_val(module_label(), "include_miscentering")
-                     ? cfg.view<int>(module_label(),
-                                     "include_miscentering") != 0
-                     : true)
-    , max_xi_(cfg.has_val(module_label(), "max_xi")
-                          ? cfg.view<int>(module_label(),
-                                          "max_xi") != 0
-                          : false)
-    // TODO(#14): drop the hardcoded c=4 — once claude/issue-4-dsigma-hh-2h-term
-    // merges, call dsigma_mis_.set_concentration_table(
-    //   make_Interp1D(s, "haloModel", "lnM", "concentration"))
-    // in set_sample so the miscentred term uses the same per-mass Child18
-    // concentration as the centred dSigma_nfw table.
-    , dsigma_mis_(y3_cluster::CONC, y3_cluster::RHOC, y3_cluster::GAMMA)
+    , bsel_enabled_(read_bool_opt(cfg, module_label(), "bsel", false))
+    , bsel_model_(bsel_enabled_
+                    ? cfg.view<std::string>(module_label(), "bsel_model")
+                    : "")
+    , profile_method_(cfg.has_val(module_label(), "profile_method")
+                        ? cfg.view<std::string>(module_label(), "profile_method")
+                        : "piecewise_approx")
+    , n_los_(cfg.has_val(module_label(), "n_los")
+               ? cfg.view<int>(module_label(), "n_los") : 64)
+    , n_aperture_(cfg.has_val(module_label(), "n_aperture")
+                    ? cfg.view<int>(module_label(), "n_aperture") : 32)
   {
-    int const n_gl = cfg.has_val(module_label(), "n_gl")
-      ? cfg.view<int>(module_label(), "n_gl") : 20;
-    int const n_root = cfg.has_val(module_label(), "n_root")
-      ? cfg.view<int>(module_label(), "n_root") : 96;
-    if (n_gl < 1)
-      throw std::invalid_argument("Shear1h2hMax: n_gl must be positive");
-    if (n_root < 2)
-      throw std::invalid_argument(
-        "Shear1h2hMax: n_root must be at least 2");
-    N_gl_ = static_cast<std::size_t>(n_gl);
-    N_root_ = static_cast<std::size_t>(n_root);
-    int const n_offset = cfg.has_val(module_label(), "n_offset")
-      ? cfg.view<int>(module_label(), "n_offset") : 24;
-    int const n_phi = cfg.has_val(module_label(), "n_phi")
-      ? cfg.view<int>(module_label(), "n_phi") : 64;
-    int const n_aperture = cfg.has_val(module_label(), "n_aperture")
-      ? cfg.view<int>(module_label(), "n_aperture") : 8;
-    q_max_ = cfg.has_val(module_label(), "q_max")
-      ? cfg.view<double>(module_label(), "q_max") : 12.0;
-    if (n_offset < 1 || n_phi < 1 || n_aperture < 1 || q_max_ <= 0.0)
-      throw std::invalid_argument(
-        "Shear1h2hMax: invalid miscentering quadrature");
-    N_offset_ = static_cast<std::size_t>(n_offset);
-    N_phi_ = static_cast<std::size_t>(n_phi);
-    N_aperture_ = static_cast<std::size_t>(n_aperture);
-    miscentering_method_ = cfg.has_val(
-      module_label(), "miscentering_method")
-      ? cfg.view<std::string>(module_label(), "miscentering_method")
-      : "table";
-    if (miscentering_method_ != "table" &&
-        miscentering_method_ != "direct")
-      throw std::invalid_argument(
-        "Shear1h2hMax: miscentering_method must be 'table' or 'direct'");
-    use_nfw_table_residual_ = cfg.has_val(
-      module_label(), "use_nfw_table_residual")
-      ? cfg.view<int>(module_label(), "use_nfw_table_residual") != 0 : true;
     y3_pipelines::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
     y3_pipelines::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
     lob_centers_ =
       y3_pipelines::read_lob_centers(cfg, module_label());
     if (lob_centers_.empty())
       throw std::runtime_error("Shear1h2hMax: lob_centers is empty");
+    if (bsel_enabled_)
+      y3_cluster::BselModels::parse_tag(bsel_model_);
+    if (profile_method_ != "piecewise_approx" && profile_method_ != "gauss_legendre")
+      throw std::invalid_argument("Shear1h2hMax: unknown profile_method");
+    if (cfg.has_val(module_label(), "r_perp"))  // wall radii, GL-tabulated per sample
+      gl_radii_ = get_vector_double(cfg, module_label(), "r_perp");
   }
 
   void
@@ -162,34 +158,17 @@ public:
   {
     namespace w = y3_pipelines;
 
+    bsel_op_.reset();
+    if (bsel_enabled_)
+      bsel_op_.emplace(
+        y3_cluster::BselDeltaSigmaOperator::from_datablock(
+          s, bsel_model_));
+
     y3_cluster::HMF_t const hmf(s);
     y3_cluster::DV_DO_DZ_t const dv(s);
     y3_cluster::OMEGA_Z_DES const omega(s);
     auto const sci = w::load_sigma_crit_inv(s);
-
-    dsigma_nfw_.emplace(y3_cluster::make_Interp2D(
-      s, "haloModel", "r_sigma", "lnM", "dSigma_nfw"));
-    bias_.emplace(
-      y3_cluster::make_Interp2D(s, "haloModel", "lnM", "z", "bias"));
-    dsigma_hh_.emplace(make_sanitized_hh(s));
-
-    // Required: no fallback to the fiducial defaults — a pipeline that
-    // has not published the miscentering section must fail loudly.
-    f_mis_ = include_mis_ ? s.view<double>("miscentering", "f_mis") : 0.0;
-    double const tau_mis = s.view<double>("miscentering", "tau_mis");
-    // UNIFIED rho_m convention (2026-08-24): boundary AND amplitude on
-    // haloModel/rho_m_ref (same density as the centred dSigma_nfw table).
-    dsigma_mis_.set_rho_ref(s.view<double>("haloModel", "rho_m_ref"));
-    // Physical mean density (opt-in): exact per-z-node identity on the
-    // 1-halo mixture ONLY (see evaluate; the 2-halo row is untouched).
-    int phys = 0;
-    if (s.has_val("haloModel", "one_halo_physical_density"))
-      s.get_val("haloModel", "one_halo_physical_density", phys);
-    phys_density_ = (phys != 0);
-
-    if (max_xi_)
-      profile_.emplace(s, N_gl_, N_root_, N_offset_, N_phi_,
-                       N_aperture_, q_max_);
+    auto const bias = y3_cluster::make_Interp2D(s, "haloModel", "lnM", "z", "bias");
 
     // z-only factors (Sigma_crit_inv folded in, as the shear weight
     // requires) and the z-RESOLVED weight W2d(bin; lnM, z).
@@ -197,6 +176,12 @@ public:
     for (std::size_t q = 0; q != z_x_.size(); ++q)
       zfac[q] = z_w_[q] * dv(z_x_[q]) * omega(z_x_[q]) * sci.clamp(z_x_[q]);
 
+    // W2d(b; lnM_k, z_q) = w_k^lnM * zfac(z_q) * dn/dlnM(M_k, z_q)
+    //                      * S_b(M_k, z_q),
+    // with S_b the probability a halo of (M, z) lands in observed bin b.
+    // R-independent, so built once per sample; evaluate() then reduces the
+    // (lnM, z) integral to acc = sum_{k,q} W2d * DeltaSigma(R | lnM_k, z_q).
+    // Flat layout: index (b * N_lnm + k) * N_z + q.  Not normalised here.
     int const n_bins = y3_pipelines::n_bins_from_block(s);
     n_bins_ = static_cast<std::size_t>(n_bins);
     w2d_.assign(n_bins_ * N_lnm_ * N_z_, 0.0);
@@ -209,46 +194,10 @@ public:
             sel(lnm_x_[k], z_x_[q]);
     }
 
-    // b(lnM, z) on the node grid — bin-independent, so hoisted here
-    // (this is the cache that keeps evaluate() free of interpolation
-    // in the inner double loop).
-    bias_kq_.assign(N_lnm_ * N_z_, 0.0);
-    for (std::size_t k = 0; k != N_lnm_; ++k)
-      for (std::size_t q = 0; q != N_z_; ++q)
-        bias_kq_[k * N_z_ + q] = bias_->clamp(lnm_x_[k], z_x_[q]);
-
-    if (s.has_val("haloModel", "r_trans")) {
-      r_trans_.emplace(y3_cluster::make_Interp2D(
-        s, "haloModel", "lnM", "z", "r_trans"));
-      c0_trans_.emplace(y3_cluster::make_Interp2D(
-        s, "haloModel", "lnM", "z", "c0_trans"));
-      delta_gap_1_.emplace(y3_cluster::make_Interp2D(
-        s, "haloModel", "lnM", "z", "delta_gap_1"));
-
-      r_trans_kq_.assign(N_lnm_ * N_z_, 0.0);
-      c0_trans_kq_.assign(N_lnm_ * N_z_, 0.0);
-      delta_gap_1_kq_.assign(N_lnm_ * N_z_, 0.0);
-      for (std::size_t k = 0; k != N_lnm_; ++k) {
-        for (std::size_t q = 0; q != N_z_; ++q) {
-          std::size_t const idx = k * N_z_ + q;
-          r_trans_kq_[idx] = r_trans_->clamp(lnm_x_[k], z_x_[q]);
-          c0_trans_kq_[idx] = c0_trans_->clamp(lnm_x_[k], z_x_[q]);
-          delta_gap_1_kq_[idx] = delta_gap_1_->clamp(lnm_x_[k], z_x_[q]);
-        }
-      }
-    } else {
-      r_trans_.reset();
-      c0_trans_.reset();
-      delta_gap_1_.reset();
-      r_trans_kq_.clear();
-      c0_trans_kq_.clear();
-      delta_gap_1_kq_.clear();
-    }
-
-    r_mis_.assign(n_bins_, 0.0);
-    for (std::size_t b = 0; b != n_bins_; ++b)
-      r_mis_[b] = tau_mis * w::R_lambda(
-                              lob_centers_[b % lob_centers_.size()]);
+    if (profile_method_ == "gauss_legendre")
+      set_sample_gauss_legendre(s, bias);
+    else
+      set_sample_piecewise(s, bias);
   }
 
   std::array<double, n_outputs>
@@ -258,125 +207,11 @@ public:
     double const R = pt[1];
     if (b < 0 || static_cast<std::size_t>(b) >= n_bins_)
       throw std::out_of_range("Shear1h2hMax: bin_index out of range");
-
-    // Per-(bin, R) profile rows: the 1-halo term is z-free (one value
-    // per mass node), the 2-halo table row is mass-free (one per z
-    // node). Both are interpolated once here, so the (lnM, z) double
-    // sum below touches no interpolator.
-    std::vector<double> one(N_lnm_), two(N_z_);
-    if (!max_xi_)
-      for (std::size_t k = 0; k != N_lnm_; ++k) {
-        double const d_cen = dsigma_nfw_->clamp(R, lnm_x_[k]);
-        double const d_mis = dsigma_mis_(R, r_mis_[b], lnm_x_[k]);
-        one[k] = (1.0 - f_mis_) * d_cen + f_mis_ * d_mis;
-      }
-    for (std::size_t q = 0; q != N_z_; ++q)
-      two[q] = dsigma_hh_->clamp(R, z_x_[q]);
-
-    double acc = 0.0;
     double const* w2 = &w2d_[static_cast<std::size_t>(b) * N_lnm_ * N_z_];
-    if (max_xi_) {
-      for (std::size_t k = 0; k != N_lnm_; ++k) {
-        double const* wrow = w2 + k * N_z_;
-        for (std::size_t q = 0; q != N_z_; ++q) {
-          double const qf = phys_density_ ? 1.0 + z_x_[q] : 1.0;
-          double const centered = profile_->excess_surface_density(
-            R * qf, lnm_x_[k], z_x_[q]) * qf * qf;
-          if (miscentering_method_ == "direct" && f_mis_ != 0.0) {
-            double const direct_mis =
-              profile_->miscentered_excess_surface_density(
-                R * qf, r_mis_[b] * qf, lnm_x_[k], z_x_[q]) * qf * qf;
-            double const total = centered + f_mis_ * (
-              direct_mis - centered);
-            acc += wrow[q] * total;
-            continue;
-          }
-          double const d_mis = dsigma_mis_(R * qf, r_mis_[b] * qf,
-                                           lnm_x_[k]) * qf * qf;
-          // The legacy approximation applies the tabulated correction to the
-          // 1-halo leg only.  The residual mode below instead adds the
-          // gamma-convolved Sigma_max - Sigma_NFW residual.
-          double const d_cen = dsigma_nfw_->clamp(R * qf, lnm_x_[k]) * qf * qf;
-          double total = centered + f_mis_ * (d_mis - d_cen);
-          if (use_nfw_table_residual_ && f_mis_ != 0.0) {
-            double const nfw_cen =
-              profile_->nfw_excess_surface_density(
-                R * qf, lnm_x_[k]) * qf * qf;
-            double const residual_cen =
-              profile_->residual_excess_surface_density(
-                R * qf, lnm_x_[k], z_x_[q]) * qf * qf;
-            double const residual_mis =
-              profile_->miscentered_residual_excess_surface_density(
-                R * qf, r_mis_[b] * qf, lnm_x_[k], z_x_[q]) * qf * qf;
-            total = centered + f_mis_ * (
-              d_mis + residual_mis - nfw_cen - residual_cen);
-          }
-          acc += wrow[q] * total;
-        }
-      }
-      return {acc};
-    }
-    if (!phys_density_) {
-      for (std::size_t k = 0; k != N_lnm_; ++k) {
-        double const* wrow = w2 + k * N_z_;
-        double const* brow = &bias_kq_[k * N_z_];
-        double const one_k = one[k];
-        for (std::size_t q = 0; q != N_z_; ++q) {
-          if (r_trans_) {
-            std::size_t const idx = k * N_z_ + q;
-            double const rt = r_trans_kq_[idx];
-            double const d_2h = brow[q] * two[q];
-            double d_tot;
-            if (R >= rt) {
-              double const c0 = c0_trans_kq_[idx];
-              d_tot = d_2h + (c0 / (R * R)) * 1.0e-12;
-            } else {
-              double const gap1 = delta_gap_1_kq_[idx];
-              double const r_ratio = R / rt;
-              d_tot = one_k + gap1 * r_ratio * r_ratio;
-            }
-            acc += wrow[q] * d_tot;
-          } else {
-            acc += wrow[q] * std::max(one_k, brow[q] * two[q]);
-          }
-        }
-      }
-      return {acc};
-    }
-    // Physical density: the 1-halo mixture becomes z-dependent through
-    // the exact identity DSigma_phys(R|z) = (1+z)^2 DSigma_com(R (1+z)),
-    // evaluated at every z node (slower; opt-in diagnostic mode). The
-    // 2-halo row keeps its own convention.
-    for (std::size_t k = 0; k != N_lnm_; ++k) {
-      double const* wrow = w2 + k * N_z_;
-      double const* brow = &bias_kq_[k * N_z_];
-      for (std::size_t q = 0; q != N_z_; ++q) {
-        double const qf = 1.0 + z_x_[q];
-        double const d_cen = dsigma_nfw_->clamp(R * qf, lnm_x_[k]);
-        double const d_mis =
-          dsigma_mis_(R * qf, r_mis_[b] * qf, lnm_x_[k]);
-        double const one_kq =
-          (qf * qf) * ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
-        if (r_trans_) {
-          std::size_t const idx = k * N_z_ + q;
-          double const rt = r_trans_kq_[idx];
-          double const d_2h = brow[q] * two[q];
-          double d_tot;
-          if (R >= rt) {
-            double const c0 = c0_trans_kq_[idx];
-            d_tot = d_2h + (c0 / (R * R)) * 1.0e-12;
-          } else {
-            double const gap1 = delta_gap_1_kq_[idx];
-            double const r_ratio = R / rt;
-            d_tot = one_kq + gap1 * r_ratio * r_ratio;
-          }
-          acc += wrow[q] * d_tot;
-        } else {
-          acc += wrow[q] * std::max(one_kq, brow[q] * two[q]);
-        }
-      }
-    }
-    return {acc};
+    double const lob = lob_centers_[b % lob_centers_.size()];
+    if (profile_method_ == "gauss_legendre")
+      return {evaluate_gauss_legendre(w2, b, R, lob)};
+    return {evaluate_piecewise(w2, b, R, lob)};
   }
 
   static char const* module_label() { return "Shear1h2hMax"; }
@@ -395,47 +230,252 @@ public:
   }
 
 private:
-  // haloModel/dSigma_hh through Interp2D, with the producer's NaNs
-  // replaced by 0 first (docs/known_issues/dsigma_hh_debug_flag.md — since fixed;
-  // guard kept). The datablock
-  // ndarray is (n_z, n_r) row-major, which is exactly the column-major
-  // (x = r_sigma fastest) layout Interp2D's vector constructor wants.
+  // ---- piecewise_approx -------------------------------------------------
+
+  void
+  set_sample_piecewise(cosmosis::DataBlock& s, y3_cluster::Interp2D const& bias)
+  {
+    sigma_bar_nfw_.reset();
+    sigma_bar_hh_.reset();
+    if (bsel_enabled_) {
+      sigma_bar_nfw_.emplace(y3_cluster::make_Interp2D(
+        s, "haloModel", "r_sigma", "lnM", "Sigma_bar_nfw"));
+      sigma_bar_hh_.emplace(make_sanitized_table(s, "Sigma_bar_hh"));
+    }
+    dsigma_nfw_.emplace(y3_cluster::make_Interp2D(
+      s, "haloModel", "r_sigma", "lnM", "dSigma_nfw"));
+    dsigma_hh_.emplace(make_sanitized_table(s, "dSigma_hh"));
+    // Piecewise max-model terms: required, no max(1h, 2h) fallback.
+    auto const r_trans = y3_cluster::make_Interp2D(
+      s, "haloModel", "lnM", "z", "r_trans");
+    auto const c0_trans = y3_cluster::make_Interp2D(
+      s, "haloModel", "lnM", "z", "c0_trans");
+    auto const delta_gap_1 = y3_cluster::make_Interp2D(
+      s, "haloModel", "lnM", "z", "delta_gap_1");
+    std::optional<y3_cluster::Interp2D> delta_gap_0;
+    if (bsel_enabled_)
+      delta_gap_0.emplace(y3_cluster::make_Interp2D(
+        s, "haloModel", "lnM", "z", "delta_gap_0"));
+
+    // (lnM, z)-only terms on the node grid — bin- and R-independent, so
+    // hoisted here to keep evaluate() free of 2D interpolation.
+    bias_kq_.assign(N_lnm_ * N_z_, 0.0);
+    r_trans_kq_.assign(N_lnm_ * N_z_, 0.0);
+    c0_trans_kq_.assign(N_lnm_ * N_z_, 0.0);
+    delta_gap_1_kq_.assign(N_lnm_ * N_z_, 0.0);
+    delta_gap_0_kq_.assign(N_lnm_ * N_z_, 0.0);
+    for (std::size_t k = 0; k != N_lnm_; ++k)
+      for (std::size_t q = 0; q != N_z_; ++q) {
+        std::size_t const idx = k * N_z_ + q;
+        bias_kq_[idx] = bias.clamp(lnm_x_[k], z_x_[q]);
+        r_trans_kq_[idx] = r_trans.clamp(lnm_x_[k], z_x_[q]);
+        c0_trans_kq_[idx] = c0_trans.clamp(lnm_x_[k], z_x_[q]);
+        delta_gap_1_kq_[idx] = delta_gap_1.clamp(lnm_x_[k], z_x_[q]);
+        if (delta_gap_0)
+          delta_gap_0_kq_[idx] = delta_gap_0->clamp(lnm_x_[k], z_x_[q]);
+      }
+  }
+
+  double
+  evaluate_piecewise(double const* w2, int b, double R, double lob) const
+  {
+    // Per-(bin, R) profile rows: the 1-halo term is z-free (one value
+    // per mass node), the 2-halo table row is mass-free (one per z
+    // node). Both are interpolated once here, so the (lnM, z) double
+    // sum below touches no interpolator.
+    std::vector<double> one(N_lnm_), two(N_z_);
+    for (std::size_t k = 0; k != N_lnm_; ++k)
+      one[k] = dsigma_nfw_->clamp(R, lnm_x_[k]);
+    for (std::size_t q = 0; q != N_z_; ++q)
+      two[q] = dsigma_hh_->clamp(R, z_x_[q]);
+
+    double acc = 0.0;
+    for (std::size_t k = 0; k != N_lnm_; ++k) {
+      double const* wrow = w2 + k * N_z_;
+      for (std::size_t q = 0; q != N_z_; ++q) {
+        std::size_t const idx = k * N_z_ + q;
+        double const d_max = excess_surface_density_node(
+          R, one[k], two[q], idx);
+        double d_val = d_max;
+        if (bsel_op_) {
+          // For a given (lnM, z): d_val = B_sel(R) * d_max - M_sel(R) / (pi R^2),
+          // with barSigma(<r) from the same piecewise profile.
+          d_val = bsel_op_->apply(
+            d_max,
+            [this, k, q, idx](double r) {
+              return mean_surface_density_node(r, k, q, idx);
+            },
+            R, b, lob, z_x_[q]);
+        }
+        acc += wrow[q] * d_val;
+      }
+    }
+    return acc;
+  }
+
+  // ---- gauss_legendre ---------------------------------------------------
+
+  void
+  set_sample_gauss_legendre(cosmosis::DataBlock& s,
+                            y3_cluster::Interp2D const& bias)
+  {
+    // xi_nfw(r, lnM) = rho_NFW / rho_m - 1 with M = M200m, the same
+    // convention halo_model uses for xi_1h (rho_s / rho_m = delta_c).
+    double const rho_m = s.view<double>("haloModel", "rho_m_ref");
+    auto const conc = y3_cluster::make_Interp1D(
+      s, "haloModel", "lnM", "concentration");
+    auto xi_nfw = [conc, rho_m](double r, double lnM) {
+      constexpr double PI = 3.14159265358979323846;
+      double const c = conc.clamp(lnM);
+      double const r200 = std::cbrt(3.0 * std::exp(lnM) / (800.0 * PI * rho_m));
+      double const x = r * c / r200;
+      double const delta_c = (200.0 / 3.0) * c * c * c /
+                             (std::log1p(c) - c / (1.0 + c));
+      return delta_c / (x * (1.0 + x) * (1.0 + x)) - 1.0;
+    };
+    // Bicubic: bilinear kinks at every r knot stall the GL convergence.
+    auto const xi_nl = y3_cluster::make_Interp2D(
+      s, "xi_nl", "r", "z", "xi_nl", /*bicubic=*/true);
+    double const r_max = s.view<std::vector<double>>("xi_nl", "r").back();
+
+    gl_op_.emplace(
+      xi_nfw,
+      [bias](double lnM, double z) { return bias.clamp(lnM, z); },
+      [xi_nl](double r, double z) { return xi_nl.clamp(r, z); },
+      rho_m, r_max, n_los_, n_aperture_);
+    gl_aperture_weights_ = gl_op_->aperture_weights();
+
+    // Bin-independent: tabulate every wall radius once per sample.
+    gl_sigma_.assign(gl_radii_.size(), {});
+    for (std::size_t i = 0; i != gl_radii_.size(); ++i)
+      gl_sigma_slots(gl_radii_[i], gl_sigma_[i]);
+  }
+
+  // Sigma on the (lnM, z) grid at R (slot 0) and at the aperture radii
+  // R t_j^2 (slot j + 1): out[(slot * N_lnm + k) * N_z + q].
+  void
+  gl_sigma_slots(double R, std::vector<double>& out) const
+  {
+    std::size_t const n_kq = N_lnm_ * N_z_;
+    auto const& t = gl_op_->aperture_nodes();
+    out.assign((t.size() + 1) * n_kq, 0.0);
+    std::vector<double> sigma;
+    gl_op_->surface_density_grid(R, lnm_x_, z_x_, sigma);
+    std::copy(sigma.begin(), sigma.end(), out.begin());
+    for (std::size_t j = 0; j != t.size(); ++j) {
+      gl_op_->surface_density_grid(R * t[j] * t[j], lnm_x_, z_x_, sigma);
+      std::copy(sigma.begin(), sigma.end(), out.begin() + (j + 1) * n_kq);
+    }
+  }
+
+  // DeltaSigma = sum_j a_j B(R t_j^2) Sigma(R t_j^2) - B(R) Sigma(R), with
+  // a_j = 4 w_j t_j^3 and B = 1 without bsel.  With bsel this is exactly
+  // B DeltaSigma - M_sel / (pi R^2) (integration by parts).
+  double
+  evaluate_gauss_legendre(double const* w2, int b, double R, double lob) const
+  {
+    std::vector<double> local;
+    double const* sig = nullptr;
+    auto const it = std::find(gl_radii_.begin(), gl_radii_.end(), R);
+    if (it != gl_radii_.end()) {
+      sig = gl_sigma_[static_cast<std::size_t>(it - gl_radii_.begin())].data();
+    } else {
+      gl_sigma_slots(R, local);
+      sig = local.data();
+    }
+
+    auto const& t = gl_op_->aperture_nodes();
+    std::size_t const n_slot = t.size() + 1;
+    std::vector<double> coef(n_slot * N_z_);
+    for (std::size_t q = 0; q != N_z_; ++q) {
+      auto B = [&](double r) {
+        return bsel_op_ ? bsel_op_->model()(r, b, lob, z_x_[q]) : 1.0;
+      };
+      coef[q] = -B(R);
+      for (std::size_t j = 0; j != t.size(); ++j)
+        coef[(j + 1) * N_z_ + q] =
+          gl_aperture_weights_[j] * B(R * t[j] * t[j]);
+    }
+
+    std::size_t const n_kq = N_lnm_ * N_z_;
+    double acc = 0.0;
+    for (std::size_t slot = 0; slot != n_slot; ++slot) {
+      double const* srow = sig + slot * n_kq;
+      double const* crow = &coef[slot * N_z_];
+      for (std::size_t k = 0; k != N_lnm_; ++k)
+        for (std::size_t q = 0; q != N_z_; ++q)
+          acc += w2[k * N_z_ + q] * crow[q] * srow[k * N_z_ + q];
+    }
+    return acc;
+  }
+
   static y3_cluster::Interp2D
-  make_sanitized_hh(cosmosis::DataBlock& s)
+  make_sanitized_table(cosmosis::DataBlock& s, char const* key)
   {
     using doubles = std::vector<double>;
     auto const r = s.view<doubles>("haloModel", "r_sigma");
     auto const z = s.view<doubles>("haloModel", "z");
     auto const& nd =
-      s.view<cosmosis::ndarray<double>>("haloModel", "dSigma_hh");
+      s.view<cosmosis::ndarray<double>>("haloModel", key);
     std::vector<double> vals(nd.begin(), nd.end());
     if (vals.size() != r.size() * z.size())
-      throw std::runtime_error("Shear1h2hMax: dSigma_hh extents mismatch");
+      throw std::runtime_error(std::string("Shear1h2hMax: ") + key + " extents mismatch");
     for (auto& v : vals)
       if (!std::isfinite(v)) v = 0.0;
     return y3_cluster::Interp2D(r, z, vals);
   }
 
+  // Piecewise DeltaSigma_max(R) for a given (lnM_k, z_q):
+  //   R <  r_trans : DeltaSigma_1h(R) + Delta_gap^1 (R / r_trans)^2
+  //   R >= r_trans : b DeltaSigma_hh(R) + C_0 / R^2
+  // one_k = DeltaSigma_1h(R | lnM_k), two_q = DeltaSigma_hh(R | z_q).
+  double excess_surface_density_node(double R, double one_k, double two_q,
+                                     std::size_t idx) const
+  {
+    double const rt = r_trans_kq_[idx];
+    if (R >= rt)
+      return bias_kq_[idx] * two_q + (c0_trans_kq_[idx] / (R * R)) * 1.0e-12;
+    double const r_ratio = R / rt;
+    return one_k + delta_gap_1_kq_[idx] * r_ratio * r_ratio;
+  }
+
+  // barSigma(<r) = Sigma(r) + DeltaSigma(r) of the same piecewise profile,
+  // for a given (lnM_k, z_q); the mean_sigma_fn input to
+  // BselDeltaSigmaOperator::apply.  Only built when bsel is enabled.
+  //   r <  r_trans : barSigma_1h(r) + Delta_gap^0 + 2 Delta_gap^1
+  //                  - Delta_gap^1 (r / r_trans)^2
+  //   r >= r_trans : b barSigma_hh(r) + C_0 / r^2
+  double mean_surface_density_node(double r, std::size_t k, std::size_t q,
+                                   std::size_t idx) const
+  {
+    double const rt = r_trans_kq_[idx];
+    if (r >= rt)
+      return bias_kq_[idx] * sigma_bar_hh_->clamp(r, z_x_[q]) +
+             (c0_trans_kq_[idx] / (r * r)) * 1.0e-12;
+    double const gap1 = delta_gap_1_kq_[idx];
+    double const r_ratio = r / rt;
+    return sigma_bar_nfw_->clamp(r, lnm_x_[k]) + delta_gap_0_kq_[idx] +
+           2.0 * gap1 - gap1 * r_ratio * r_ratio;
+  }
+
   std::size_t N_lnm_, N_z_;
-  std::size_t N_gl_{20}, N_root_{96};
-  std::size_t N_offset_{24}, N_phi_{64}, N_aperture_{8};
-  double q_max_{12.0};
   double zt_lo_, zt_hi_, lnm_lo_, lnm_hi_;
-  bool include_mis_;
-  y3_cluster::NFW_DSIGMA_MIS dsigma_mis_;
+  bool bsel_enabled_;
+  std::string bsel_model_;
+  std::string profile_method_;  // piecewise_approx | gauss_legendre
+  std::size_t n_los_, n_aperture_;
   std::vector<double> lnm_x_, lnm_w_, z_x_, z_w_, lob_centers_;
 
-  std::optional<y3_cluster::Interp2D> dsigma_nfw_, bias_, dsigma_hh_;
-  std::optional<y3_cluster::Interp2D> r_trans_, c0_trans_, delta_gap_1_;
-  double f_mis_{0.0};
+  std::optional<y3_cluster::Interp2D> dsigma_nfw_, dsigma_hh_;
+  std::optional<y3_cluster::Interp2D> sigma_bar_nfw_, sigma_bar_hh_;
+  std::optional<y3_cluster::BselDeltaSigmaOperator> bsel_op_;
   std::size_t n_bins_{0};
-  bool phys_density_{false};
-  bool max_xi_{false};
-  std::string miscentering_method_{"table"};
-  bool use_nfw_table_residual_{true};
-  std::optional<Shear1h2hMaxProfile> profile_;
-  std::vector<double> w2d_, bias_kq_, r_mis_;
-  std::vector<double> r_trans_kq_, c0_trans_kq_, delta_gap_1_kq_;
+  std::vector<double> w2d_, bias_kq_;
+  std::vector<double> r_trans_kq_, c0_trans_kq_, delta_gap_1_kq_, delta_gap_0_kq_;
+
+  std::vector<double> gl_radii_, gl_aperture_weights_;
+  std::vector<std::vector<double>> gl_sigma_;
+  std::optional<y3_cluster::OperatorMax1h2h_gl> gl_op_;
 };
 
 #endif

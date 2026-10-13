@@ -174,12 +174,12 @@ class MisMixtureProfile:
 
 class MaxMixtureProfile:
     """Traditional 1h+2h shear profile formulated via 3D halo exclusion and
-    3-pillar smooth bridging:
+    piecewise approximation:
 
     1. In 3D real space, halo exclusion is defined on the correlation function:
            xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
        with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
-    2. The projected excess surface density DeltaSigma_max is assembled via the 3-pillar bridging operators:
+    2. The projected excess surface density DeltaSigma_max is approximated around transition radius and is assembled by building a piecewise function:
        - For R < r_trans:
            DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
        - For R >= r_trans:
@@ -219,6 +219,15 @@ class MaxMixtureProfile:
             self._r_trans = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "r_trans")
             self._c0_trans = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "c0_trans")
             self._delta_gap_1 = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "delta_gap_1")
+        self._sigma_bar_hh = (
+            _dm.Bilinear2D(source, "halomodel", "r_sigma", "z", "sigma_bar_hh", nan_fill=0.0)
+            if source.has("halomodel", "sigma_bar_hh") else None)
+        self._sigma_bar_nfw = (
+            _dm.Bilinear2D(source, "halomodel", "r_sigma", "lnm", "sigma_bar_nfw")
+            if source.has("halomodel", "sigma_bar_nfw") else None)
+        self._delta_gap_0 = (
+            _dm.Bilinear2D(source, "halomodel", "lnm", "z", "delta_gap_0")
+            if source.has("halomodel", "delta_gap_0") else None)
 
     def __call__(self, b, r_perp, lnM, z):
         DSigma_1h = self._one(b, r_perp, lnM)
@@ -232,5 +241,21 @@ class MaxMixtureProfile:
             inner = DSigma_1h + gap1 * (r_perp / rt)**2
             return np.where(r_perp < rt, inner, outer)
         return np.maximum(DSigma_1h, DSigma_2h)
+
+    def mean_surface_density(self, b, r_perp, lnM, z):
+        if self._has_max1h2h:
+            rt = self._r_trans(lnM, z)
+            c0 = self._c0_trans(lnM, z)
+            gap1 = self._delta_gap_1(lnM, z)
+            gap0 = self._delta_gap_0(lnM, z) if self._delta_gap_0 is not None else 0.0
+            s_2h = self._bias(lnM, z) * self._sigma_bar_hh(r_perp, z) if self._sigma_bar_hh is not None else 0.0
+            s_1h = self._sigma_bar_nfw(r_perp, lnM) if self._sigma_bar_nfw is not None else self._one(b, r_perp, lnM)
+            c0_term = (c0 / (r_perp * r_perp)) * 1.0e-12
+            outer = s_2h + c0_term
+            inner = s_1h + gap0 + 2.0 * gap1 - gap1 * (r_perp / rt)**2
+            return np.where(r_perp < rt, inner, outer)
+        if self._sigma_bar_nfw is not None and self._sigma_bar_hh is not None:
+            return np.maximum(self._sigma_bar_nfw(r_perp, lnM), self._bias(lnM, z) * self._sigma_bar_hh(r_perp, z))
+        return self._one(b, r_perp, lnM)
 
 
