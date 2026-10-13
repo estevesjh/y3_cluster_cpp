@@ -156,6 +156,22 @@ def setup(options):
     except Exception:
         c_amp = 1.0
 
+    # concentration_fixed: a single, mass-independent NFW concentration
+    # c = R_200m / r_s that REPLACES the c(M, z_halo) relation (conc_model,
+    # z_halo and concentration_amplitude are then unused).  Like the
+    # amplitude, it is set on lensModel.c before first_halo_term, so it
+    # lands on the 1-halo tables, the published `concentration` (miscentred
+    # NFW, the gauss_legendre xi_nfw) and the max1h2h r_trans/c0/gap terms
+    # alike.  Unset (default) keeps the c(M) relation.  The Buzzard runs use
+    # concentration_fixed = 5.0 (des-cluster-nersc be6757b).
+    try:
+        c_fixed = float(options.get_double(section, "concentration_fixed",
+                                           default=np.nan))
+    except Exception:
+        c_fixed = np.nan
+    if np.isfinite(c_fixed) and not c_fixed > 0.0:
+        raise ValueError("halo_model: concentration_fixed must be > 0")
+
     # conc_model: mass-concentration relation for the 1-halo term and the
     # published `concentration` (haloModel.concentration_at_M's
     # model_name). Default "Child18" (pipeline default, unchanged);
@@ -210,7 +226,8 @@ def setup(options):
                   Radii_min, Radii_max, Radii_bins,
                   M_min, M_max, M_bins,
                   compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
-                  z_density, physical_density, conc_model, compute_max1h2h)
+                  z_density, physical_density, conc_model, compute_max1h2h,
+                  c_fixed)
     return params_out
 
 
@@ -221,7 +238,8 @@ def execute(block, config):
      Radii_min, Radii_max, Radii_bins,
      M_min, M_max, M_bins,
      compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
-     z_density, physical_density, conc_model, compute_max1h2h) = config
+     z_density, physical_density, conc_model, compute_max1h2h,
+     c_fixed) = config
 
     # cosmo parameters
     omega_m = block[cosmo_names, "omega_m"]
@@ -349,13 +367,18 @@ def execute(block, config):
         # whole term at z>0 would inflate DSigma by up to (1+z)^2
         # (measured +65% at the innermost radius for z=0.46). Setting
         # self.c first makes first_halo_term skip its own z=0 recompute.
-        lensModel.concentration_at_M(M, z=one_halo_z,
-                                     model_name=conc_model)
-        # Buzzard concentration boost: scale c BEFORE first_halo_term (which
-        # reuses the pre-set lensModel.c) so the factor lands on the 1-halo
-        # term and the published concentration alike.  c_amp=1.0 => no boost.
-        if c_amp != 1.0:
-            lensModel.c = lensModel.c * c_amp
+        if np.isfinite(c_fixed):
+            # Fixed, mass-independent concentration (concentration_fixed).
+            lensModel.c = np.full(np.shape(M), c_fixed)
+        else:
+            lensModel.concentration_at_M(M, z=one_halo_z,
+                                         model_name=conc_model)
+            # Buzzard concentration boost: scale c BEFORE first_halo_term
+            # (which reuses the pre-set lensModel.c) so the factor lands on
+            # the 1-halo term and the published concentration alike.
+            # c_amp=1.0 => no boost.
+            if c_amp != 1.0:
+                lensModel.c = lensModel.c * c_amp
         # z_density=0 -> comoving rho_m0 (default); z_density>0 -> physical
         # rho_m(z)=rho_m0(1+z)^3 (concentration stays fixed, pre-set above).
         lensModel.first_halo_term(M, z=z_density, conc_model_name=conc_model)

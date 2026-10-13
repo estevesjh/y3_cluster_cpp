@@ -46,6 +46,7 @@ Covers:
 """
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -699,6 +700,56 @@ class TestTransformChainAnalytic(unittest.TestCase):
         peak = np.abs(self.gauss.delta_sigma(self.R128) / 1e12).max()
         diff = np.abs(out[1e14] - out[1e13])[self.R128 >= 0.5].max()
         self.assertLess(diff / peak, 3e-2)
+
+
+_HAS_PIPELINE_ENV = bool(os.environ.get("CAMB_EMULATOR_DIR")) and bool(
+    os.environ.get("COSMOSIS_STANDARD_LIBRARY"))
+
+
+def _run_halo_model(**halo_model_options):
+    """Run the fast-apriori ini up to halo_model at the fiducial point."""
+    from cosmosis.runtime.config import Inifile
+    from cosmosis.runtime.pipeline import LikelihoodPipeline
+    cwd = os.getcwd()
+    os.chdir(REPO)
+    try:
+        ini = Inifile(str(REPO / "cosmosis-models" / "des_y3_cpp0d_fast_apriori.ini"))
+        ini.set("pipeline", "modules", "consistency GrowthFactor cp_camb MfTinker halo_model")
+        ini.set("pipeline", "quiet", "T")
+        for key, value in halo_model_options.items():
+            ini.set("halo_model", key, str(value))
+        pipe = LikelihoodPipeline(ini)
+        return pipe.run_parameters(pipe.start_vector())
+    finally:
+        os.chdir(cwd)
+
+
+@unittest.skipUnless(_HAS_PIPELINE_ENV, "requires the cosmosis env (cosmosis_init_macos.sh)")
+class TestConcentrationFixed(unittest.TestCase):
+    """halo_model `concentration_fixed`: one mass-independent NFW c replaces c(M, z_halo)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fixed = _run_halo_model(concentration_fixed=5.0)
+        cls.default = _run_halo_model()
+
+    def test_published_concentration_is_the_fixed_value(self):
+        c = np.asarray(self.fixed["haloModel", "concentration"])
+        np.testing.assert_array_equal(c, np.full_like(c, 5.0))
+
+    def test_default_keeps_the_mass_dependent_relation(self):
+        c = np.asarray(self.default["haloModel", "concentration"])
+        self.assertGreater(c.max() - c.min(), 0.5)
+
+    def test_one_halo_tables_use_the_fixed_concentration(self):
+        d_fixed = np.asarray(self.fixed["haloModel", "dSigma_nfw"])
+        d_default = np.asarray(self.default["haloModel", "dSigma_nfw"])
+        self.assertTrue(np.all(np.isfinite(d_fixed)))
+        self.assertFalse(np.allclose(d_fixed, d_default, rtol=1e-3))
+
+    def test_non_positive_value_is_rejected(self):
+        with self.assertRaises(Exception):
+            _run_halo_model(concentration_fixed=0.0)
 
 
 if __name__ == "__main__":
