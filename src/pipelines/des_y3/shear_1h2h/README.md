@@ -31,14 +31,14 @@ distribution. The $\Sigma_{\rm crit}^{-1}$ factor is optional: set it to
 unity to compute $\Delta\Sigma$; include the lensing-geometry factor to
 return the tangential shear $\gamma_T$. The optional traditional max
 model retains the redshift-dependent two-halo term via 3D halo exclusion
-and 3-pillar smooth bridging:
+and piecewise approximation:
 
 1. In 3D real space, halo exclusion is defined on the correlation function:
    $$
    \xi_{\rm hm}(r) = \max\left[\xi_{1h}(r),\; b(M, z)\,\xi_{\rm mm}(r, z)\right],
    $$
    with transition radius $r_{\rm trans}$ defined by $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
-2. Enforcing the quadratic gap bridge for $\Delta\Sigma$ uniquely determines the exact unified profiles for $\Sigma$, $\bar{\Sigma}$, and $\Delta\Sigma$:
+2. The projected excess surface density $\Delta\Sigma_{\rm max}$ is approximated around transition radius and is assembled by building a piecewise function:
    - **Projected Surface Density $\Sigma(R)$**:
      $$
      \Sigma_{\rm hm}(R, M, z) = \begin{cases}
@@ -318,7 +318,7 @@ subdivides the outer mass integral (reported error at or below 1e-6).
 The max-model observable has its explicit adaptive reference here too
 (`Shear1h2hMax3d`): because the two-halo term is $z$-dependent
 and the max nonlinear, the whole integrand rides inside the adaptive
-volume with $d_{\rm tot} = \Delta\Sigma_{\rm max}$ assembled via the 3D halo-exclusion bridging operators. Both max backends require
+volume with $d_{\rm tot} = \Delta\Sigma_{\rm max}$ assembled via 3D halo exclusion and piecewise approximation. Both max backends require
 `compute_lensing_2h = T` and sanitize `dSigma_hh` NaNs to 0 before
 interpolation (exact under the max), and all backends here read
 `miscentering/{f_mis,tau_mis}` strictly.

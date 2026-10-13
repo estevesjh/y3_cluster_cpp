@@ -2,13 +2,13 @@
 
 The traditional-pipeline counterpart of the projection treatment (plan
 owner, 2026-08-12: "two pipelines — one with traditional shear and one
-with prj"). The radial profile is formulated via 3D halo exclusion and 3-pillar
-smooth bridging:
+with prj"). The radial profile is formulated via 3D halo exclusion and
+piecewise approximation:
 
 1. In 3D real space, halo exclusion is defined on the correlation function:
        xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
    with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
-2. The projected excess surface density DeltaSigma_max is assembled via the 3-pillar bridging operators:
+2. The projected excess surface density DeltaSigma_max is approximated around transition radius and is assembled by building a piecewise function:
    - For R < r_trans:
        DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
    - For R >= r_trans:

@@ -98,7 +98,7 @@ def setup(options):
     compute_lensing = _bool("compute_lensing", True)
     compute_lensing_1h = _bool("compute_lensing_1h", compute_lensing)
     compute_lensing_2h = _bool("compute_lensing_2h", compute_lensing)
-    # Option for max1h2hOperators bridging (supports compute_max1h2h or max1h2hOperator)
+    # Option for max1h2h piecewise approximation (supports compute_max1h2h or max1h2hOperator)
     compute_max1h2h = _bool("compute_max1h2h", False) or _bool("max1h2hOperator", False) or _bool("max1h2hOperators", False)
 
     # z_halo: the FIXED redshift at which the 1h concentration is
@@ -357,12 +357,12 @@ def execute(block, config):
         block[section_name, "dSigma_hh"]    = lensModel.dSigma['2h']
         block[section_name, "Sigma_bar_hh"] = lensModel.sigma_bar['2h']
 
-    # ----- max(1h, 2h) bridging operators: optional ----------------------
-    # The Complete Unified Profile (Pillars 2 & 3 Assembled):
+    # ----- max(1h, 2h) piecewise approximation terms: optional ------------
+    # The Complete Unified Profile:
     #
     # Because DeltaSigma(R) = barSigma(<R) - Sigma(R) and
-    # d/dR [R^2 barSigma(<R)] = 2 R Sigma(R), enforcing the quadratic gap
-    # bridge for DeltaSigma uniquely determines the exact unified profiles
+    # d/dR [R^2 barSigma(<R)] = 2 R Sigma(R), enforcing quadratic matching
+    # for DeltaSigma uniquely determines the exact unified profiles
     # for Sigma(R), barSigma(<R), and DeltaSigma(R):
     #
     # 1. Projected Surface Density Sigma(R):

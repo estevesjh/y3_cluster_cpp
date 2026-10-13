@@ -13,7 +13,8 @@
 //
 // Evaluating the exact line-of-sight projection of the non-linear 3D maximum
 // at every radial scale is computationally expensive during MCMC.
-// Therefore, we approximate the projected profile via the 3-pillar smooth bridging operators:
+// The projected excess surface density DeltaSigma_max is approximated around transition radius
+// and is assembled by building a piecewise function:
 //
 //   For R < r_trans:
 //     DeltaSigma(R) = DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2

@@ -7,11 +7,11 @@ explicit composition
               Sigma_crit_inv(z) S_j(z) S_i(lt, z) P_HOD(lt | M, z)
               DSigma_max(R, lnM, z | bin)
 
-where DeltaSigma_max is formulated via 3D halo exclusion and 3-pillar smooth bridging:
+where DeltaSigma_max is formulated via 3D halo exclusion and piecewise approximation:
 1. In 3D real space, halo exclusion is defined on the correlation function:
        xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
    with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
-2. The projected excess surface density DeltaSigma_max is assembled via the 3-pillar bridging operators:
+2. The projected excess surface density DeltaSigma_max is approximated around transition radius and is assembled by building a piecewise function:
    - For R < r_trans:
        DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
    - For R >= r_trans:

@@ -34,7 +34,7 @@ explicitly ({doc}`observables/likelihood`).
 | Adaptive projection backends (`ShearPrjGsl`, `ShearPrjCuhre`, `ShearPrjFrozenCuhre`) | projection stage | same, adaptive quadrature | validation-only |
 | Centred one-halo (`Shear1hSel`) | `Shear1hMisSel` → `Shear1hSel` | $\gamma_t^{1h}$ without miscentering | historical / validation |
 | PAGANI selection-bias benchmarks (`P1/I1/I2PaganiIntegrand`) | `b_sel_marg` → 3 GPU modules | same $(P_1, I_1, I_2)$ | validation-only |
-| **Traditional $1h{+}2h$ max model** (`Shear1h2hMax`) | `+ halo_model` 2h branch, no projection stage | 3D halo exclusion $\xi_{\rm hm}=\max(\xi_{1h}, b\,\xi_{\rm mm})$ with 3-pillar bridging | **model option** (see below) |
+| **Traditional $1h{+}2h$ max model** (`Shear1h2hMax`) | `+ halo_model` 2h branch, no projection stage | 3D halo exclusion $\xi_{\rm hm}=\max(\xi_{1h}, b\,\xi_{\rm mm})$ with piecewise approximation | **model option** (see below) |
 | Population diagnostics (`MassWeightedSel`, `BiasWeightedSel`, `n_operator_ratios`) | added after `NumCountsSel` | adds $\langle M\rangle_i$, $\langle b\rangle_i$ | diagnostics |
 
 ## widePlanck self-closure — `mock_mcmc_cp_camb.ini`
@@ -118,12 +118,12 @@ inherits the $I_2 - I_1$ cancellation the production module avoids.
 The pre-projection shear model: run `halo_model` with
 `compute_lensing_2h = T` ({doc}`observables/second_halo_term`), and
 formulate the one-halo and biased two-halo terms via 3D halo exclusion and
-3-pillar smooth bridging (rather than a 2D pointwise maximum or sum):
+piecewise approximation (rather than a 2D pointwise maximum or sum):
 
 1. In 3D real space, halo exclusion is defined on the correlation function:
    $$\xi_{\rm hm}(r) = \max\left[\xi_{1h}(r),\; b(M, z)\,\xi_{\rm mm}(r, z)\right],$$
    with transition radius $r_{\rm trans}$ where $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
-2. Projected excess surface density $\Delta\Sigma_{\max}$ is assembled via 3-pillar bridging:
+2. The projected excess surface density $\Delta\Sigma_{\max}$ is approximated around transition radius and is assembled by building a piecewise function:
    $$\Delta\Sigma_{\max}(R \mid M, z) = \begin{cases}
    \Delta\Sigma_{1h}(R) + \Delta_{\rm gap}^1 \left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
    b(M, z)\,\Delta\Sigma_{\rm hh}(R) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans},

@@ -640,7 +640,7 @@ That contradicts this project's own documented standard
 formulated via 3D halo exclusion on the correlation function,
 $\xi_{\rm hm}(r) = \max[\xi_{1h}(r),\, b(M, z)\,\xi_{\rm mm}(r, z)]$, with
 transition radius $r_{\rm trans}$ where $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$,
-and assembled via 3-pillar bridging:
+and approximated around the transition radius via a piecewise function:
 $\Delta\Sigma_{1h}(R) + \Delta_{\rm gap}^1\,(R/r_{\rm trans})^2$ for $R < r_{\rm trans}$ and
 $b\,\Delta\Sigma_{hh}(R) + (C_0/R^2)\times 10^{-12}$ for $R \ge r_{\rm trans}$,
 where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans})/\pi$ (in $M_\odot/h$) and

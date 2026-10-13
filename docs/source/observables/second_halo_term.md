@@ -99,9 +99,9 @@ population; and there is no halo exclusion, so $\Sigma_{2h}$ is
 unphysically large inside the halo boundary — which is exactly what the
 max composition below is designed to hide.
 
-### The 3D halo-exclusion and 3-pillar bridging max model
+#### The 3D halo-exclusion piecewise max model
 
-The one-halo and two-halo profiles are not combined via a naive 2D pointwise maximum or sum. Instead, the model is physically formulated in 3D real space with halo exclusion and assembled via 3-pillar smooth bridging:
+The one-halo and two-halo profiles are not combined via a naive 2D pointwise maximum or sum. Instead, the model is physically formulated in 3D real space with halo exclusion and piecewise approximation:
 
 1. In 3D real space, halo exclusion is defined on the correlation function:
 
@@ -109,7 +109,7 @@ $$\xi_{\rm hm}(r \mid M, z) = \max\!\Big[\xi_{1h}(r \mid M, z),\; b(M, z)\,\xi_{
 
 with transition radius $r_{\rm trans}$ defined by $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
 
-2. Because $\Delta\Sigma(R) = \bar{\Sigma}(<R) - \Sigma(R)$ and $\frac{d}{dR}[R^2\bar{\Sigma}(<R)] = 2R\,\Sigma(R)$, enforcing the quadratic gap bridge for $\Delta\Sigma$ uniquely determines the exact unified profiles for **$\Sigma(R)$**, **$\bar{\Sigma}(<R)$**, and **$\Delta\Sigma(R)$**:
+2. The projected excess surface density $\Delta\Sigma_{\max}$ is approximated around transition radius and is assembled by building a piecewise function. Because $\Delta\Sigma(R) = \bar{\Sigma}(<R) - \Sigma(R)$ and $\frac{d}{dR}[R^2\bar{\Sigma}(<R)] = 2R\,\Sigma(R)$, enforcing the quadratic matching for $\Delta\Sigma$ uniquely determines the exact unified profiles for **$\Sigma(R)$**, **$\bar{\Sigma}(<R)$**, and **$\Delta\Sigma(R)$**:
 
 #### Projected Surface Density $\Sigma(R)$
 Outside the core ($R \ge r_{\rm trans}$), sightlines never pierce $r < r_{\rm trans}$, so the local surface density is purely 2-halo: $\Sigma(R) = b(M, z)\,\Sigma_{\rm hh}(R, z)$. Inside the core ($R < r_{\rm trans}$), matching the quadratic expansion yields:
@@ -142,7 +142,7 @@ where $\mathcal{C}_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) 
 * **Continuity:** All three profiles ($\Sigma$, $\bar{\Sigma}$, $\Delta\Sigma$) are strictly $C^0$ continuous at $R = r_{\rm trans}$.
 * **DataBlock inputs:** All tables are strictly 2D arrays: $\Sigma_{1h}(R, M)$, $\Sigma_{\rm hh}(R, z)$, $r_{\rm trans}(M, z)$, $\mathcal{C}_0(M, z)$, $\Delta_{\rm gap}(M, z)$, and $\Delta_{\rm gap}^{(\Sigma)}(M, z)$.
 
-The transition and bridging terms depend on $M$ and $z$, which has two consequences for the pipeline: (i) the composition must be applied *inside* the population integral, at each $(M, z)$, not to the stacked profiles; (ii) because the two-halo term depends on $z$, the redshift integral can no longer be contracted past the profile the way the one-halo `0d` path does — `Shear1h2hMax` keeps a $z$-resolved selection weight and performs a double $(\ln M, z)$ fixed-GL sum:
+The transition and piecewise terms depend on $M$ and $z$, which has two consequences for the pipeline: (i) the composition must be applied *inside* the population integral, at each $(M, z)$, not to the stacked profiles; (ii) because the two-halo term depends on $z$, the redshift integral can no longer be contracted past the profile the way the one-halo `0d` path does — `Shear1h2hMax` keeps a $z$-resolved selection weight and performs a double $(\ln M, z)$ fixed-GL sum:
 
 $$N_i[\Delta\Sigma_{\max}](R) = \int d\ln M \int dz\;
 \Omega(z)\,\frac{dV}{d\Omega\,dz}\,\frac{dn}{d\ln M}(M,z)\,
