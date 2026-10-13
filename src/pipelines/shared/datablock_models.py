@@ -103,6 +103,12 @@ class DataBlockSource:
         """Return whether ``section/key`` is present."""
         return self.block.has_value(section, key)
 
+    def __getitem__(self, item: tuple[str, str]) -> Any:
+        return self.block[item]
+
+    def __contains__(self, item: tuple[str, str]) -> bool:
+        return self.block.has_value(item[0], item[1])
+
 
 class DumpSource:
     """Read adapter over a cosmosis test-sampler save_dir directory.

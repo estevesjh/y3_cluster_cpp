@@ -94,9 +94,20 @@ class BselCostanzi26:
 
     @classmethod
     def from_source(cls, source: Any, section: str = SECTION):
-        """Read ``A``, ``alpha``, ``beta`` and ``gamma`` from a DataBlock."""
-        return cls(**{name: float(source[section, name])
-                      for name in PARAM_NAMES})
+        has_val = source.has if hasattr(source, "has") else (
+            source.has_value if hasattr(source, "has_value") else (lambda s, k: (s, k) in source))
+        if not has_val(section, "A"):
+            for cand in ("boost_selection_costanzi26", "bsel_profile_costanzi26"):
+                if has_val(cand, "A"):
+                    section = cand
+                    break
+
+        def _get(name: str) -> float:
+            if hasattr(source, "scalar"):
+                return float(source.scalar(section, name))
+            return float(source[section, name])
+
+        return cls(**{name: _get(name) for name in PARAM_NAMES})
 
     @staticmethod
     def validate_wall(lob, z):

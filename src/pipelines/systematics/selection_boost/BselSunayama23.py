@@ -56,13 +56,15 @@ class BselSunayama23:
             raise ValueError("BselSunayama23 r0 values must be positive")
         if not np.isfinite(self.c):
             raise ValueError("BselSunayama23 c must be finite")
-        bins = (np.arange(pi0.size, dtype=int) if self.lambda_bin is None
+        has_explicit = self.lambda_bin is not None
+        bins = (np.arange(pi0.size, dtype=int) if not has_explicit
                 else self._integer_labels(self.lambda_bin).ravel())
         if bins.size != pi0.size or np.unique(bins).size != bins.size:
             raise ValueError("BselSunayama23 lambda_bin must match pi0/r0")
         object.__setattr__(self, "pi0", pi0)
         object.__setattr__(self, "r0", r0)
         object.__setattr__(self, "lambda_bin", bins)
+        object.__setattr__(self, "_has_explicit_bins", has_explicit)
 
     @staticmethod
     def _integer_labels(values):
@@ -77,6 +79,8 @@ class BselSunayama23:
 
     def _row(self, bin_index):
         requested = self._integer_labels(bin_index)
+        if self.pi0.size == 1 and not getattr(self, "_has_explicit_bins", True):
+            return np.zeros(requested.shape, dtype=int)
         positions = {int(value): i for i, value in enumerate(self.lambda_bin)}
         try:
             return np.asarray([positions[int(value)] for value in requested.ravel()],
@@ -110,15 +114,50 @@ class BselSunayama23:
 
     @classmethod
     def from_source(cls, source: Any, section: str = SECTION):
-        """Read the per-bin calibration and shared ``c`` from a DataBlock."""
-        try:
-            bins = source[section, "lambda_bin"]
-        except Exception:
-            bins = None
-        return cls(pi0=np.asarray(source[section, "pi0"], dtype=float),
-                   r0=np.asarray(source[section, "r0"], dtype=float),
-                   c=float(source[section, "c"]),
-                   lambda_bin=bins)
+        """Read the calibration parameters and shared ``c`` from a DataBlock."""
+        has_val = source.has if hasattr(source, "has") else (
+            source.has_value if hasattr(source, "has_value") else (lambda s, k: (s, k) in source))
+
+        if not has_val(section, "c") and not has_val(section, "pi0"):
+            for cand in ("boost_selection_sunayama23", "bsel_profile_sunayama23"):
+                if has_val(cand, "c") or has_val(cand, "pi0"):
+                    section = cand
+                    break
+
+        def _get_scalar(k):
+            if hasattr(source, "scalar"):
+                return float(source.scalar(section, k))
+            return float(source[section, k])
+
+        def _get_arr_or_scalar(k):
+            if has_val(section, k):
+                if hasattr(source, "array") and hasattr(source, "scalar"):
+                    try:
+                        return np.atleast_1d(source.array(section, k))
+                    except Exception:
+                        return np.atleast_1d(source.scalar(section, k))
+                val = source[section, k]
+                return np.atleast_1d(np.asarray(val, dtype=float))
+            vals = []
+            b = 0
+            while has_val(section, f"{k}_{b}"):
+                vals.append(_get_scalar(f"{k}_{b}"))
+                b += 1
+            if vals:
+                return np.asarray(vals, dtype=float)
+            raise KeyError(f"Parameter '{k}' not found in section '{section}'")
+
+        pi0 = _get_arr_or_scalar("pi0")
+        r0 = _get_arr_or_scalar("r0")
+        c = _get_scalar("c")
+        bins = None
+        if has_val(section, "lambda_bin"):
+            if hasattr(source, "array"):
+                bins = source.array(section, "lambda_bin")
+            else:
+                bins = np.asarray(source[section, "lambda_bin"], dtype=float)
+
+        return cls(pi0=pi0, r0=r0, c=c, lambda_bin=bins)
 
     def validate_wall(self, bin_index):
         """Validate that every requested richness-bin label is available."""

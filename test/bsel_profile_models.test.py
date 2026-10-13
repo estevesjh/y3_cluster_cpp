@@ -339,6 +339,119 @@ class TestBselModels(unittest.TestCase):
         result = op.apply(delta_sigma, mean_sigma_fn, R, bin_index=0, lob=lob, z=z)
         np.testing.assert_allclose(result, expected_dsigma_sel, rtol=1e-6)
 
+    def test_bsel_operator_matches_direct_quad_fiducial_integral(self):
+        """Verify that BselDeltaSigmaOperator matches the fiducial direct integral:
+
+            BDS_direct(R) = (2 / R^2) * int_0^R r' * B(r') * Sigma(r') dr' - B(R) * Sigma(R)
+
+        evaluated via scipy.integrate.quad, establishing mathematical and numerical
+        equivalence of the integration-by-parts operator.
+        """
+        from scipy.integrate import quad
+
+        # 1. Smooth profile with finite central mass: barSigma(<r) = Sigma0 / (1 + r/rc)
+        # Sigma(r) = (1 / 2pi r) dM/dr = Sigma0 * (2 + r/rc) / [2 (1 + r/rc)^2]
+        # DeltaSigma(r) = barSigma(<r) - Sigma(r) = Sigma0 * (r/rc) / [2 (1 + r/rc)^2]
+        Sigma0 = 100.0
+        rc = 1.5
+
+        def bar_sigma_smooth(r):
+            return Sigma0 / (1.0 + np.asarray(r, dtype=float) / rc)
+
+        def sigma_smooth(r):
+            x = np.asarray(r, dtype=float) / rc
+            return Sigma0 * (2.0 + x) / (2.0 * (1.0 + x)**2)
+
+        def delta_sigma_smooth(r):
+            return bar_sigma_smooth(r) - sigma_smooth(r)
+
+        # Test Costanzi26
+        costanzi = BselCostanzi26(A=0.03, alpha=0.92, beta=-0.53, gamma=4.1)
+        op_costanzi = BselDeltaSigmaOperator(BselModels("Costanzi26", costanzi), n_gl=20)
+        lob, z = 25.0, 0.275
+
+        radii = [0.2, 0.5, 1.0, 2.0, 3.5, 5.0]
+        for R in radii:
+            quad_val, _ = quad(lambda r: r * costanzi(r, lob, z) * sigma_smooth(r),
+                               0.0, R, epsabs=1e-12, epsrel=1e-10)
+            bds_direct = (2.0 / R**2) * quad_val - costanzi(R, lob, z) * sigma_smooth(R)
+            bds_op = op_costanzi.apply(delta_sigma_smooth(R), bar_sigma_smooth,
+                                       R, bin_index=0, lob=lob, z=z)
+            np.testing.assert_allclose(bds_op, bds_direct, rtol=1e-6,
+                                       err_msg=f"Costanzi26 direct quad mismatch at R={R}")
+
+        # Test Sunayama23 for R <= r0 (r0 = 3.5)
+        sunayama = BselSunayama23(pi0=[0.45], r0=[3.5], c=-0.1, lambda_bin=[0])
+        op_sunayama = BselDeltaSigmaOperator(BselModels("Sunayama23", sunayama), n_gl=20)
+
+        for R in [0.2, 0.5, 1.0, 2.0, 3.5]:
+            quad_val, _ = quad(lambda r: r * sunayama(r, 0) * sigma_smooth(r),
+                               0.0, R, epsabs=1e-12, epsrel=1e-10)
+            bds_direct = (2.0 / R**2) * quad_val - sunayama(R, 0) * sigma_smooth(R)
+            bds_op = op_sunayama.apply(delta_sigma_smooth(R), bar_sigma_smooth,
+                                       R, bin_index=0)
+            np.testing.assert_allclose(bds_op, bds_direct, rtol=1e-6,
+                                       err_msg=f"Sunayama23 direct quad mismatch at R={R}")
+
+        # 2. Analytic NFW profile with realistic 1/r central cusp
+        def nfw_f(x):
+            x = np.asarray(x, dtype=float)
+            res = np.zeros_like(x)
+            m1 = x < 1.0
+            if np.any(m1):
+                xm = x[m1]
+                arg = np.sqrt((1.0 - xm) / (1.0 + xm))
+                res[m1] = (1.0 - 2.0 / np.sqrt(1.0 - xm**2) * np.arctanh(arg)) / (xm**2 - 1.0)
+            m2 = x > 1.0
+            if np.any(m2):
+                xm = x[m2]
+                arg = np.sqrt((xm - 1.0) / (1.0 + xm))
+                res[m2] = (1.0 - 2.0 / np.sqrt(xm**2 - 1.0) * np.arctan(arg)) / (xm**2 - 1.0)
+            m3 = x == 1.0
+            if np.any(m3):
+                res[m3] = 1.0 / 3.0
+            return res
+
+        def nfw_g(x):
+            x = np.asarray(x, dtype=float)
+            res = np.zeros_like(x)
+            m1 = x < 1.0
+            if np.any(m1):
+                xm = x[m1]
+                arg = np.sqrt((1.0 - xm) / (1.0 + xm))
+                res[m1] = np.log(0.5 * xm) + 2.0 / np.sqrt(1.0 - xm**2) * np.arctanh(arg)
+            m2 = x > 1.0
+            if np.any(m2):
+                xm = x[m2]
+                arg = np.sqrt((xm - 1.0) / (1.0 + xm))
+                res[m2] = np.log(0.5 * xm) + 2.0 / np.sqrt(xm**2 - 1.0) * np.arctan(arg)
+            m3 = x == 1.0
+            if np.any(m3):
+                res[m3] = 1.0 + np.log(0.5)
+            return res
+
+        r_s_nfw = 0.35
+        norm_nfw = 70.0
+
+        def sigma_nfw(r):
+            return norm_nfw * nfw_f(r / r_s_nfw)
+
+        def bar_sigma_nfw(r):
+            x = r / r_s_nfw
+            return norm_nfw * 2.0 * nfw_g(x) / (x**2)
+
+        def delta_sigma_nfw(r):
+            return bar_sigma_nfw(r) - sigma_nfw(r)
+
+        for R in radii:
+            quad_val, _ = quad(lambda r: r * costanzi(r, lob, z) * sigma_nfw(r),
+                               0.0, R, epsabs=1e-12, epsrel=1e-9)
+            bds_direct = (2.0 / R**2) * quad_val - costanzi(R, lob, z) * sigma_nfw(R)
+            bds_op = op_costanzi.apply(delta_sigma_nfw(R), bar_sigma_nfw,
+                                       R, bin_index=0, lob=lob, z=z)
+            np.testing.assert_allclose(bds_op, bds_direct, rtol=1e-6,
+                                       err_msg=f"NFW Costanzi26 direct quad mismatch at R={R}")
+
     def test_bsel_delta_sigma_operator_requires_positive_radius(self):
         costanzi = BselCostanzi26(0.10, 0.92, -0.53, 4.1)
         op = BselDeltaSigmaOperator(BselModels("Costanzi26", costanzi))
@@ -350,3 +463,4 @@ class TestBselModels(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

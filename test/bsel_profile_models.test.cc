@@ -4,6 +4,8 @@
 #include "cosmosis/datablock/datablock.hh"
 #include "pipelines/systematics/selection_boost/Bsel.hh"
 
+#include <gsl/gsl_integration.h>
+
 #include <array>
 #include <cmath>
 #include <limits>
@@ -264,3 +266,90 @@ TEST_CASE("BselDeltaSigmaOperator loads correctly from DataBlock")
   auto op_sunayama = BselDeltaSigmaOperator::from_datablock(source, "Sunayama23");
   CHECK(op_sunayama.model().tag() == BselModels::Tag::Sunayama23);
 }
+
+TEST_CASE("BselDeltaSigmaOperator matches direct GSL numerical quadrature")
+{
+  // Analytic smooth profile: barSigma(<r) = Sigma0 / (1 + r / rc)
+  // Sigma(r) = Sigma0 * (2 + r/rc) / [2 (1 + r/rc)^2]
+  // DeltaSigma(r) = Sigma0 * (r/rc) / [2 (1 + r/rc)^2]
+  double const sigma0 = 100.0;
+  double const rc = 1.5;
+
+  auto bar_sigma = [sigma0, rc](double r) {
+    return sigma0 / (1.0 + r / rc);
+  };
+  auto sigma = [sigma0, rc](double r) {
+    double const x = r / rc;
+    return sigma0 * (2.0 + x) / (2.0 * (1.0 + x) * (1.0 + x));
+  };
+  auto delta_sigma = [sigma0, rc](double r) {
+    double const x = r / rc;
+    return sigma0 * x / (2.0 * (1.0 + x) * (1.0 + x));
+  };
+
+  BselCostanzi26 const costanzi(0.03, 0.92, -0.53, 4.1);
+  BselDeltaSigmaOperator const op_c(BselModels(costanzi), 20);
+
+  BselSunayama23 const sunayama({0.45}, {3.5}, -0.1, {0.0});
+  BselDeltaSigmaOperator const op_s(BselModels(sunayama), 20);
+
+  double const lob = 25.0;
+  double const z = 0.275;
+
+  gsl_integration_workspace* ws = gsl_integration_workspace_alloc(1000);
+
+  std::vector<double> const radii = {0.2, 0.5, 1.0, 2.0, 3.5, 5.0};
+  for (double const R : radii) {
+    // 1. Costanzi26
+    struct ParamsC {
+      BselCostanzi26 const* model;
+      decltype(sigma) const* sig_fn;
+      double lob, z;
+    } params_c{&costanzi, &sigma, lob, z};
+
+    gsl_function F_c;
+    F_c.function = [](double r, void* p) -> double {
+      auto const* p_c = static_cast<ParamsC*>(p);
+      return r * (*p_c->model)(r, p_c->lob, p_c->z) * (*p_c->sig_fn)(r);
+    };
+    F_c.params = &params_c;
+
+    double quad_val_c = 0.0, err_c = 0.0;
+    gsl_integration_qag(&F_c, 0.0, R, 1e-12, 1e-9, 1000, GSL_INTEG_GAUSS21, ws,
+                        &quad_val_c, &err_c);
+    double const bds_direct_c =
+      (2.0 / (R * R)) * quad_val_c - costanzi(R, lob, z) * sigma(R);
+    double const bds_op_c =
+      op_c.apply(delta_sigma(R), bar_sigma, R, 0, lob, z);
+
+    CHECK(bds_op_c == Approx(bds_direct_c).epsilon(1e-6));
+
+    // 2. Sunayama23 for R <= r0 (r0 = 3.5)
+    if (R <= 3.5) {
+      struct ParamsS {
+        BselSunayama23 const* model;
+        decltype(sigma) const* sig_fn;
+      } params_s{&sunayama, &sigma};
+
+      gsl_function F_s;
+      F_s.function = [](double r, void* p) -> double {
+        auto const* p_s = static_cast<ParamsS*>(p);
+        return r * (*p_s->model)(r, 0) * (*p_s->sig_fn)(r);
+      };
+      F_s.params = &params_s;
+
+      double quad_val_s = 0.0, err_s = 0.0;
+      gsl_integration_qag(&F_s, 0.0, R, 1e-12, 1e-9, 1000, GSL_INTEG_GAUSS21,
+                          ws, &quad_val_s, &err_s);
+      double const bds_direct_s =
+        (2.0 / (R * R)) * quad_val_s - sunayama(R, 0) * sigma(R);
+      double const bds_op_s =
+        op_s.apply(delta_sigma(R), bar_sigma, R, 0, 0.0, 0.0);
+
+      CHECK(bds_op_s == Approx(bds_direct_s).epsilon(1e-6));
+    }
+  }
+
+  gsl_integration_workspace_free(ws);
+}
+

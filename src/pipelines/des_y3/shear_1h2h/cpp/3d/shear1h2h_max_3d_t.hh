@@ -136,13 +136,31 @@ public:
       y3_pipelines::read_lob_centers(cfg, module_label());
     if (lob_centers_.empty())
       throw std::runtime_error("Shear1h2hMax3d: lob_centers is empty");
-    if (cfg.has_val(module_label(), "include_miscentering"))
-      include_mis_ =
-        cfg.view<int>(module_label(), "include_miscentering") != 0;
-    if (cfg.has_val(module_label(), "bsel"))
-      bsel_enabled_ = cfg.view<int>(module_label(), "bsel") != 0;
+    include_mis_ =
+      read_bool_opt(cfg, module_label(), "include_miscentering", true);
+    bsel_enabled_ =
+      read_bool_opt(cfg, module_label(), "bsel", false);
     if (bsel_enabled_ && cfg.has_val(module_label(), "bsel_model"))
       bsel_model_ = cfg.view<std::string>(module_label(), "bsel_model");
+  }
+
+  static bool read_bool_opt(cosmosis::DataBlock& cfg,
+                            char const* sec,
+                            char const* key,
+                            bool default_val)
+  {
+    if (!cfg.has_val(sec, key))
+      return default_val;
+    try {
+      return cfg.view<bool>(sec, key);
+    } catch (...) {
+      try {
+        return cfg.view<int>(sec, key) != 0;
+      } catch (...) {
+        auto const str = cfg.view<std::string>(sec, key);
+        return str == "T" || str == "true" || str == "True" || str == "1";
+      }
+    }
   }
 
   void

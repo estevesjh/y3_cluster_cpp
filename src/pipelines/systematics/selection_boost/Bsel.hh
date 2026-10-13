@@ -42,12 +42,24 @@ public:
       throw std::invalid_argument("BselCostanzi26 gamma must be positive");
   }
 
+  static std::string resolve_section(cosmosis::DataBlock& source,
+                                     std::string const& section)
+  {
+    if (source.has_val(section, "A"))
+      return section;
+    if (source.has_val("boost_selection_costanzi26", "A"))
+      return "boost_selection_costanzi26";
+    if (source.has_val("bsel_profile_costanzi26", "A"))
+      return "bsel_profile_costanzi26";
+    return section;
+  }
+
   explicit BselCostanzi26(cosmosis::DataBlock& source,
                           std::string const& section = "boost_selection_costanzi26")
-    : BselCostanzi26(source.view<double>(section, "A"),
-                     source.view<double>(section, "alpha"),
-                     source.view<double>(section, "beta"),
-                     source.view<double>(section, "gamma"))
+    : BselCostanzi26(source.view<double>(resolve_section(source, section), "A"),
+                     source.view<double>(resolve_section(source, section), "alpha"),
+                     source.view<double>(resolve_section(source, section), "beta"),
+                     source.view<double>(resolve_section(source, section), "gamma"))
   {}
 
   static double r0(double lob, double z)
@@ -89,7 +101,8 @@ public:
   BselSunayama23(std::vector<double> pi0, std::vector<double> r0,
                  double c, std::vector<double> lambda_bin = {})
     : pi0_(std::move(pi0)), r0_(std::move(r0)), c_(c),
-      lambda_bin_(std::move(lambda_bin))
+      lambda_bin_(std::move(lambda_bin)),
+      has_explicit_bins_(!lambda_bin_.empty())
   {
     if (pi0_.empty() || pi0_.size() != r0_.size())
       throw std::invalid_argument("BselSunayama23 pi0/r0 sizes differ");
@@ -115,14 +128,52 @@ public:
     }
   }
 
+  static std::string resolve_section(cosmosis::DataBlock& source,
+                                     std::string const& section)
+  {
+    if (source.has_val(section, "c") || source.has_val(section, "pi0"))
+      return section;
+    if (source.has_val("boost_selection_sunayama23", "c") ||
+        source.has_val("boost_selection_sunayama23", "pi0"))
+      return "boost_selection_sunayama23";
+    if (source.has_val("bsel_profile_sunayama23", "c") ||
+        source.has_val("bsel_profile_sunayama23", "pi0"))
+      return "bsel_profile_sunayama23";
+    return section;
+  }
+
+  static std::vector<double> read_array_or_scalar(cosmosis::DataBlock& source,
+                                                  std::string const& sec,
+                                                  std::string const& key)
+  {
+    if (source.has_val(sec, key)) {
+      try {
+        return source.view<std::vector<double>>(sec, key);
+      } catch (...) {
+        return {source.view<double>(sec, key)};
+      }
+    }
+    std::vector<double> vals;
+    for (int b = 0;; ++b) {
+      std::string const indexed = key + "_" + std::to_string(b);
+      if (!source.has_val(sec, indexed))
+        break;
+      vals.push_back(source.view<double>(sec, indexed));
+    }
+    if (!vals.empty())
+      return vals;
+    throw std::runtime_error("BselSunayama23 missing parameter: " + key + " in section " + sec);
+  }
+
   explicit BselSunayama23(cosmosis::DataBlock& source,
-                          std::string const& section = "bsel_profile_sunayama23")
-    : BselSunayama23(source.view<std::vector<double>>(section, "pi0"),
-                     source.view<std::vector<double>>(section, "r0"),
-                     source.view<double>(section, "c"),
-                     source.has_val(section, "lambda_bin")
-                       ? source.view<std::vector<double>>(section, "lambda_bin")
-                       : std::vector<double>{})
+                          std::string const& section = "boost_selection_sunayama23")
+    : BselSunayama23(
+        read_array_or_scalar(source, resolve_section(source, section), "pi0"),
+        read_array_or_scalar(source, resolve_section(source, section), "r0"),
+        source.view<double>(resolve_section(source, section), "c"),
+        source.has_val(resolve_section(source, section), "lambda_bin")
+          ? read_array_or_scalar(source, resolve_section(source, section), "lambda_bin")
+          : std::vector<double>{})
   {}
 
   double operator()(double R, int bin_index) const
@@ -146,6 +197,8 @@ public:
 private:
   std::size_t row_for(int bin_index) const
   {
+    if (pi0_.size() == 1 && !has_explicit_bins_)
+      return 0;
     for (std::size_t i = 0; i != lambda_bin_.size(); ++i)
       if (lambda_bin_[i] == static_cast<double>(bin_index))
         return i;
@@ -154,6 +207,7 @@ private:
 
   std::vector<double> pi0_, r0_, lambda_bin_;
   double c_;
+  bool has_explicit_bins_{false};
 };
 
 class BselModels {
