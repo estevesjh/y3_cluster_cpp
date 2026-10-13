@@ -304,6 +304,22 @@ target_include_directories(
   )
 add_test(bsel_profile_models_test bsel_profile_models_test)
 
+# Gamma-kernel miscentering operator (systematics/miscentering/Miscentering.hh):
+# GL operator and the Cuhre full-integral reference vs Hankel-space NFW pins
+# (make_miscentering_nfw_truth_pins.py).
+add_executable(miscentering_operator_test miscentering_operator.test.cc)
+target_link_libraries(
+  miscentering_operator_test PRIVATE testmain utils cosmosis ${GSL_LIBRARIES}
+                                     ${CUBA_LIBRARIES}
+  )
+target_include_directories(
+  miscentering_operator_test PRIVATE ${CMAKE_SOURCE_DIR}/src
+                                     ${CMAKE_SOURCE_DIR}/externals
+                                     ${CUBACPP_DIR} ${CUBA_INCLUDE_DIR}
+                                     ${GSL_INCLUDE_DIR}
+  )
+add_test(miscentering_operator_test miscentering_operator_test)
+
 # End-to-end driver test for the projection-shear 0d wrapper
 # (shear_projection/cpp/0d/shear_prj_gl_t.hh) and the sample-level half of
 # ShearPrjCore that shear_prj_gl_test cannot reach: set_sample, the

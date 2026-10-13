@@ -21,6 +21,9 @@ systematics/
 │   ├── BselCostanzi26.py     # Costanzi26 B_sel(R) kernel
 │   ├── BselSunayama23.py     # Sunayama23 B_sel(R) kernel
 │   └── Bsel.hh                # C++ kernels, dispatcher, and operator
+├── miscentering/
+│   ├── Miscentering.hh        # Miscentering (stack) + GL operator + Cuhre reference
+│   └── Miscentering.py        # Python twin of the gauss_legendre path
 └── shear_prj/cpp/
     ├── sigma_prj_t.hh                # exact-z projection shear core
     ├── sigma_prj_frozen_t.hh         # frozen-physics projection backend
@@ -238,6 +241,75 @@ file = ${Y3_CLUSTER_CPP_DIR}/src/pipelines/systematics/selection_bias/python/bse
 `prj_params.py` is loaded explicitly by configurations that need to publish
 the projection coefficients.
 
+## Miscentering with Gamma kernel
+
+`miscentering/Miscentering.hh` (Python twin `Miscentering.py`) computes
+the gamma-miscentred excess surface density consumed by `Shear1h2hMax`
+(`miscentering = T`).  The consumer calls one class, `Miscentering`: it
+reads `[miscentering]` and the `mis_*` module options, takes the
+consumer's stack (weights, z nodes, Bsel model) and centred profile
+$\Sigma(r\mid\ln M, z)$ each sample, and returns $O_{\rm mis}(b, R)$
+and the mixture.  Inside, `mis_method` picks `MiscenteringOperator`
+(fixed GL, default) or `MiscenteringCuhre` (adaptive reference).  For a
+halo with centred surface density
+$\Sigma(r)$ and offset scale $\sigma = \tau_{\rm mis}R_\lambda(\lambda)$,
+
+$$
+\Sigma_{\rm mis}(R) = \int_0^\infty dR_s\,\frac{R_s}{\sigma^2}e^{-R_s/\sigma}
+\,\frac{1}{\pi}\int_0^\pi d\theta\;\Sigma\!\left(\sqrt{R^2+R_s^2+2RR_s\cos\theta}\right),
+\qquad
+\Delta\Sigma_{\rm mis}(R) = \int_0^1 4t^3\,\Sigma_{\rm mis}(Rt^2)\,dt - \Sigma_{\rm mis}(R).
+$$
+
+**Why through $\Sigma$.**  $\Delta\Sigma$ is defined relative to a centre,
+so it cannot be ring-averaged like $\Sigma$: for a point mass at offset
+$R_s$ the truth is $0$ inside and $M/\pi R^2$ outside, the ring average
+$M/\pi|R^2-R_s^2|$ on both sides.  The map $\Delta\Sigma\to\Delta\Sigma_{\rm mis}$
+is still linear — in Hankel space $\Sigma$ and $\Delta\Sigma$ share
+$\tilde\Sigma(k)$ ($J_0$ / $J_2$) and the gamma kernel multiplies it by
+$\tilde P(k) = (1+k^2\sigma^2)^{-3/2}$ — which the tests use as the
+analytic truth; no Fourier–Bessel transform runs in the code.
+
+**The numerical trick — one weight row per $(\sigma, R)$.**  The kernel
+depends only on radius, never on $(\ln M, z)$.  Tabulate $\Sigma$ once per
+sample on a log-uniform grid $r_m$ (linear in $\ln r$ between nodes); then
+the fixed-GL evaluation of both integrals is linear in the tabulated
+values,
+
+$$
+\Delta\Sigma_{\rm mis}(R) = \sum_m L_{\sigma,R,m}\,\Sigma(r_m),
+$$
+
+with `MiscenteringOperator::excess_surface_density_row` building $L$ from
+offset nodes on two panels split at $R_s = R$ (where the ring crosses the
+halo centre), angle nodes $\theta = \pi(1-v^2)$ clustered at $\theta=\pi$,
+and the aperture map $R' = Rt^2$ (weights $4wt^3$, as
+`OperatorMax1h2h_gl`).  Rows are built once per $(\sigma_b, R)$ and reused
+while $\tau_{\rm mis}$ is unchanged; a stacked consumer folds the
+selection weight in once, $g_b[m] = \sum_{k,q} W\,B\,\Sigma(r_m\mid k,q)$,
+and evaluates $O_{\rm mis} = L\cdot g_b$.
+
+**Keep the core mass.**  $\Delta\Sigma$ remembers enclosed mass through
+$1/R^2$: clamping $\Sigma$ below 0.1 Mpc/h biases $\Delta\Sigma_{\rm mis}$
+of an NFW by −23% at $R=0.2$ and −1% at $R=5$.  `LogRadialGrid(...,
+core = true)` adds a core slot: ring nodes with $r < r_{\rm lo}$ count as a
+uniform disk of the projected core mass (`haloModel/m2d_core`); with
+$r_{\rm lo} = 10^{-3}$ that is as accurate as the exact NFW interior
+(1.4e-5).
+
+**Reference.**  `MiscenteringCuhre` integrates both equations as one 3-D
+adaptive Cuhre integral over $(t, y, \theta)$ ($R'=Rt^2$, offsets
+$x = y/(1-y)$ on $[0,\infty)$), no tables of $\Sigma_{\rm mis}$, from a
+callable profile or a cluster-toolkit-style spline.  Smooth input
+matters: a linearly interpolated table stalls it at a 3e-4 error
+estimate, hence `CubicSplineLnR` (natural cubic in $\ln r$).
+
+**Precision** (analytic NFW, $M_{200m}=2\times10^{14}$, $c=4$,
+$\sigma=0.149$, vs the Hankel truth, $R\in[0.2,5]$): Cuhre 3e-8; GL
+operator on analytic $\Sigma$ 3.4e-7 (32/32/32 nodes); GL on a table
+from $10^{-3}$ plus core disk, $N_r = 1024$: 1.4e-5; cluster-toolkit
+2.9e-5.  On the real `Shear1h2hMax` stack, GL vs Cuhre 2.5e-5 max.
+
 ## Validation
 
 The tagged kernels and dispatchers are covered by:
@@ -248,5 +320,10 @@ The tagged kernels and dispatchers are covered by:
   tag dispatch, and selected consumers;
 - `test/shear1h2h_max.test.py` and
   `test/shear1h2h_max_t.test.cc` — Python/C++ max-profile integration and
-  preservation of the output contract.
+  preservation of the output contract (incl. the tabulated Bsel wall path
+  == per-node `apply()`);
+- `test/miscentering_operator.test.cc` — miscentering operator and Cuhre
+  reference vs Hankel-space NFW pins
+  (`test/make_miscentering_nfw_truth_pins.py`), row vs callback form, the
+  core slot, and the DataBlock contract.
 
