@@ -60,6 +60,25 @@ def setup(options):
     R_perp_min = options[section,"R_perp_min"]
     R_perp_max = options[section,"R_perp_max"]
     R_perp_bins = int(options[section,"R_perp_bins"])
+    # Optional sparse core segment below R_perp_min: R_perp_core_bins knots
+    # on [R_perp_core, R_perp_min), log-spaced, prepended to the main grid
+    # (whose knots stay unchanged).  These radii are not fitted; they carry
+    # the profile down to the core radius r_sigma[0] = R_perp_core, inside
+    # which m2d_core holds the projected mass (miscentering needs both).
+    # 8 knots on [1e-3, 0.1) reach the 1.4e-5 floor of the gamma-miscentred
+    # DeltaSigma on R >= 0.2 (analytic NFW); 4 give 1.2e-4.
+    R_perp_core = (options[section, "R_perp_core"]
+                   if options.has_value(section, "R_perp_core") else None)
+    R_perp_core_bins = (int(options[section, "R_perp_core_bins"])
+                        if options.has_value(section, "R_perp_core_bins") else 8)
+    R_perp = np.logspace(np.log10(R_perp_min), np.log10(R_perp_max), R_perp_bins)
+    if R_perp_core is not None:
+        if not (0.0 < R_perp_core < R_perp_min) or R_perp_core_bins < 1:
+            raise ValueError("halo_model: needs 0 < R_perp_core < R_perp_min "
+                             "and R_perp_core_bins >= 1")
+        R_perp = np.concatenate([
+            np.geomspace(R_perp_core, R_perp_min, R_perp_core_bins, endpoint=False),
+            R_perp])
 
     # radii of xi_hm, in Mpc/h
     Radii_min = options[section,"Radii_min"]
@@ -187,7 +206,7 @@ def setup(options):
             "one_halo_z_density = 0 (comoving tables); combining both "
             "double-counts the (1+z)^3 density evolution")
 
-    params_out = (R_perp_min, R_perp_max, R_perp_bins,
+    params_out = (R_perp,
                   Radii_min, Radii_max, Radii_bins,
                   M_min, M_max, M_bins,
                   compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
@@ -198,7 +217,7 @@ def setup(options):
 def execute(block, config):
     section_name = "haloModel"
 
-    (R_perp_min, R_perp_max, R_perp_bins,
+    (R_perp,
      Radii_min, Radii_max, Radii_bins,
      M_min, M_max, M_bins,
      compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
@@ -250,7 +269,6 @@ def execute(block, config):
     
     # setup bins
     nz = len(z)
-    R_perp = np.logspace(np.log10(R_perp_min), np.log10(R_perp_max), R_perp_bins)
     Radii = np.logspace(np.log10(Radii_min), np.log10(Radii_max), Radii_bins)
     M = np.logspace(np.log10(M_min), np.log10(M_max), M_bins)
     logM = np.log(M)
@@ -405,6 +423,22 @@ def execute(block, config):
         block[section_name, "c0_trans"]    = c0_trans
         block[section_name, "delta_gap_0"] = delta_gap_0
         block[section_name, "delta_gap_1"] = delta_gap_1
+
+        # Core mass: projected max-model mass inside the table floor
+        # r_core = R_perp[0], from the unified barSigma above (r_core < r_trans):
+        #   M_2d,core(M, z) = pi r_core^2 [barSigma_1h(<r_core, M) + Delta_gap^(Sigma)
+        #                     + 2 Delta_gap - Delta_gap (r_core / r_trans)^2]   [Msun/h]
+        # Profile consumers that need Sigma below the table (miscentering)
+        # take the core as a uniform disk of this mass; keep r_sigma[0] small
+        # (~1e-3 Mpc/h, via R_perp_core) so the disk is accurate (1e-5 at
+        # 1e-3, 3e-2 at 0.1).
+        r_core = R_perp[0]
+        if np.any(r_core >= r_trans):
+            raise ValueError("halo_model: r_sigma[0] must lie inside r_trans for m2d_core")
+        sbar_core = (np.asarray(lensModel.sigma_bar['1h'])[:, 0][None, :]
+                     + delta_gap_0 + 2.0 * delta_gap_1
+                     - delta_gap_1 * (r_core / r_trans) ** 2)
+        block[section_name, "m2d_core"] = np.pi * r_core**2 * sbar_core * 1.0e12
 
     return 0
 
