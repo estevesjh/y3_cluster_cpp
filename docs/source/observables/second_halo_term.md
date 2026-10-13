@@ -100,29 +100,50 @@ population; and there is no halo exclusion, so $\Sigma_{2h}$ is
 unphysically large inside the halo boundary — which is exactly what the
 max composition below is designed to hide.
 
-### The max composition (DES Y1 prescription)
+### The 3D halo-exclusion and 3-pillar bridging max model
 
-The one-halo and two-halo profiles are not added. Following Hayashi &
-White (2008) as adopted in the DES Y1 lensing analysis
-([McClintock et al. 2019, MNRAS 482, 1352](https://ui.adsabs.harvard.edu/abs/2019MNRAS.482.1352M/abstract),
-arXiv:[1805.00039](https://arxiv.org/abs/1805.00039)), the total
-profile is the **pointwise maximum**:
+The one-halo and two-halo profiles are not combined via a naive 2D pointwise maximum or sum. Instead, the model is physically formulated in 3D real space with halo exclusion and assembled via 3-pillar smooth bridging:
 
-$$\Delta\Sigma_{\max}(R \mid M, z) = \max\!\Big[
-\Delta\Sigma_{1h}(R \mid M, z),\;
-b(M, z)\,\Delta\Sigma_{\rm hh}(R, z)\Big],$$
+1. In 3D real space, halo exclusion is defined on the correlation function:
 
-with $\Delta\Sigma_{1h}$ the centred + miscentred one-halo mixture of
-{doc}`shear_halo`. The max is a crude but effective stand-in for halo
-exclusion and the 1h–2h transition: inside the halo the steep NFW wins,
-far outside the linear-bias two-halo term wins, and there is no
-double-counting in between. It is nonlinear in the profiles, which has
-two consequences for the pipeline: (i) the composition must be applied
-*inside* the population integral, at each $(M, z)$, not to the stacked
-profiles; (ii) because the two-halo term depends on $z$, the redshift
-integral can no longer be contracted past the profile the way the
-one-halo `0d` path does — `Shear1h2hMax` keeps a $z$-resolved
-selection weight and performs a double $(\ln M, z)$ fixed-GL sum:
+$$\xi_{\rm hm}(r \mid M, z) = \max\!\Big[\xi_{1h}(r \mid M, z),\; b(M, z)\,\xi_{\rm mm}(r, z)\Big],$$
+
+with transition radius $r_{\rm trans}$ defined by $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
+
+2. Because $\Delta\Sigma(R) = \bar{\Sigma}(<R) - \Sigma(R)$ and $\frac{d}{dR}[R^2\bar{\Sigma}(<R)] = 2R\,\Sigma(R)$, enforcing the quadratic gap bridge for $\Delta\Sigma$ uniquely determines the exact unified profiles for **$\Sigma(R)$**, **$\bar{\Sigma}(<R)$**, and **$\Delta\Sigma(R)$**:
+
+#### Projected Surface Density $\Sigma(R)$
+Outside the core ($R \ge r_{\rm trans}$), sightlines never pierce $r < r_{\rm trans}$, so the local surface density is purely 2-halo: $\Sigma(R) = b(M, z)\,\Sigma_{\rm hh}(R, z)$. Inside the core ($R < r_{\rm trans}$), matching the quadratic expansion yields:
+
+$$\Sigma_{\rm hm}(R, M, z) = \begin{cases} 
+\Sigma_{1h}(R, M) + \Delta_{\rm gap}^{(\Sigma)}(M, z) + 2\,\Delta_{\rm gap}(M, z)\left[1 - \left(\dfrac{R}{r_{\rm trans}(M, z)}\right)^2\right] & \text{if } R < r_{\rm trans}(M, z) \\[10pt] 
+b(M, z)\,\Sigma_{\rm hh}(R, z) & \text{if } R \ge r_{\rm trans}(M, z) 
+\end{cases}$$
+
+where the boundary surface density gap is:
+$$\Delta_{\rm gap}^{(\Sigma)}(M, z) \equiv b(M, z)\,\Sigma_{\rm hh}\big(r_{\rm trans}(M, z), z\big) - \Sigma_{1h}\big(r_{\rm trans}(M, z), M\big).$$
+
+#### Enclosed Mean Surface Density $\bar{\Sigma}(<R)$
+$$\bar{\Sigma}_{\rm hm}(<R, M, z) = \begin{cases} 
+\bar{\Sigma}_{1h}(<R, M) + \Delta_{\rm gap}^{(\Sigma)}(M, z) + 2\,\Delta_{\rm gap}(M, z) - \Delta_{\rm gap}(M, z)\left(\dfrac{R}{r_{\rm trans}(M, z)}\right)^2 & \text{if } R < r_{\rm trans}(M, z) \\[10pt] 
+b(M, z)\,\bar{\Sigma}_{\rm hh}(<R, z) + \dfrac{\mathcal{C}_0(M, z)}{R^2} \times 10^{-12} & \text{if } R \ge r_{\rm trans}(M, z) 
+\end{cases}$$
+
+#### Excess Surface Density $\Delta\Sigma(R) = \bar{\Sigma}(<R) - \Sigma(R)$
+Subtracting $\Sigma(R)$ from $\bar{\Sigma}(<R)$, the constant sheet $\Delta_{\rm gap}^{(\Sigma)} + 2\Delta_{\rm gap}$ cancels out identically, leaving:
+
+$$\Delta\Sigma_{\rm hm}(R, M, z) = \begin{cases} 
+\Delta\Sigma_{1h}(R, M) + \Delta_{\rm gap}(M, z)\left(\dfrac{R}{r_{\rm trans}(M, z)}\right)^2 & \text{if } R < r_{\rm trans}(M, z) \\[10pt] 
+b(M, z)\,\Delta\Sigma_{\rm hh}(R, z) + \dfrac{\mathcal{C}_0(M, z)}{R^2} \times 10^{-12} & \text{if } R \ge r_{\rm trans}(M, z) 
+\end{cases}$$
+
+where $\mathcal{C}_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and $\Delta_{\rm gap}(M, z) = [b(M, z)\,\Delta\Sigma_{\rm hh}(r_{\rm trans}, z) + (\mathcal{C}_0 / r_{\rm trans}^2)\times 10^{-12}] - \Delta\Sigma_{1h}(r_{\rm trans}, M)$, with $\Delta\Sigma_{1h}$ the centred + miscentred one-halo mixture of {doc}`shear_halo`.
+
+* **Exact Identity:** $\Delta\Sigma_{\rm hm}(R) \equiv \bar{\Sigma}_{\rm hm}(<R) - \Sigma_{\rm hm}(R)$ holds analytically everywhere.
+* **Continuity:** All three profiles ($\Sigma$, $\bar{\Sigma}$, $\Delta\Sigma$) are strictly $C^0$ continuous at $R = r_{\rm trans}$.
+* **DataBlock inputs:** All tables are strictly 2D arrays: $\Sigma_{1h}(R, M)$, $\Sigma_{\rm hh}(R, z)$, $r_{\rm trans}(M, z)$, $\mathcal{C}_0(M, z)$, $\Delta_{\rm gap}(M, z)$, and $\Delta_{\rm gap}^{(\Sigma)}(M, z)$.
+
+The transition and bridging terms depend on $M$ and $z$, which has two consequences for the pipeline: (i) the composition must be applied *inside* the population integral, at each $(M, z)$, not to the stacked profiles; (ii) because the two-halo term depends on $z$, the redshift integral can no longer be contracted past the profile the way the one-halo `0d` path does — `Shear1h2hMax` keeps a $z$-resolved selection weight and performs a double $(\ln M, z)$ fixed-GL sum:
 
 $$N_i[\Delta\Sigma_{\max}](R) = \int d\ln M \int dz\;
 \Omega(z)\,\frac{dV}{d\Omega\,dz}\,\frac{dn}{d\ln M}(M,z)\,
@@ -208,6 +229,12 @@ lnm_high = 36.7300
 n_lnm = 96
 n_z   = 64
 lob_centers = 25.0 37.5 52.5 130.0
+# max_xi = T                         ; enable the 3D xi max profile
+# miscentering_method = table        ; or direct
+# n_offset = 24
+# n_phi = 64
+# n_aperture = 8
+# q_max = 12.0
 include_miscentering = T
 
 [likelihoods]
@@ -219,6 +246,16 @@ is_b_proj_costanzi26 = T          ; optional B_prj(R) correction
 in the values file (no in-code fallback) and `haloModel/rho_m_ref`,
 `bias`, `dSigma_nfw`, `dSigma_hh`. `cosmosis-models/real_pipeline_extract_max2h.ini`
 is the fixture pipeline that exercises this branch.
+
+When `max_xi = T`, `miscentering_method` selects the miscentering benchmark:
+`table` (the default) uses the DES NFW gamma table and applies the signed
+`Sigma_max - Sigma_NFW` residual with the GL aperture projection; `direct`
+performs the same DES gamma-kernel integral on the complete centered
+`Sigma_max` and then applies the aperture projection. The direct path is not
+the shortcut of convolving `DeltaSigma` itself. The quadrature controls are
+`n_offset` for the radial offset integral, `n_phi` for the angular integral,
+`n_aperture` for the aperture projection, and `q_max` for the exponential
+offset tail. `use_nfw_table_residual` affects only the `table` method.
 
 ## DataBlock outputs (when enabled)
 

@@ -36,7 +36,7 @@ from shared import lensing_profiles as lp
 from systematics.selection_richness.python import sel_kernels
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from shear1h2h_max import compute_shear_max, z_resolved_weights  # noqa: E402
+from shear1h2h_max_explicit_gl import compute_shear_max, z_resolved_weights  # noqa: E402
 from shear1h_gl import compute_shear as shear_1h_only     # noqa: E402
 
 R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,

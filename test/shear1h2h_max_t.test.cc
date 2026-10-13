@@ -102,6 +102,7 @@ namespace {
     double hh_amp = 1.0;
     bool hh_nan = false;
     bool phys_density = false;
+    bool max_xi = false;
   };
 
   // Two knots per axis, all tables either constant or linear along the one
@@ -166,6 +167,22 @@ namespace {
     std::vector<double> hh(4, o.hh_nan ? nan_d : o.hh_amp);
     s.put_val("haloModel", "dSigma_hh",
               cosmosis::ndarray<double>(hh, {2, 2}));
+
+    if (o.max_xi) {
+      s.put_val("haloModel", "concentration",
+                std::vector<double>{4.0, 4.0});
+      s.put_val("haloModel", "Sigma_bar_hh",
+                cosmosis::ndarray<double>(std::vector<double>(4, 2.0),
+                                          {2, 2}));
+      s.put_val("xi_nl", "r", std::vector<double>{0.05, 10.0});
+      s.put_val("xi_nl", "z", std::vector<double>{0.0, 1.0});
+      s.put_val("xi_nl", "xi_nl",
+                cosmosis::ndarray<double>(std::vector<double>(4, 0.0),
+                                          {2, 2}));
+      s.put_val("xi_nl", "m3d_nl",
+                cosmosis::ndarray<double>(std::vector<double>(4, 0.0),
+                                          {2, 2}));
+    }
 
     if (o.phys_density)
       s.put_val("haloModel", "one_halo_physical_density", 1);
@@ -531,6 +548,75 @@ TEST_CASE("Shear1h2hMax one_halo_physical_density applies the exact (1+z)^2 iden
   CHECK(mod.evaluate(pt)[0] != Approx(com.evaluate(pt)[0]).epsilon(1e-6));
 }
 
+TEST_CASE("Shear1h2hMax opt-in max_xi path is finite")
+{
+  auto cfg = make_cfg_block();
+  cfg.put_val(Shear1h2hMax::module_label(), "max_xi", 1);
+  cfg.put_val(Shear1h2hMax::module_label(), "n_gl", 8);
+  cfg.put_val(Shear1h2hMax::module_label(), "n_root", 32);
+  cfg.put_val(Shear1h2hMax::module_label(), "n_offset", 3);
+  cfg.put_val(Shear1h2hMax::module_label(), "n_phi", 8);
+  cfg.put_val(Shear1h2hMax::module_label(), "n_aperture", 3);
+  auto s = make_sample_block(SampleOpts{F_MIS, TAU_MIS, 1.0, false, false,
+                                        true});
+
+  Shear1h2hMax mod(cfg);
+  REQUIRE_NOTHROW(mod.set_sample(s));
+  for (int b : {0, 1})
+    for (double R : R_QUERY) {
+      auto const value = mod.evaluate({static_cast<double>(b), R})[0];
+      INFO("bin " << b << " R " << R);
+      CHECK(std::isfinite(value));
+    }
+
+  auto cfg_direct = make_cfg_block();
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "max_xi", 1);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_gl", 8);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_root", 32);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_offset", 3);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_phi", 8);
+  cfg_direct.put_val(Shear1h2hMax::module_label(), "n_aperture", 3);
+  cfg_direct.put_val(Shear1h2hMax::module_label(),
+                     "miscentering_method", std::string("direct"));
+  Shear1h2hMax direct(cfg_direct);
+  REQUIRE_NOTHROW(direct.set_sample(s));
+  CHECK(std::isfinite(direct.evaluate({0.0, 1.0})[0]));
+}
+
+TEST_CASE("Shear1h2hMaxProfile exposes Sigma DeltaSigma and gamma_T")
+{
+  auto s = make_sample_block(SampleOpts{F_MIS, TAU_MIS, 1.0, false, false,
+                                        true});
+  Shear1h2hMaxProfile profile(s, 8, 32, 2, 8, 3, 24.0);
+  double const R = 1.0;
+  double const lnM = 34.0;
+  double const z = 0.3;
+  double const sigma = profile.surface_density(R, lnM, z);
+  double const mean_sigma = profile.mean_surface_density(R, lnM, z);
+  double const delta_sigma = profile.excess_surface_density(R, lnM, z);
+  double const sigma_crit_inv = 2.5e-4;
+  double const gamma_t = profile.tangential_shear(
+    R, lnM, z, sigma_crit_inv);
+  double const residual_sigma = profile.residual_surface_density(R, lnM, z);
+  double const residual_delta =
+    profile.residual_excess_surface_density(R, lnM, z);
+  double const residual_mis =
+    profile.miscentered_residual_excess_surface_density(
+      R, 0.2, lnM, z);
+  double const direct_mis = profile.miscentered_excess_surface_density(
+    R, 0.2, lnM, z);
+
+  CHECK(std::isfinite(sigma));
+  CHECK(std::isfinite(delta_sigma));
+  CHECK(std::isfinite(gamma_t));
+  CHECK(std::isfinite(residual_sigma));
+  CHECK(std::isfinite(residual_delta));
+  CHECK(std::isfinite(residual_mis));
+  CHECK(std::isfinite(direct_mis));
+  CHECK(mean_sigma - sigma == Approx(delta_sigma).epsilon(1e-12));
+  CHECK(gamma_t == Approx(delta_sigma * sigma_crit_inv).epsilon(1e-12));
+}
+
 TEST_CASE("Shear1h2hMax ini-option contract: [Shear1h2hMax] required vs optional")
 {
   // Cross-checked against cosmosis-models/real_pipeline_extract_max2h.ini:
@@ -541,6 +627,7 @@ TEST_CASE("Shear1h2hMax ini-option contract: [Shear1h2hMax] required vs optional
   //   r_perp    = 0.2 ... 5.0 REQUIRED (wall, fast axis)
   //   zt_low / zt_high / lnm_low / lnm_high   REQUIRED
   //   n_lnm = 96 / n_z = 64                   optional (those defaults)
+  //   n_gl = 20 / n_root = 96                 optional 3D-envelope controls
   //   lob_centers = 25 37.5 52.5 130          optional (DES-Y3 default)
   //   include_miscentering                    optional, default T
   char const* label = Shear1h2hMax::module_label();
@@ -570,6 +657,14 @@ TEST_CASE("Shear1h2hMax ini-option contract: [Shear1h2hMax] required vs optional
   CHECK(y3_pipelines::read_lob_centers(cfg_default, label) ==
         y3_pipelines::default_lob_centers());
 
+  cosmosis::DataBlock cfg_direct = cfg_default;
+  cfg_direct.put_val(label, "miscentering_method", std::string("direct"));
+  CHECK_NOTHROW(Shear1h2hMax{cfg_direct});
+
+  cosmosis::DataBlock cfg_invalid = cfg_default;
+  cfg_invalid.put_val(label, "miscentering_method", std::string("bad"));
+  CHECK_THROWS_AS(Shear1h2hMax{cfg_invalid}, std::invalid_argument);
+
   // An explicitly EMPTY lob_centers is a configuration error, not a
   // silent fall-back to the default.
   cosmosis::DataBlock cfg_empty = cfg_default;
@@ -589,6 +684,13 @@ TEST_CASE("Shear1h2hMax ini-option contract: [Shear1h2hMax] required vs optional
   CHECK(grid.points[3][0] == Approx(1.0)); // bin is the slow axis
 
   CHECK(std::string(Shear1h2hMax::output_sections()[0]) == "shear1h2h_max");
+
+  auto cfg_bad_gl = make_cfg_block();
+  cfg_bad_gl.put_val(label, "n_gl", 0);
+  CHECK_THROWS_AS(Shear1h2hMax{cfg_bad_gl}, std::invalid_argument);
+  auto cfg_bad_root = make_cfg_block();
+  cfg_bad_root.put_val(label, "n_root", 1);
+  CHECK_THROWS_AS(Shear1h2hMax{cfg_bad_root}, std::invalid_argument);
 }
 
 TEST_CASE("Shear1h2hMax DataBlock contract: every required sample key fails loudly")

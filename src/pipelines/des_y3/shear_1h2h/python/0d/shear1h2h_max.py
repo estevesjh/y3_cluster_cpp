@@ -1,33 +1,33 @@
-"""Traditional 1h+2h shear via the max model — Python (fast path).
+"""Traditional 1h+2h excess surface density via ``Shear1h2hMax``.
 
 The traditional-pipeline counterpart of the projection treatment (plan
 owner, 2026-08-12: "two pipelines — one with traditional shear and one
-with prj"). The radial operator is the Y1-era SIG_MAX/GAMMA_MAX
-composition on the modern haloModel tables:
+with prj"). The radial profile is formulated via 3D halo exclusion and 3-pillar
+smooth bridging:
 
-    DSigma_max(R, lnM, z | bin) = max( DSigma_cl(R, lnM | bin),
-                                       bias(lnM, z) * dSigma_hh(R, z) )
-
-with DSigma_cl the production miscentred 1-halo mixture (optionally
-pure centred via include_miscentering = F) and the biased two-halo term
-from haloModel (requires halo_model to run with
-compute_lensing_2h = T). The observable is the count-weighted stack
-
-    O_ij(R) = int dz int dlnM  n dV/dOmegadz Omega Sigma_crit^-1
-              S_ij(lnM, z) DSigma_max(R, lnM, z)
-
-**The two-halo term is z-dependent, so — unlike the 1h-only fixed-GL —
-the redshift integral cannot be contracted past the profile.** The fast
-path therefore keeps the z-resolved tabulated weight
-W2d(lnM, z) = zfac * hmf * S_stack (the S_ij tabulation is still the
-S_ij-tabulation hallmark) and performs the double fixed-GL contraction
-sum_kq W2d * DSigma_max per (bin, R).
+1. In 3D real space, halo exclusion is defined on the correlation function:
+       xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
+   with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
+2. The projected excess surface density DeltaSigma_max is assembled via the 3-pillar bridging operators:
+   - For R < r_trans:
+       DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
+   - For R >= r_trans:
+       b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+   where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
+   Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
 
 DataBlock contract
 ------------------
 Reads (options): bin_index, r_perp (cartesian, bin slow / R fast),
     lob_centers (default 25 37.5 52.5 130), zt_low/zt_high/
     lnm_low/lnm_high (required), n_lnm (96), n_z (64),
+    n_gl (20), n_root (96) for the opt-in max_xi path,
+    n_offset (24), n_phi (64), n_aperture (8), q_max (12),
+    n_residual (512) for the signed residual convolution,
+    max_xi (default F; applies max operator on xi in 3D before projection),
+    miscentering_method (default ``table``; ``table`` keeps the DES NFW
+        gamma table plus residual correction, ``direct`` convolves the full
+        centered Sigma_max and then applies the aperture operation),
     include_miscentering (default T).
 Reads (datablock): the Shear1hMisSel contract plus
     halomodel/{r_sigma, z, dSigma_hh, bias}  (compute_lensing_2h = T).
@@ -95,6 +95,12 @@ def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
     n_z = z_x.size
     vals = np.empty(len(bin_index) * n_r)
     for i, b in enumerate(bin_index):
+        if hasattr(profile, "excess_surface_density_grid"):
+            envelope = profile.excess_surface_density_grid(
+                b, r_perp, lnm_x, z_x, physical=physical)
+            vals[i * n_r:(i + 1) * n_r] = np.einsum(
+                "rkq,kq->r", envelope, w2d[b] * lnm_w[:, None])
+            continue
         if physical:
             DSigma_1h = np.empty((n_r, lnm_x.size, n_z))
             for iq, z in enumerate(z_x):
@@ -106,7 +112,17 @@ def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
                 b, r_perp[:, None], lnm_x[None, :])[:, :, None]
         DSigma_2h = (profile._bias(lnm_x[:, None], z_x[None, :])[None, :, :]
                     * profile._hh(r_perp[:, None], z_x[None, :])[:, None, :])
-        DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
+        if getattr(profile, "_has_max1h2h", False):
+            rt = profile._r_trans(lnm_x[:, None], z_x[None, :])[None, :, :]
+            c0 = profile._c0_trans(lnm_x[:, None], z_x[None, :])[None, :, :]
+            gap1 = profile._delta_gap_1(lnm_x[:, None], z_x[None, :])[None, :, :]
+            r_arr = r_perp[:, None, None]
+            c0_term = (c0 / (r_arr * r_arr)) * 1.0e-12
+            outer = DSigma_2h + c0_term
+            inner = DSigma_1h + gap1 * (r_arr / rt)**2
+            DSigma_max = np.where(r_arr < rt, inner, outer)
+        else:
+            DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
         vals[i * n_r:(i + 1) * n_r] = np.einsum(
             "rkq,kq->r", DSigma_max, w2d[b] * lnm_w[:, None])
     return vals
@@ -126,11 +142,36 @@ def setup(options):
         cfg["lob_centers"] = np.asarray(dm.DEFAULT_LOB_CENTERS)
     for key in ("zt_low", "zt_high", "lnm_low", "lnm_high"):
         cfg[key] = float(options.get_double(option_section, key))
-    for key, default in (("n_lnm", 96), ("n_z", 64)):
+    for key, default in (("n_lnm", 96), ("n_z", 64),
+                         ("n_gl", 20), ("n_root", 96),
+                         ("n_offset", 24), ("n_phi", 64),
+                         ("n_aperture", 8), ("n_residual", 512)):
         try:
             cfg[key] = int(options.get_int(option_section, key))
         except Exception:
             cfg[key] = default
+    try:
+        cfg["q_max"] = float(options.get_double(option_section, "q_max"))
+    except Exception:
+        cfg["q_max"] = 12.0
+    try:
+        cfg["max_xi"] = bool(
+            options.get_bool(option_section, "max_xi"))
+    except Exception:
+        cfg["max_xi"] = False
+    try:
+        cfg["use_nfw_table_residual"] = bool(
+            options.get_bool(option_section, "use_nfw_table_residual"))
+    except Exception:
+        cfg["use_nfw_table_residual"] = True
+    try:
+        cfg["miscentering_method"] = options.get_string(
+            option_section, "miscentering_method").lower()
+    except Exception:
+        cfg["miscentering_method"] = "table"
+    if cfg["miscentering_method"] not in ("table", "direct"):
+        raise ValueError(
+            "miscentering_method must be 'table' or 'direct'")
     try:
         cfg["include_miscentering"] = bool(
             options.get_bool(option_section, "include_miscentering"))
@@ -143,14 +184,26 @@ def execute(block, cfg):
     t0 = time.perf_counter()
     source = dm.DataBlockSource(block)
     physical = dm.physical_density_flag(source)
-    profile = lp.MaxMixtureProfile(
-        source, lob_centers=cfg["lob_centers"],
+    from cosmology.shear1h2h_max_profile import Shear1h2hMaxProfile
+    profile_type = (Shear1h2hMaxProfile
+                    if cfg["max_xi"] else lp.MaxMixtureProfile)
+    profile_kwargs = dict(
+        source=source, lob_centers=cfg["lob_centers"],
         # Required: no fallback to the fiducial defaults — a pipeline
         # missing the miscentering section must fail loudly.
         f_mis=source.scalar("miscentering", "f_mis"),
         tau_mis=source.scalar("miscentering", "tau_mis"),
         omega_m=source.scalar("cosmological_parameters", "omega_m"),
         include_miscentering=cfg["include_miscentering"])
+    if cfg["max_xi"]:
+        profile_kwargs.update(
+            n_gl=cfg["n_gl"], n_root=cfg["n_root"],
+            n_offset=cfg["n_offset"], n_phi=cfg["n_phi"],
+            n_aperture=cfg["n_aperture"], q_max=cfg["q_max"],
+            n_residual=cfg["n_residual"],
+            use_nfw_table_residual=cfg["use_nfw_table_residual"],
+            miscentering_method=cfg["miscentering_method"])
+    profile = profile_type(**profile_kwargs)
     lnm_x, lnm_w, z_x, w2d = z_resolved_weights(
         source, n_lnm=cfg["n_lnm"], n_z=cfg["n_z"],
         zt_lo=cfg["zt_low"], zt_hi=cfg["zt_high"],
@@ -159,8 +212,9 @@ def execute(block, cfg):
         profile, lnm_x, lnm_w, z_x, w2d, cfg["bin_index"], cfg["r_perp"],
         physical=physical)
     dt_ms = 1000.0 * (time.perf_counter() - t0)
+    label = "max_xi" if cfg["max_xi"] else "max 1h/2h"
     print(f"[shear1h2h_max] {cfg['bin_index'].size} bins x "
-          f"{cfg['r_perp'].size} radii (max 1h/2h) — {dt_ms:.0f} ms",
+          f"{cfg['r_perp'].size} radii ({label}) — {dt_ms:.0f} ms",
           flush=True)
     return 0
 

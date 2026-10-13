@@ -7,8 +7,17 @@ explicit composition
               Sigma_crit_inv(z) S_j(z) S_i(lt, z) P_HOD(lt | M, z)
               DSigma_max(R, lnM, z | bin)
 
-    DSigma_max = max( DSigma_cl(R, lnM | bin),
-                 bias(lnM, z) * dSigma_hh(R, z) )
+where DeltaSigma_max is formulated via 3D halo exclusion and 3-pillar smooth bridging:
+1. In 3D real space, halo exclusion is defined on the correlation function:
+       xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
+   with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
+2. The projected excess surface density DeltaSigma_max is assembled via the 3-pillar bridging operators:
+   - For R < r_trans:
+       DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
+   - For R >= r_trans:
+       b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+   where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
+   Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
 
 with every selection kernel evaluated at the quadrature nodes (no S_ij
 tabulation, no interpolation of the selection). Unlike the 1-halo
@@ -60,6 +69,21 @@ from systematics.selection_richness.python import sel_kernels
 OUTPUT_SECTION = "shear1h2h_max_explicit_gl"
 
 
+def z_resolved_weights(source, *, n_lnm, n_z, zt_lo, zt_hi, lnm_lo, lnm_hi):
+    """W2d[b, k, q] = zfac_q sci_q hmf(k,q) S_stack(b; k, q) on GL nodes."""
+    lnm_x, lnm_w = dm.gl_nodes(lnm_lo, lnm_hi, n_lnm)
+    z_x, z_w = dm.gl_nodes(zt_lo, zt_hi, n_z)
+    hmf = dm.HMF(source)
+    dv = dm.DVDoDz(source)
+    sel = dm.SelStack(source)
+    zfac = z_w * dv(z_x) * dm.omega_z_des(z_x) * dm.SigmaCritInv(source)(z_x)
+    base = hmf(lnm_x[:, None], z_x[None, :]) * zfac[None, :]
+    w2d = np.empty((sel.n_bins, n_lnm, n_z))
+    for b in range(sel.n_bins):
+        w2d[b] = base * sel(b, lnm_x[:, None], z_x[None, :])
+    return lnm_x, lnm_w, z_x, w2d
+
+
 def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
                       physical=False):
     """O(R) = sum_kq lnm_w_k W2d[b,k,q] DSigma_max(b, R, lnM_k, z_q).
@@ -86,7 +110,17 @@ def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
                 b, r_perp[:, None], lnm_x[None, :])[:, :, None]
         DSigma_2h = (profile._bias(lnm_x[:, None], z_x[None, :])[None, :, :]
                     * profile._hh(r_perp[:, None], z_x[None, :])[:, None, :])
-        DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
+        if getattr(profile, "_has_max1h2h", False):
+            rt = profile._r_trans(lnm_x[:, None], z_x[None, :])[None, :, :]
+            c0 = profile._c0_trans(lnm_x[:, None], z_x[None, :])[None, :, :]
+            gap1 = profile._delta_gap_1(lnm_x[:, None], z_x[None, :])[None, :, :]
+            r_arr = r_perp[:, None, None]
+            c0_term = (c0 / (r_arr * r_arr)) * 1.0e-12
+            outer = DSigma_2h + c0_term
+            inner = DSigma_1h + gap1 * (r_arr / rt)**2
+            DSigma_max = np.where(r_arr < rt, inner, outer)
+        else:
+            DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
         vals[i * n_r:(i + 1) * n_r] = np.einsum(
             "rkq,kq->r", DSigma_max, w2d[b] * lnm_w[:, None])
     return vals

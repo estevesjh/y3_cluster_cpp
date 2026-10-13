@@ -49,6 +49,7 @@ from pathlib import Path
 
 import numpy as np
 
+import cluster_toolkit as ct
 import cluster_toolkit.bias as ctb
 import cluster_toolkit.deltasigma as ctd
 
@@ -421,6 +422,42 @@ class TestPipelinesVsBuzzardEquivalence(unittest.TestCase):
             self.assertTrue(np.allclose(a.dSigma[key], b.dSigma[key],
                                         rtol=1e-14))
 
+    def test_max1h2h_operators_agrees(self):
+        import haloModel as buzzard
+        z = np.array([0.2, 0.4])
+        k = np.logspace(-3.0, 1.0, 40)
+        pk = np.array([1000.0 / (1.0 + k**2) * (1.0 + zz)**(-1.0) for zz in z])
+        bias = np.ones((len(z), len(M_GRID))) * 2.5
+        r_xi = np.logspace(-2.0, 2.0, 64)
+        xi_nl = np.array([ct.xi.xi_mm_at_r(r_xi, k, pk[i]) for i in range(len(z))])
+
+        a_lm = hm.lensingModel(R_GRID, omega_m=OMEGA_M)
+        b_lm = buzzard.lensingModel(R_GRID, omega_m=OMEGA_M)
+        a_lm.first_halo_term(M_GRID, z=0.0)
+        b_lm.first_halo_term(M_GRID, z=0.0)
+        a_lm.second_halo_term(z, k, pk)
+        b_lm.second_halo_term(z, k, pk)
+
+        a_ops = hm.max1h2hOperators(a_lm)
+        b_ops = buzzard.max1h2hOperators(b_lm)
+
+        rt_a = a_ops.compute_rtrans(M_GRID, z, bias, r_xi, xi_nl)
+        rt_b = b_ops.compute_rtrans(M_GRID, z, bias, r_xi, xi_nl)
+        self.assertTrue(np.allclose(rt_a, rt_b, rtol=1e-14))
+
+        m3d_hh = hm.ct_2hTerm.m3d_at_r(r_xi, xi_nl, rho_m=OMEGA_M * hm.ct_2hTerm.RHO_C)
+        c0_a = a_ops.compute_c0(rt_a, M_GRID, z, bias, r_xi, m3d_hh)
+        c0_b = b_ops.compute_c0(rt_b, M_GRID, z, bias, r_xi, m3d_hh)
+        self.assertTrue(np.allclose(c0_a, c0_b, rtol=1e-14))
+
+        g0_a = a_ops.compute_delta_gap_0(rt_a, M_GRID, z, bias)
+        g0_b = b_ops.compute_delta_gap_0(rt_b, M_GRID, z, bias)
+        self.assertTrue(np.allclose(g0_a, g0_b, rtol=1e-14))
+
+        g1_a = a_ops.compute_delta_gap_1(rt_a, c0_a, M_GRID, z, bias)
+        g1_b = b_ops.compute_delta_gap_1(rt_b, c0_b, M_GRID, z, bias)
+        self.assertTrue(np.allclose(g1_a, g1_b, rtol=1e-14))
+
     def test_hydro_mc_is_byte_identical(self):
         a = (REPO / "src" / "pipelines" / "cosmology" / "hydro_mc.py")
         b = (REPO / "y3_buzzard" / "hydro_mc.py")
@@ -531,6 +568,133 @@ class TestSigmaCritInvModule(unittest.TestCase):
         with np.load(lut) as table:
             for key in ("zlens", "Radii", "zEff", "betaEff"):
                 self.assertIn(key, table.files, f"{key} absent from the LUT")
+
+
+class TestCt2hTermAndEnclosedMass3D(unittest.TestCase):
+    """Unit tests for ct_2hTerm.m3d_at_r (Gauss-Legendre) and sigma_bar."""
+
+    def setUp(self):
+        self.r_grid = np.logspace(-3.0, 3.0, 128)
+
+    def test_m3d_at_r_shape_and_aliases(self):
+        xi_1d = np.exp(-self.r_grid / 10.0)
+        xi_2d = np.array([xi_1d * (1.0 + 0.1 * iz) for iz in range(4)])
+
+        # Test physical names and aliases
+        out1 = hm.ct_2hTerm.m3d_at_r(self.r_grid, xi_1d, rho_m=1.0)
+        out2 = hm.ct_2hTerm.mass_3d_at_r(self.r_grid, xi_1d, rho_m=1.0)
+        out3 = hm.ct_2hTerm.enclosed_mass_3d(self.r_grid, xi_1d, rho_m=1.0)
+        out4 = hm.ct_2hTerm.m3d(self.r_grid, xi_1d, rho_m=1.0)
+        out5 = hm.ct_2hTerm.int_r2_xi(self.r_grid, xi_1d, rho_m=1.0)
+
+        self.assertEqual(out1.shape, (128,))
+        self.assertTrue(np.allclose(out1, out2, rtol=1e-15))
+        self.assertTrue(np.allclose(out1, out3, rtol=1e-15))
+        self.assertTrue(np.allclose(out1, out4, rtol=1e-15))
+        self.assertTrue(np.allclose(out1, out5, rtol=1e-15))
+
+        # Test 2D broadcast
+        out_2d = hm.ct_2hTerm.m3d_at_r(self.r_grid, xi_2d, rho_m=1.0)
+        self.assertEqual(out_2d.shape, (4, 128))
+        for iz in range(4):
+            expected = hm.ct_2hTerm.m3d_at_r(self.r_grid, xi_2d[iz], rho_m=1.0)
+            self.assertTrue(np.allclose(out_2d[iz], expected, rtol=1e-14))
+
+    def test_m3d_at_r_analytic_constant(self):
+        xi_const = 2.5 * np.ones_like(self.r_grid)
+        rho_m = 0.3 * 2.77533742639e11
+        out = hm.ct_2hTerm.m3d_at_r(self.r_grid, xi_const, rho_m=rho_m, n_gl=5)
+        exact = (4.0 * np.pi / 3.0) * rho_m * 2.5 * (self.r_grid ** 3)
+
+        # Gauss-Legendre quadrature achieves near machine precision on power laws
+        rel_err = np.max(np.abs(out / exact - 1.0))
+        self.assertLess(rel_err, 1e-11)
+
+    def test_ct_2h_term_mass_3d_and_sigma_bar(self):
+        p2h = hm.ct_2hTerm(0.3, NSIZE=20)
+        k = np.logspace(-3, 1, 50)
+        pk = 1000.0 / (1.0 + k**2)
+        r_eval = np.logspace(0, 1.5, 10)
+
+        p2h.pk_to_dsigma(r_eval, k, pk, zvec=np.array([0.0]))
+        self.assertIsNotNone(p2h.sigma_bar)
+        self.assertEqual(p2h.sigma_bar.shape, (1, 10))
+        expected = p2h.Sigma + p2h.dSigma
+        self.assertTrue(np.allclose(p2h.sigma_bar, expected, rtol=1e-14))
+
+        m3d = p2h.mass_3d()
+        self.assertEqual(m3d.shape, (1, p2h.Rfix.size))
+        mask_pos = (p2h.Rfix <= 10.0)
+        self.assertTrue(np.all(m3d[0, mask_pos] > 0.0))
+        self.assertTrue(np.all(np.diff(m3d[0, mask_pos]) > 0.0))
+
+    def test_lensing_model_sigma_bar(self):
+        r_eval = np.logspace(-1, 1.5, 15)
+        model = hm.lensingModel(r_eval, omega_m=0.3)
+        model.first_halo_term(np.array([1e14, 2e14]), z=0.3)
+
+        self.assertIn("1h", model.sigma_bar)
+        self.assertIsNotNone(model.sigma_bar["1h"])
+        expected_1h = model.Sigma["1h"] + model.dSigma["1h"]
+        self.assertTrue(np.allclose(model.sigma_bar["1h"], expected_1h, rtol=1e-14))
+
+        k = np.logspace(-3, 1, 50)
+        pk = 1000.0 / (1.0 + k**2)
+        model.second_halo_term(np.array([0.3]), k, pk[np.newaxis, :])
+        self.assertIn("2h", model.sigma_bar)
+        self.assertIsNotNone(model.sigma_bar["2h"])
+        expected_2h = model.Sigma["2h"] + model.dSigma["2h"]
+        self.assertTrue(np.allclose(model.sigma_bar["2h"], expected_2h, rtol=1e-14))
+
+
+class TestMax1h2hOperators(unittest.TestCase):
+    def setUp(self):
+        self.omega_m = 0.3
+        self.z = np.array([0.2, 0.4])
+        self.M = np.logspace(14.0, 15.0, 4)
+        self.r_sigma = np.logspace(-1.0, 1.5, 25)
+        self.r_xi = np.logspace(-2.0, 2.0, 64)
+        self.k = np.logspace(-3.0, 1.0, 40)
+        self.pk = np.array([1000.0 / (1.0 + self.k**2) * (1.0 + zz)**(-1.0)
+                            for zz in self.z])
+        self.bias = np.array([[2.0, 2.3, 2.7, 3.2],
+                              [2.2, 2.5, 3.0, 3.6]])
+
+        self.lens_model = hm.lensingModel(self.r_sigma, omega_m=self.omega_m)
+        self.lens_model.first_halo_term(self.M, z=0.0)
+        self.lens_model.second_halo_term(self.z, self.k, self.pk)
+
+        # Precompute xi_NL and m3d_hh
+        self.xi_nl = np.zeros((self.z.size, self.r_xi.size))
+        for iz in range(self.z.size):
+            self.xi_nl[iz] = ct.xi.xi_mm_at_r(self.r_xi, self.k, self.pk[iz])
+        self.m3d_hh = hm.ct_2hTerm.m3d_at_r(self.r_xi, self.xi_nl,
+                                            rho_m=self.omega_m * hm.ct_2hTerm.RHO_C)
+        self.ops = hm.max1h2hOperators(self.lens_model)
+
+    def test_vectorized_operator_outputs_shape_and_finite(self):
+        rtrans = self.ops.compute_rtrans(self.M, self.z, self.bias, self.r_xi, self.xi_nl)
+        self.assertEqual(rtrans.shape, (self.z.size, self.M.size))
+        self.assertTrue(np.all(np.isfinite(rtrans)))
+        self.assertTrue(np.all(rtrans > 0.0))
+
+        c0 = self.ops.compute_c0(rtrans, self.M, self.z, self.bias, self.r_xi, self.m3d_hh)
+        self.assertEqual(c0.shape, (self.z.size, self.M.size))
+        self.assertTrue(np.all(np.isfinite(c0)))
+
+        g0 = self.ops.compute_delta_gap_0(rtrans, self.M, self.z, self.bias)
+        self.assertEqual(g0.shape, (self.z.size, self.M.size))
+        self.assertTrue(np.all(np.isfinite(g0)))
+
+        g1 = self.ops.compute_delta_gap_1(rtrans, c0, self.M, self.z, self.bias)
+        self.assertEqual(g1.shape, (self.z.size, self.M.size))
+        self.assertTrue(np.all(np.isfinite(g1)))
+
+    def test_rtrans_grows_with_mass(self):
+        rtrans = self.ops.compute_rtrans(self.M, self.z, self.bias, self.r_xi, self.xi_nl)
+        # For each redshift, crossing radius must grow monotonically with halo mass
+        for iz in range(self.z.size):
+            self.assertTrue(np.all(np.diff(rtrans[iz]) > 0.0))
 
 
 if __name__ == "__main__":

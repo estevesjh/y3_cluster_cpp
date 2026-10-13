@@ -25,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
+from scipy.interpolate import PchipInterpolator, RegularGridInterpolator
 
 CONC = 4.0
 RHOC = 2.77533742639e11
@@ -149,7 +149,8 @@ class MisMixtureProfile:
         # UNIFIED rho_m convention: the mis component shares the density
         # the centred dSigma_nfw table was built with (haloModel/rho_m_ref).
         self.rho_ref = float(source.scalar("halomodel", "rho_m_ref"))
-        self._mis = NfwDsigmaMisProduction(rho_ref=self.rho_ref)
+        self._mis = NfwDsigmaMisProduction(
+            kernel="gamma", rho_ref=self.rho_ref)
         self._lob = np.asarray(lob_centers, dtype=float)
         self.f_mis = float(f_mis)
         self.tau_mis = float(tau_mis)
@@ -172,13 +173,21 @@ class MisMixtureProfile:
 
 
 class MaxMixtureProfile:
-    """Traditional 1h+2h shear profile: the SIG_MAX/GAMMA_MAX composition
-    with the modern haloModel tables,
+    """Traditional 1h+2h shear profile formulated via 3D halo exclusion and
+    3-pillar smooth bridging:
 
-        DSigma_max(b, R, lnM, z) = max( DSigma_cl(R, lnM | bin b),
-                                        bias(lnM, z) * dSigma_hh(R, z) )
+    1. In 3D real space, halo exclusion is defined on the correlation function:
+           xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
+       with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
+    2. The projected excess surface density DeltaSigma_max is assembled via the 3-pillar bridging operators:
+       - For R < r_trans:
+           DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
+       - For R >= r_trans:
+           b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+       where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
+       Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
 
-    where DSigma_cl is the production miscentred 1-halo mixture
+    where DSigma_1h is the production miscentred 1-halo mixture
     (MisMixtureProfile; set include_miscentering=False for the pure
     centred term) and the two-halo term is z-dependent — callers must
     keep z inside the mass integral (see
@@ -205,8 +214,23 @@ class MaxMixtureProfile:
         # finite).
         self._hh = _dm.Bilinear2D(source, "halomodel", "r_sigma", "z",
                                   "dsigma_hh", nan_fill=0.0)
+        self._has_max1h2h = source.has("halomodel", "r_trans")
+        if self._has_max1h2h:
+            self._r_trans = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "r_trans")
+            self._c0_trans = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "c0_trans")
+            self._delta_gap_1 = _dm.Bilinear2D(source, "halomodel", "lnm", "z", "delta_gap_1")
 
     def __call__(self, b, r_perp, lnM, z):
         DSigma_1h = self._one(b, r_perp, lnM)
         DSigma_2h = self._bias(lnM, z) * self._hh(r_perp, z)
+        if self._has_max1h2h:
+            rt = self._r_trans(lnM, z)
+            c0 = self._c0_trans(lnM, z)
+            gap1 = self._delta_gap_1(lnM, z)
+            c0_term = (c0 / (r_perp * r_perp)) * 1.0e-12
+            outer = DSigma_2h + c0_term
+            inner = DSigma_1h + gap1 * (r_perp / rt)**2
+            return np.where(r_perp < rt, inner, outer)
         return np.maximum(DSigma_1h, DSigma_2h)
+
+

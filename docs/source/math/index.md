@@ -637,8 +637,14 @@ labeled "fiducial 1h+2h" curve computed as a plain **sum**,
 $\langle\Delta\Sigma^{1h}\rangle_i + \langle b\rangle_i\,\Delta\Sigma_{\rm 2h}$.
 That contradicts this project's own documented standard
 ({doc}`../observables/second_halo_term`): the traditional composition is
-the **pointwise max**, $\Sigma_{\max} = \max(\Sigma_{\rm NFW},\,
-b\,\Sigma_{\rm hh})$ (Hayashi & White 2008, the DES Y1 prescription),
+formulated via 3D halo exclusion on the correlation function,
+$\xi_{\rm hm}(r) = \max[\xi_{1h}(r),\, b(M, z)\,\xi_{\rm mm}(r, z)]$, with
+transition radius $r_{\rm trans}$ where $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$,
+and assembled via 3-pillar bridging:
+$\Delta\Sigma_{1h}(R) + \Delta_{\rm gap}^1\,(R/r_{\rm trans})^2$ for $R < r_{\rm trans}$ and
+$b\,\Delta\Sigma_{hh}(R) + (C_0/R^2)\times 10^{-12}$ for $R \ge r_{\rm trans}$,
+where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans})/\pi$ (in $M_\odot/h$) and
+$\Delta_{\rm gap}^1 = \Delta\Sigma_{\max}(r_{\rm trans}) - \Delta\Sigma_{1h}(r_{\rm trans})$,
 implemented by
 [`shear1h2h_max.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py).
 Removed rather than left showing the wrong physics. Regenerating it

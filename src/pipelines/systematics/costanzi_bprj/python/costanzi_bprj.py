@@ -1,8 +1,9 @@
 """Costanzi-2026 selection-bias correction B_prj(R) (arXiv:2604.05833, App. C).
 
-The correction multiplies the max halo lensing model:
+The correction multiplies the traditional max halo lensing model
+(formulated via 3D halo exclusion and 3-pillar smooth bridging):
 
-    Sigma_corr(R) = B_prj(R) Sigma_max(R),     Sigma_max = max(Sigma_1h, Sigma_2h)
+    Sigma_corr(R) = B_prj(R) Sigma_max(R),     DeltaSigma_corr(R) = B_prj(R) DeltaSigma_max(R)
 
     B_prj(R) = A (R/R0)^alpha [1 + (R/R0)^gamma]^((beta - alpha)/gamma) + 1
     R0       = R_lambda(lob) (1 + z)           comoving Mpc/h

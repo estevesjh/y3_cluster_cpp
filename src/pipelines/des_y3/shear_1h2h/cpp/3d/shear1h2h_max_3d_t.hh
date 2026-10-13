@@ -9,10 +9,19 @@
 //             Σ_crit^-1(zt) S_j(zt) S_i(lt, zt) P_HOD(lt | M, zt)
 //             d_tot(R, lnM, zt | bin),
 //
-//   DSigma_tot = max( DSigma_cl(R, lnM | bin),
-//                b(lnM, zt) * DSigma_hh(R, zt) )
+// where d_tot is formulated via 3D halo exclusion and 3-pillar smooth bridging:
+// 1. In 3D real space, halo exclusion is defined on the correlation function:
+//      xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
+//    with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
+// 2. The projected excess surface density DeltaSigma_max is assembled via 3-pillar bridging:
+//      For R < r_trans:
+//        DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
+//      For R >= r_trans:
+//        b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+//    where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
+//    Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
 //
-// with DSigma_cl the production miscentred mixture ((1 - f_mis)
+// with DeltaSigma_1h the production miscentred mixture ((1 - f_mis)
 // haloModel ΔΣ_nfw + f_mis gamma-table ΔΣ_mis, Ω_m amplitude). Unlike
 // the 1-halo Shear1h3d, d_tot is z-dependent (the biased two-halo
 // term) and the max is nonlinear, so nothing can be contracted past the
@@ -85,6 +94,7 @@ private:
   std::optional<y3_cluster::MOR_HOD_t> mor_;
   std::optional<y3_cluster::PlobLtrEMG_t> plob_;
   std::optional<y3_cluster::Interp2D> dsigma_nfw_, bias_, dsigma_hh_;
+  std::optional<y3_cluster::Interp2D> r_trans_, c0_trans_, delta_gap_1_;
   std::optional<y3_cluster::Interp1D> sci_;
   // TODO(#14): drop the hardcoded c=4 — once claude/issue-4-dsigma-hh-2h-term
   // merges, call dsigma_mis_.set_concentration_table(
@@ -140,6 +150,18 @@ public:
     bias_.emplace(
       y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "bias"));
     dsigma_hh_.emplace(make_sanitized_hh(sample));
+    if (sample.has_val("haloModel", "r_trans")) {
+      r_trans_.emplace(
+        y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "r_trans"));
+      c0_trans_.emplace(
+        y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "c0_trans"));
+      delta_gap_1_.emplace(
+        y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "delta_gap_1"));
+    } else {
+      r_trans_.reset();
+      c0_trans_.reset();
+      delta_gap_1_.reset();
+    }
     sci_.emplace(w::load_sigma_crit_inv(sample));
     // Required: no fallback to the fiducial defaults — a pipeline that
     // has not published the miscentering section must fail loudly.
@@ -184,7 +206,20 @@ public:
                         ((1.0 - f_mis_) * d_cen + f_mis_ * d_mis);
     double const d_2h =
       bias_->clamp(lnM, zt) * dsigma_hh_->clamp(current_R_, zt);
-    double const d_tot = std::max(d_1h, d_2h);
+    double d_tot;
+    if (r_trans_ && c0_trans_ && delta_gap_1_) {
+      double const rt = r_trans_->clamp(lnM, zt);
+      if (current_R_ >= rt) {
+        double const c0 = c0_trans_->clamp(lnM, zt);
+        d_tot = d_2h + (c0 / (current_R_ * current_R_)) * 1.0e-12;
+      } else {
+        double const gap1 = delta_gap_1_->clamp(lnM, zt);
+        double const r_ratio = current_R_ / rt;
+        d_tot = d_1h + gap1 * r_ratio * r_ratio;
+      }
+    } else {
+      d_tot = std::max(d_1h, d_2h);
+    }
     return (*hmf_)(lnM, zt) * (*dv_do_dz_)(zt) * (*omega_z_)(zt) *
            sci_->clamp(zt) * s_j * s_i_[current_bin_](lt, zt, *plob_) *
            (*mor_)(lt, lnM, zt) * d_tot;

@@ -5,6 +5,7 @@
 # Sphinx documentation
 # docs/figs/ — script is source, generated PNGs/PDFs are outputs.
 # owner review notes -- LOCAL ONLY, never commit
+ANTIGRAVITY_CONVERSATIONS.md
 #validation-data/
 *.aux
 *.csv
@@ -1035,3 +1036,7 @@ y1_rerun/*.txt
 y3_buzzard/*.txt
 y3_buzzard/datablock*
 cosmosis-models/output/
+plans/
+Methods/
+y3_cluster_cpp/
+Obsidian/

@@ -30,13 +30,38 @@ kernel, and $P_{\rm HOD}$ the shifted-Poisson true-richness
 distribution. The $\Sigma_{\rm crit}^{-1}$ factor is optional: set it to
 unity to compute $\Delta\Sigma$; include the lensing-geometry factor to
 return the tangential shear $\gamma_T$. The optional traditional max
-model retains the redshift-dependent two-halo term,
+model retains the redshift-dependent two-halo term via 3D halo exclusion
+and 3-pillar smooth bridging:
 
-$$
-\Delta\Sigma_{\rm max}(R,M,z)=
-\max\left[\Delta\Sigma_{1h}(R,M,z),\;
-b(M,z)\Delta\Sigma_{hh}(R,z)\right].
-$$
+1. In 3D real space, halo exclusion is defined on the correlation function:
+   $$
+   \xi_{\rm hm}(r) = \max\left[\xi_{1h}(r),\; b(M, z)\,\xi_{\rm mm}(r, z)\right],
+   $$
+   with transition radius $r_{\rm trans}$ defined by $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
+2. Enforcing the quadratic gap bridge for $\Delta\Sigma$ uniquely determines the exact unified profiles for $\Sigma$, $\bar{\Sigma}$, and $\Delta\Sigma$:
+   - **Projected Surface Density $\Sigma(R)$**:
+     $$
+     \Sigma_{\rm hm}(R, M, z) = \begin{cases}
+       \Sigma_{1h}(R, M) + \Delta_{\rm gap}^{(\Sigma)}(M, z) + 2\,\Delta_{\rm gap}(M, z)\left[1 - \left(\frac{R}{r_{\rm trans}}\right)^2\right], & R < r_{\rm trans}, \\[6pt]
+       b(M, z)\,\Sigma_{\rm hh}(R, z), & R \ge r_{\rm trans},
+     \end{cases}
+     $$
+     where $\Delta_{\rm gap}^{(\Sigma)} = b(M, z)\,\Sigma_{\rm hh}(r_{\rm trans}, z) - \Sigma_{1h}(r_{\rm trans}, M)$.
+   - **Enclosed Mean Surface Density $\bar{\Sigma}(<R)$**:
+     $$
+     \bar{\Sigma}_{\rm hm}(<R, M, z) = \begin{cases}
+       \bar{\Sigma}_{1h}(<R, M) + \Delta_{\rm gap}^{(\Sigma)} + 2\,\Delta_{\rm gap} - \Delta_{\rm gap}\left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
+       b(M, z)\,\bar{\Sigma}_{\rm hh}(<R, z) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans}.
+     \end{cases}
+     $$
+   - **Excess Surface Density $\Delta\Sigma(R) = \bar{\Sigma}(<R) - \Sigma(R)$**:
+     $$
+     \Delta\Sigma_{\rm hm}(R, M, z) = \begin{cases}
+       \Delta\Sigma_{1h}(R, M) + \Delta_{\rm gap}(M, z) \left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
+       b(M, z)\,\Delta\Sigma_{\rm hh}(R, z) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans},
+     \end{cases}
+     $$
+     where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and $\Delta_{\rm gap}(M, z) = [b(M, z)\,\Delta\Sigma_{\rm hh}(r_{\rm trans}, z) + (C_0 / r_{\rm trans}^2)\times 10^{-12}] - \Delta\Sigma_{1h}(r_{\rm trans}, M)$. Both $\Sigma$, $\bar{\Sigma}$, and $\Delta\Sigma$ are strictly $C^0$ continuous at $R = r_{\rm trans}$.
 
 The dims tag of each backend counts its **adaptive** integration
 dimensions, and the physics dictates which reductions are legal:
@@ -293,8 +318,7 @@ subdivides the outer mass integral (reported error at or below 1e-6).
 The max-model observable has its explicit adaptive reference here too
 (`Shear1h2hMax3d`): because the two-halo term is $z$-dependent
 and the max nonlinear, the whole integrand rides inside the adaptive
-volume with $d_{\rm tot} = \max(\text{1h mixture},\,
-b\cdot\Delta\Sigma_{hh})$. Both max backends require
+volume with $d_{\rm tot} = \Delta\Sigma_{\rm max}$ assembled via the 3D halo-exclusion bridging operators. Both max backends require
 `compute_lensing_2h = T` and sanitize `dSigma_hh` NaNs to 0 before
 interpolation (exact under the max), and all backends here read
 `miscentering/{f_mis,tau_mis}` strictly.
@@ -314,7 +338,7 @@ production timing is supplied by the `0d` fixed-GL C++ backends.
 | --- | --- | --- | --- |
 | `0d` | Python | `python/0d/shear1h_gl.py` (+ `validate_fast_vs_production.py`) | `shear1h_gl/vals` |
 | `0d` | C++ | `cpp/0d/Shear1hGl.cc` (physics `cpp/0d/shear1h_gl_t.hh`) | `Shear1hGl.so`, section `shear1h_gl` |
-| `0d` | Python | `python/0d/shear1h2h_max.py` (+ `validate_shear1h2h_max.py`) | `shear1h2h_max/vals` |
+| `0d` | Python | `python/0d/shear1h2h_max_explicit_gl.py` (+ `validate_shear1h2h_max.py`) | `shear1h2h_max_explicit_gl/vals` |
 | `0d` | C++ | `cpp/0d/Shear1h2hMax.cc` (physics `cpp/0d/shear1h2h_max_t.hh`) | `Shear1h2hMax.so`, section `shear1h2h_max` |
 | `0d` | CUDA | `cuda/0d/Shear1h2hMaxGpu.cu` (physics `cuda/0d/shear1h2h_max_gpu_t.cuh`) | `Shear1h2hMaxGpu.so` in `des_y3_shear1h_0d_cuda/`, section `shear1h2h_max_gpu` |
 | `0d` | Python | `python/0d/shear1h_explicit_gl.py`, `python/0d/shear1h2h_max_explicit_gl.py` (+ `validate_explicit_vs_production.py`) | `shear1h_explicit_gl/vals`, `shear1h2h_max_explicit_gl/vals` |
