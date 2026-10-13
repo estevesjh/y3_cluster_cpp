@@ -16,11 +16,13 @@ namespace y3_cluster {
                 char const* section,
                 char const* x_axis_name,
                 char const* y_axis_name,
-                char const* z_array_name)
+                char const* z_array_name,
+                bool bicubic = false)
   {
     return Interp2D(cfg.view<doubles>(section, x_axis_name),
                     cfg.view<doubles>(section, y_axis_name),
-                    cfg.view<cosmosis::ndarray<double>>(section, z_array_name));
+                    cfg.view<cosmosis::ndarray<double>>(section, z_array_name),
+                    bicubic);
   }
 
   inline Interp2D

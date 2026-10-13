@@ -25,8 +25,9 @@ y3_cluster::Interp2D::Interp2D(std::vector<Point3D> const& data)
 
 y3_cluster::Interp2D::Interp2D(std::vector<double> const& xs,
                                std::vector<double> const& ys,
-                               cosmosis::ndarray<double> const& zs)
-  : Interp2D(xs, ys, std::vector<double>{zs.begin(), zs.end()})
+                               cosmosis::ndarray<double> const& zs,
+                               bool bicubic)
+  : Interp2D(xs, ys, std::vector<double>{zs.begin(), zs.end()}, bicubic)
 {
   if ((zs.extents()[1] != xs.size()) || (zs.extents()[0] != ys.size())) {
     std::cerr << "Interp2D -- wrong input dimensions:\n\t"
@@ -40,8 +41,9 @@ y3_cluster::Interp2D::Interp2D(std::vector<double> const& xs,
 
 y3_cluster::Interp2D::Interp2D(std::vector<double> const& xs,
                                std::vector<double> const& ys,
-                               std::vector<double> const& zs)
-  : xs_(xs), ys_(ys), zs_(zs)
+                               std::vector<double> const& zs,
+                               bool bicubic)
+  : xs_(xs), ys_(ys), zs_(zs), bicubic_(bicubic)
 {
   if (zs_.size() != nx() * ny())
     throw std::domain_error("Interp2D -- wrong number of z values passed");
@@ -72,7 +74,11 @@ y3_cluster::Interp2D::Interp2D(std::vector<double> const& xs,
 }
 
 y3_cluster::Interp2D::Interp2D(Interp2D const& other)
-  : xs_(other.xs_), ys_(other.ys_), zs_(other.zs_), interp_(nullptr)
+  : xs_(other.xs_)
+  , ys_(other.ys_)
+  , zs_(other.zs_)
+  , interp_(nullptr)
+  , bicubic_(other.bicubic_)
 {
   init_gsl_bits_();
 }
@@ -90,6 +96,7 @@ y3_cluster::Interp2D::Interp2D(Interp2D&& other) noexcept
   , ys_(std::move(other.ys_))
   , zs_(std::move(other.zs_))
   , interp_(other.interp_)
+  , bicubic_(other.bicubic_)
 {
   other.interp_ = nullptr;
 }
@@ -103,6 +110,7 @@ y3_cluster::Interp2D::operator=(Interp2D&& rhs) noexcept
   ys_ = std::move(rhs.ys_);
   zs_ = std::move(rhs.zs_);
   interp_ = rhs.interp_;
+  bicubic_ = rhs.bicubic_;
   rhs.interp_ = nullptr;
   return *this;
 }
@@ -129,7 +137,8 @@ y3_cluster::Interp2D::operator()(double x, double y) const
 void
 y3_cluster::Interp2D::init_gsl_bits_()
 {
-  gsl_interp2d* temp = gsl_interp2d_alloc(gsl_interp2d_bilinear, nx(), ny());
+  gsl_interp2d* temp = gsl_interp2d_alloc(
+    bicubic_ ? gsl_interp2d_bicubic : gsl_interp2d_bilinear, nx(), ny());
   gsl_interp2d_init(temp, xs_.data(), ys_.data(), zs_.data(), nx(), ny());
   interp_ = temp;
 }
