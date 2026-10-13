@@ -41,7 +41,6 @@
 #include "utils/make_interp_2d.hh"
 
 #include "pipelines/des_y3/shear_1h2h/cpp/0d/shear1h2h_max_t.hh"
-#include "pipelines/des_y3/shear_1h2h/cpp/0d/shear1h2h_max_profile.hh"
 
 #include <cmath>
 #include <limits>
@@ -100,8 +99,7 @@ namespace {
     // an all-NaN table (the historical defect shape).
     double hh_amp = 1.0;
     bool hh_nan = false;
-    // Sigma_bar_nfw / Sigma_bar_hh / delta_gap_0 (bsel), plus the extra
-    // keys Shear1h2hMaxProfile reads.
+    // Sigma_bar_nfw / Sigma_bar_hh / delta_gap_0 (bsel).
     bool sigma_bar = false;
     // xi_nl section + concentration/rho_m_ref (profile_method = gauss_legendre).
     bool xi = false;
@@ -421,28 +419,6 @@ TEST_CASE("Shear1h2hMax applies the Sunayama23 Bsel operator with non-local corr
       CHECK(selected.evaluate(pt)[0] ==
             Approx(baseline.evaluate(pt)[0]).epsilon(1e-12));
     }
-}
-
-TEST_CASE("Shear1h2hMaxProfile exposes Sigma DeltaSigma and gamma_T")
-{
-  auto s = make_sample_block(SampleOpts{1.0, false, /*sigma_bar=*/true});
-  s.put_val("haloModel", "delta_gap_0", const_table(GAP_0));
-  Shear1h2hMaxProfile profile(s, 8, 32, 2, 8, 3, 24.0);
-  double const R = 1.0;
-  double const lnM = 34.0;
-  double const z = 0.3;
-  double const sigma = profile.surface_density(R, lnM, z);
-  double const mean_sigma = profile.mean_surface_density(R, lnM, z);
-  double const delta_sigma = profile.excess_surface_density(R, lnM, z);
-  double const sigma_crit_inv = 2.5e-4;
-  double const gamma_t = profile.tangential_shear(
-    R, lnM, z, sigma_crit_inv);
-
-  CHECK(std::isfinite(sigma));
-  CHECK(std::isfinite(delta_sigma));
-  CHECK(std::isfinite(gamma_t));
-  CHECK(mean_sigma - sigma == Approx(delta_sigma).epsilon(1e-12));
-  CHECK(gamma_t == Approx(delta_sigma * sigma_crit_inv).epsilon(1e-12));
 }
 
 TEST_CASE("Shear1h2hMax ini-option contract: [Shear1h2hMax] required vs optional")
