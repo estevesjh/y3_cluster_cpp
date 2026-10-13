@@ -149,8 +149,8 @@ public:
       y3_cluster::BselModels::parse_tag(bsel_model_);
     if (profile_method_ != "piecewise_approx" && profile_method_ != "gauss_legendre")
       throw std::invalid_argument("Shear1h2hMax: unknown profile_method");
-    if (cfg.has_val(module_label(), "r_perp"))  // wall radii, GL-tabulated per sample
-      gl_radii_ = get_vector_double(cfg, module_label(), "r_perp");
+    if (cfg.has_val(module_label(), "r_perp"))  // wall radii, tabulated per sample
+      wall_radii_ = get_vector_double(cfg, module_label(), "r_perp");
   }
 
   void
@@ -274,6 +274,51 @@ private:
         if (delta_gap_0)
           delta_gap_0_kq_[idx] = delta_gap_0->clamp(lnm_x_[k], z_x_[q]);
       }
+
+    build_bsel_wall();
+  }
+
+  // Bsel on the r_perp wall.  The quadrature nodes r_j of
+  // BselDeltaSigmaOperator::apply depend only on (bin, R), and every
+  // expensive factor at them depends on lnM OR z, never both:
+  //   B_sel(R; z_q), dB_sel/dR(r_j; z_q), barSigma_1h(r_j | lnM_k),
+  //   barSigma_hh(r_j | z_q).
+  // Tabulating them once per sample leaves evaluate_piecewise() pure
+  // arithmetic over (k, q, j): ~2e5 model/interpolation calls per sample
+  // instead of ~1.5e7.  Same nodes and operation order as apply().
+  void
+  build_bsel_wall()
+  {
+    bsel_wall_.clear();
+    if (bsel_op_ && !wall_radii_.empty()) {
+      auto const& model = bsel_op_->model();
+      std::size_t const n_wall = wall_radii_.size();
+      bsel_wall_.resize(n_bins_ * n_wall);
+      for (std::size_t b = 0; b != n_bins_; ++b) {
+        int const bin = static_cast<int>(b);
+        double const lob = lob_centers_[b % lob_centers_.size()];
+        for (std::size_t i = 0; i != n_wall; ++i) {
+          double const R = wall_radii_[i];
+          auto& T = bsel_wall_[b * n_wall + i];
+          bsel_op_->nodes(R, bin, T.r, T.c);
+          std::size_t const n_j = T.r.size();
+          T.b_R.resize(N_z_);
+          T.d_bsel.resize(n_j * N_z_);
+          T.sbar_hh.resize(n_j * N_z_);
+          T.sbar_nfw.resize(n_j * N_lnm_);
+          for (std::size_t q = 0; q != N_z_; ++q)
+            T.b_R[q] = model(R, bin, lob, z_x_[q]);
+          for (std::size_t j = 0; j != n_j; ++j) {
+            for (std::size_t q = 0; q != N_z_; ++q) {
+              T.d_bsel[j * N_z_ + q] = model.derivative(T.r[j], bin, lob, z_x_[q]);
+              T.sbar_hh[j * N_z_ + q] = sigma_bar_hh_->clamp(T.r[j], z_x_[q]);
+            }
+            for (std::size_t k = 0; k != N_lnm_; ++k)
+              T.sbar_nfw[j * N_lnm_ + k] = sigma_bar_nfw_->clamp(T.r[j], lnm_x_[k]);
+          }
+        }
+      }
+    }
   }
 
   double
@@ -289,6 +334,15 @@ private:
     for (std::size_t q = 0; q != N_z_; ++q)
       two[q] = dsigma_hh_->clamp(R, z_x_[q]);
 
+    // Wall point: Bsel factors tabulated in set_sample_piecewise.
+    BselWall const* T = nullptr;
+    if (!bsel_wall_.empty()) {
+      auto const it = std::find(wall_radii_.begin(), wall_radii_.end(), R);
+      if (it != wall_radii_.end())
+        T = &bsel_wall_[static_cast<std::size_t>(b) * wall_radii_.size() +
+                        static_cast<std::size_t>(it - wall_radii_.begin())];
+    }
+
     double acc = 0.0;
     for (std::size_t k = 0; k != N_lnm_; ++k) {
       double const* wrow = w2 + k * N_z_;
@@ -297,7 +351,19 @@ private:
         double const d_max = excess_surface_density_node(
           R, one[k], two[q], idx);
         double d_val = d_max;
-        if (bsel_op_) {
+        if (T) {
+          // apply() on tabulated factors:
+          //   B(R) d_max - R sum_j c_j barSigma(<r_j) dB/dR(r_j).
+          double m_sel_over_pi_r2 = 0.0;
+          for (std::size_t j = 0; j != T->r.size(); ++j)
+            m_sel_over_pi_r2 +=
+              T->c[j] *
+              mean_surface_density_value(T->r[j], T->sbar_nfw[j * N_lnm_ + k],
+                                         T->sbar_hh[j * N_z_ + q], idx) *
+              T->d_bsel[j * N_z_ + q];
+          m_sel_over_pi_r2 *= R;
+          d_val = T->b_R[q] * d_max - m_sel_over_pi_r2;
+        } else if (bsel_op_) {
           // For a given (lnM, z): d_val = B_sel(R) * d_max - M_sel(R) / (pi R^2),
           // with barSigma(<r) from the same piecewise profile.
           d_val = bsel_op_->apply(
@@ -346,9 +412,9 @@ private:
     gl_aperture_weights_ = gl_op_->aperture_weights();
 
     // Bin-independent: tabulate every wall radius once per sample.
-    gl_sigma_.assign(gl_radii_.size(), {});
-    for (std::size_t i = 0; i != gl_radii_.size(); ++i)
-      gl_sigma_slots(gl_radii_[i], gl_sigma_[i]);
+    gl_sigma_.assign(wall_radii_.size(), {});
+    for (std::size_t i = 0; i != wall_radii_.size(); ++i)
+      gl_sigma_slots(wall_radii_[i], gl_sigma_[i]);
   }
 
   // Sigma on the (lnM, z) grid at R (slot 0) and at the aperture radii
@@ -376,9 +442,9 @@ private:
   {
     std::vector<double> local;
     double const* sig = nullptr;
-    auto const it = std::find(gl_radii_.begin(), gl_radii_.end(), R);
-    if (it != gl_radii_.end()) {
-      sig = gl_sigma_[static_cast<std::size_t>(it - gl_radii_.begin())].data();
+    auto const it = std::find(wall_radii_.begin(), wall_radii_.end(), R);
+    if (it != wall_radii_.end()) {
+      sig = gl_sigma_[static_cast<std::size_t>(it - wall_radii_.begin())].data();
     } else {
       gl_sigma_slots(R, local);
       sig = local.data();
@@ -448,14 +514,20 @@ private:
   double mean_surface_density_node(double r, std::size_t k, std::size_t q,
                                    std::size_t idx) const
   {
+    return mean_surface_density_value(r, sigma_bar_nfw_->clamp(r, lnm_x_[k]),
+                                      sigma_bar_hh_->clamp(r, z_x_[q]), idx);
+  }
+
+  // Same, given barSigma_1h(r | lnM_k) and barSigma_hh(r | z_q).
+  double mean_surface_density_value(double r, double sbar_nfw, double sbar_hh,
+                                    std::size_t idx) const
+  {
     double const rt = r_trans_kq_[idx];
     if (r >= rt)
-      return bias_kq_[idx] * sigma_bar_hh_->clamp(r, z_x_[q]) +
-             (c0_trans_kq_[idx] / (r * r)) * 1.0e-12;
+      return bias_kq_[idx] * sbar_hh + (c0_trans_kq_[idx] / (r * r)) * 1.0e-12;
     double const gap1 = delta_gap_1_kq_[idx];
     double const r_ratio = r / rt;
-    return sigma_bar_nfw_->clamp(r, lnm_x_[k]) + delta_gap_0_kq_[idx] +
-           2.0 * gap1 - gap1 * r_ratio * r_ratio;
+    return sbar_nfw + delta_gap_0_kq_[idx] + 2.0 * gap1 - gap1 * r_ratio * r_ratio;
   }
 
   std::size_t N_lnm_, N_z_;
@@ -469,11 +541,20 @@ private:
   std::optional<y3_cluster::Interp2D> dsigma_nfw_, dsigma_hh_;
   std::optional<y3_cluster::Interp2D> sigma_bar_nfw_, sigma_bar_hh_;
   std::optional<y3_cluster::BselDeltaSigmaOperator> bsel_op_;
+  // Bsel factors at the apply() nodes r_j of one (bin, wall R).
+  struct BselWall {
+    std::vector<double> r, c;           // nodes, weights (BselDeltaSigmaOperator::nodes)
+    std::vector<double> b_R;            // B_sel(R; z_q)
+    std::vector<double> d_bsel;         // dB/dR(r_j; z_q),        (j, q)
+    std::vector<double> sbar_hh;        // barSigma_hh(r_j | z_q), (j, q)
+    std::vector<double> sbar_nfw;       // barSigma_1h(r_j | lnM_k), (j, k)
+  };
+  std::vector<BselWall> bsel_wall_;     // (bin, wall R)
   std::size_t n_bins_{0};
   std::vector<double> w2d_, bias_kq_;
   std::vector<double> r_trans_kq_, c0_trans_kq_, delta_gap_1_kq_, delta_gap_0_kq_;
 
-  std::vector<double> gl_radii_, gl_aperture_weights_;
+  std::vector<double> wall_radii_, gl_aperture_weights_;
   std::vector<std::vector<double>> gl_sigma_;
   std::optional<y3_cluster::OperatorMax1h2h_gl> gl_op_;
 };
