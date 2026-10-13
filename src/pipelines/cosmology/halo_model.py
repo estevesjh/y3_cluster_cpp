@@ -131,10 +131,10 @@ class max1h2hOperators(object):
 
     Computes the 2D matching tables (shape: (n_z, n_M)) that bridge the
     1-halo core and the decoupled 2-halo outer tail:
-        - rtrans: 3D crossing scale where xi_1h = b * xi_nl
-        - c0: Decoupled 3D spherical core mass difference / pi
-        - delta_gap_0: Surface density boundary gap at rtrans (Delta_gap^0)
-        - delta_gap_1: Excess surface density boundary gap at rtrans (Delta_gap^1)
+        - rtrans: 3D crossing scale r_trans(M, z) where xi_1h = b * xi_nl
+        - c0: Core mass decoupling constant C_0(M, z) = [M_3D,1h(<r_trans) - b * M_3D,2h(<r_trans)] / pi
+        - delta_gap_0: Surface density boundary gap Delta_gap^(Sigma)(M, z) = b * Sigma_hh(r_trans) - Sigma_1h(r_trans)
+        - delta_gap_1: Excess surface density boundary gap Delta_gap(M, z) = [b * DeltaSigma_hh(r_trans) + C_0 / r_trans^2] - DeltaSigma_1h(r_trans)
     """
 
     def __init__(self, lens_model):
@@ -282,9 +282,9 @@ class max1h2hOperators(object):
         return (m1h - bias_arr * m2h) / np.pi
 
     def compute_delta_gap_0(self, r_trans, M, z, bias, conc=None, z_density=0.0):
-        """Compute the 2D surface density boundary gap Delta_gap^0(M, z) in (Msun/pc^2).
+        """Compute the 2D surface density boundary gap Delta_gap^(Sigma)(M, z) in (Msun/pc^2).
 
-        Delta_gap^0(M, z) = b(M, z) * Sigma_hh(r_trans, z) - Sigma_1h(r_trans, M)
+        Delta_gap^(Sigma)(M, z) = b(M, z) * Sigma_hh(r_trans, z) - Sigma_1h(r_trans, M)
         """
         M_arr = np.atleast_1d(M)
         bias_arr = np.atleast_2d(bias)
@@ -307,9 +307,9 @@ class max1h2hOperators(object):
         return bias_arr * s2h - s1h
 
     def compute_delta_gap_1(self, r_trans, c0, M, z, bias, conc=None, z_density=0.0):
-        """Compute the 2D excess surface density boundary gap Delta_gap^1(M, z) in (Msun/pc^2).
+        """Compute the 2D excess surface density boundary gap Delta_gap(M, z) in (Msun/pc^2).
 
-        Delta_gap^1(M, z) = [b(M, z) * DeltaSigma_hh(r_trans, z) + c0 / r_trans^2] - DeltaSigma_1h(r_trans, M)
+        Delta_gap(M, z) = [b(M, z) * DeltaSigma_hh(r_trans, z) + c0 / r_trans^2] - DeltaSigma_1h(r_trans, M)
         """
         M_arr = np.atleast_1d(M)
         bias_arr = np.atleast_2d(bias)

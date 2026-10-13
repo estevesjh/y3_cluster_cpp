@@ -358,23 +358,42 @@ def execute(block, config):
         block[section_name, "Sigma_bar_hh"] = lensModel.sigma_bar['2h']
 
     # ----- max(1h, 2h) bridging operators: optional ----------------------
-    # How to compute unified DeltaSigma and Sigma from these operators:
-    #   r_trans(M, z): 3D crossing scale where xi_1h(r) = b * xi_nl(r).
-    #   c0_trans(M, z): [M_3D,1h(<r_trans) - b * M_3D,2h(<r_trans)] / pi.
-    #   delta_gap_0(M, z): b * Sigma_hh(r_trans) - Sigma_1h(r_trans).
-    #   delta_gap_1(M, z): b * dSigma_hh(r_trans) + c0 / (pi * r_trans^2) - dSigma_1h(r_trans).
+    # The Complete Unified Profile (Pillars 2 & 3 Assembled):
     #
-    # Unified Surface Density Sigma(R | M, z):
-    #   R <= r_trans : Sigma(R) = Sigma_1h(R, M)
-    #   R >  r_trans : Sigma(R) = b * Sigma_hh(R, z) - delta_gap_0
+    # Because DeltaSigma(R) = barSigma(<R) - Sigma(R) and
+    # d/dR [R^2 barSigma(<R)] = 2 R Sigma(R), enforcing the quadratic gap
+    # bridge for DeltaSigma uniquely determines the exact unified profiles
+    # for Sigma(R), barSigma(<R), and DeltaSigma(R):
     #
-    # Unified Excess Surface Density DeltaSigma(R | M, z):
-    #   R <= r_trans : DeltaSigma(R) = dSigma_1h(R, M)
-    #   R >  r_trans : DeltaSigma(R) = b * dSigma_hh(R, z) + c0 / (pi * R^2) - delta_gap_1 * (r_trans / R)^2
+    # 1. Projected Surface Density Sigma(R):
+    #   For R < r_trans(M, z):
+    #     Sigma(R) = Sigma_1h(R, M) + Delta_gap^(Sigma)(M, z)
+    #                + 2 * Delta_gap(M, z) * [1 - (R / r_trans(M, z))^2]
+    #   For R >= r_trans(M, z):
+    #     Sigma(R) = b(M, z) * Sigma_hh(R, z)
+    #   where the boundary surface density gap is:
+    #     Delta_gap^(Sigma)(M, z) = b(M, z) * Sigma_hh(r_trans, z) - Sigma_1h(r_trans, M)
     #
-    # Both profiles are strictly C^0 continuous at R = r_trans:
-    #   Sigma(r_trans^+) = b * Sigma_hh(r_trans) - delta_gap_0 = Sigma_1h(r_trans)
-    #   DeltaSigma(r_trans^+) = b * dSigma_hh(r_trans) + c0 / (pi * r_trans^2) - delta_gap_1 = dSigma_1h(r_trans).
+    # 2. Enclosed Mean Surface Density barSigma(<R):
+    #   For R < r_trans(M, z):
+    #     barSigma(<R) = barSigma_1h(<R, M) + Delta_gap^(Sigma)(M, z)
+    #                    + 2 * Delta_gap(M, z) - Delta_gap(M, z) * (R / r_trans(M, z))^2
+    #   For R >= r_trans(M, z):
+    #     barSigma(<R) = b(M, z) * barSigma_hh(<R, z) + C_0(M, z) / R^2
+    #
+    # 3. Excess Surface Density DeltaSigma(R) = barSigma(<R) - Sigma(R):
+    #   Subtracting Sigma(R) from barSigma(<R), the constant sheet
+    #   Delta_gap^(Sigma) + 2 Delta_gap cancels out identically, leaving:
+    #   For R < r_trans(M, z):
+    #     DeltaSigma(R) = DeltaSigma_1h(R, M) + Delta_gap(M, z) * (R / r_trans(M, z))^2
+    #   For R >= r_trans(M, z):
+    #     DeltaSigma(R) = b(M, z) * DeltaSigma_hh(R, z) + C_0(M, z) / R^2
+    #   where Delta_gap(M, z) = [b * DeltaSigma_hh(r_trans) + C_0 / r_trans^2] - DeltaSigma_1h(r_trans).
+    #
+    # Exact Identity: DeltaSigma_hm(R) == barSigma_hm(<R) - Sigma_hm(R) holds analytically everywhere.
+    # Continuity: All three profiles (Sigma, barSigma, DeltaSigma) are strictly C^0 continuous at R = r_trans.
+    # DataBlock inputs: All tables are strictly 2D arrays:
+    #   Sigma_1h(R, M), Sigma_hh(R, z), r_trans(M, z), C_0(M, z), Delta_gap(M, z), Delta_gap^(Sigma)(M, z).
     if compute_max1h2h or (compute_lensing_1h and compute_lensing_2h):
         ops = max1h2hOperators(lensModel)
         r_trans = ops.compute_rtrans(M, z, Bias, r_xi, xi_NL)

@@ -38,14 +38,30 @@ and 3-pillar smooth bridging:
    \xi_{\rm hm}(r) = \max\left[\xi_{1h}(r),\; b(M, z)\,\xi_{\rm mm}(r, z)\right],
    $$
    with transition radius $r_{\rm trans}$ defined by $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
-2. The projected excess surface density $\Delta\Sigma_{\rm max}$ is assembled via the 3-pillar bridging operators:
-   $$
-   \Delta\Sigma_{\rm max}(R, M, z) = \begin{cases}
-     \Delta\Sigma_{1h}(R) + \Delta_{\rm gap}^1 \left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
-     b(M, z)\,\Delta\Sigma_{hh}(R) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans},
-   \end{cases}
-   $$
-   where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and $\Delta_{\rm gap}^1 = \Delta\Sigma_{\rm max}(r_{\rm trans}) - \Delta\Sigma_{1h}(r_{\rm trans})$.
+2. Enforcing the quadratic gap bridge for $\Delta\Sigma$ uniquely determines the exact unified profiles for $\Sigma$, $\bar{\Sigma}$, and $\Delta\Sigma$:
+   - **Projected Surface Density $\Sigma(R)$**:
+     $$
+     \Sigma_{\rm hm}(R, M, z) = \begin{cases}
+       \Sigma_{1h}(R, M) + \Delta_{\rm gap}^{(\Sigma)}(M, z) + 2\,\Delta_{\rm gap}(M, z)\left[1 - \left(\frac{R}{r_{\rm trans}}\right)^2\right], & R < r_{\rm trans}, \\[6pt]
+       b(M, z)\,\Sigma_{\rm hh}(R, z), & R \ge r_{\rm trans},
+     \end{cases}
+     $$
+     where $\Delta_{\rm gap}^{(\Sigma)} = b(M, z)\,\Sigma_{\rm hh}(r_{\rm trans}, z) - \Sigma_{1h}(r_{\rm trans}, M)$.
+   - **Enclosed Mean Surface Density $\bar{\Sigma}(<R)$**:
+     $$
+     \bar{\Sigma}_{\rm hm}(<R, M, z) = \begin{cases}
+       \bar{\Sigma}_{1h}(<R, M) + \Delta_{\rm gap}^{(\Sigma)} + 2\,\Delta_{\rm gap} - \Delta_{\rm gap}\left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
+       b(M, z)\,\bar{\Sigma}_{\rm hh}(<R, z) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans}.
+     \end{cases}
+     $$
+   - **Excess Surface Density $\Delta\Sigma(R) = \bar{\Sigma}(<R) - \Sigma(R)$**:
+     $$
+     \Delta\Sigma_{\rm hm}(R, M, z) = \begin{cases}
+       \Delta\Sigma_{1h}(R, M) + \Delta_{\rm gap}(M, z) \left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
+       b(M, z)\,\Delta\Sigma_{\rm hh}(R, z) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans},
+     \end{cases}
+     $$
+     where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and $\Delta_{\rm gap}(M, z) = [b(M, z)\,\Delta\Sigma_{\rm hh}(r_{\rm trans}, z) + (C_0 / r_{\rm trans}^2)\times 10^{-12}] - \Delta\Sigma_{1h}(r_{\rm trans}, M)$. Both $\Sigma$, $\bar{\Sigma}$, and $\Delta\Sigma$ are strictly $C^0$ continuous at $R = r_{\rm trans}$.
 
 The dims tag of each backend counts its **adaptive** integration
 dimensions, and the physics dictates which reductions are legal:

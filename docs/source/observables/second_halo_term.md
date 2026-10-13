@@ -110,14 +110,38 @@ $$\xi_{\rm hm}(r \mid M, z) = \max\!\Big[\xi_{1h}(r \mid M, z),\; b(M, z)\,\xi_{
 
 with transition radius $r_{\rm trans}$ defined by $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$.
 
-2. The projected excess surface density $\Delta\Sigma_{\max}$ is assembled via the 3-pillar bridging operators:
+2. Because $\Delta\Sigma(R) = \bar{\Sigma}(<R) - \Sigma(R)$ and $\frac{d}{dR}[R^2\bar{\Sigma}(<R)] = 2R\,\Sigma(R)$, enforcing the quadratic gap bridge for $\Delta\Sigma$ uniquely determines the exact unified profiles for **$\Sigma(R)$**, **$\bar{\Sigma}(<R)$**, and **$\Delta\Sigma(R)$**:
 
-$$\Delta\Sigma_{\max}(R \mid M, z) = \begin{cases}
-\Delta\Sigma_{1h}(R \mid M, z) + \Delta_{\rm gap}^1 \left(\frac{R}{r_{\rm trans}}\right)^2, & R < r_{\rm trans}, \\[6pt]
-b(M, z)\,\Delta\Sigma_{\rm hh}(R, z) + \frac{C_0}{R^2} \times 10^{-12}, & R \ge r_{\rm trans},
+#### Projected Surface Density $\Sigma(R)$
+Outside the core ($R \ge r_{\rm trans}$), sightlines never pierce $r < r_{\rm trans}$, so the local surface density is purely 2-halo: $\Sigma(R) = b(M, z)\,\Sigma_{\rm hh}(R, z)$. Inside the core ($R < r_{\rm trans}$), matching the quadratic expansion yields:
+
+$$\Sigma_{\rm hm}(R, M, z) = \begin{cases} 
+\Sigma_{1h}(R, M) + \Delta_{\rm gap}^{(\Sigma)}(M, z) + 2\,\Delta_{\rm gap}(M, z)\left[1 - \left(\dfrac{R}{r_{\rm trans}(M, z)}\right)^2\right] & \text{if } R < r_{\rm trans}(M, z) \\[10pt] 
+b(M, z)\,\Sigma_{\rm hh}(R, z) & \text{if } R \ge r_{\rm trans}(M, z) 
 \end{cases}$$
 
-where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and $\Delta_{\rm gap}^1 = \Delta\Sigma_{\max}(r_{\rm trans}) - \Delta\Sigma_{1h}(r_{\rm trans})$, with $\Delta\Sigma_{1h}$ the centred + miscentred one-halo mixture of {doc}`shear_halo`.
+where the boundary surface density gap is:
+$$\Delta_{\rm gap}^{(\Sigma)}(M, z) \equiv b(M, z)\,\Sigma_{\rm hh}\big(r_{\rm trans}(M, z), z\big) - \Sigma_{1h}\big(r_{\rm trans}(M, z), M\big).$$
+
+#### Enclosed Mean Surface Density $\bar{\Sigma}(<R)$
+$$\bar{\Sigma}_{\rm hm}(<R, M, z) = \begin{cases} 
+\bar{\Sigma}_{1h}(<R, M) + \Delta_{\rm gap}^{(\Sigma)}(M, z) + 2\,\Delta_{\rm gap}(M, z) - \Delta_{\rm gap}(M, z)\left(\dfrac{R}{r_{\rm trans}(M, z)}\right)^2 & \text{if } R < r_{\rm trans}(M, z) \\[10pt] 
+b(M, z)\,\bar{\Sigma}_{\rm hh}(<R, z) + \dfrac{\mathcal{C}_0(M, z)}{R^2} \times 10^{-12} & \text{if } R \ge r_{\rm trans}(M, z) 
+\end{cases}$$
+
+#### Excess Surface Density $\Delta\Sigma(R) = \bar{\Sigma}(<R) - \Sigma(R)$
+Subtracting $\Sigma(R)$ from $\bar{\Sigma}(<R)$, the constant sheet $\Delta_{\rm gap}^{(\Sigma)} + 2\Delta_{\rm gap}$ cancels out identically, leaving:
+
+$$\Delta\Sigma_{\rm hm}(R, M, z) = \begin{cases} 
+\Delta\Sigma_{1h}(R, M) + \Delta_{\rm gap}(M, z)\left(\dfrac{R}{r_{\rm trans}(M, z)}\right)^2 & \text{if } R < r_{\rm trans}(M, z) \\[10pt] 
+b(M, z)\,\Delta\Sigma_{\rm hh}(R, z) + \dfrac{\mathcal{C}_0(M, z)}{R^2} \times 10^{-12} & \text{if } R \ge r_{\rm trans}(M, z) 
+\end{cases}$$
+
+where $\mathcal{C}_0 = \Delta M_{\rm 3D}(r_{\rm trans}) / \pi$ (in $M_\odot/h$) and $\Delta_{\rm gap}(M, z) = [b(M, z)\,\Delta\Sigma_{\rm hh}(r_{\rm trans}, z) + (\mathcal{C}_0 / r_{\rm trans}^2)\times 10^{-12}] - \Delta\Sigma_{1h}(r_{\rm trans}, M)$, with $\Delta\Sigma_{1h}$ the centred + miscentred one-halo mixture of {doc}`shear_halo`.
+
+* **Exact Identity:** $\Delta\Sigma_{\rm hm}(R) \equiv \bar{\Sigma}_{\rm hm}(<R) - \Sigma_{\rm hm}(R)$ holds analytically everywhere.
+* **Continuity:** All three profiles ($\Sigma$, $\bar{\Sigma}$, $\Delta\Sigma$) are strictly $C^0$ continuous at $R = r_{\rm trans}$.
+* **DataBlock inputs:** All tables are strictly 2D arrays: $\Sigma_{1h}(R, M)$, $\Sigma_{\rm hh}(R, z)$, $r_{\rm trans}(M, z)$, $\mathcal{C}_0(M, z)$, $\Delta_{\rm gap}(M, z)$, and $\Delta_{\rm gap}^{(\Sigma)}(M, z)$.
 
 The transition and bridging terms depend on $M$ and $z$, which has two consequences for the pipeline: (i) the composition must be applied *inside* the population integral, at each $(M, z)$, not to the stacked profiles; (ii) because the two-halo term depends on $z$, the redshift integral can no longer be contracted past the profile the way the one-halo `0d` path does — `Shear1h2hMax` keeps a $z$-resolved selection weight and performs a double $(\ln M, z)$ fixed-GL sum:
 
