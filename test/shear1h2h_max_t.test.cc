@@ -66,6 +66,9 @@ namespace {
   double constexpr GAP_0 = 0.1;
   std::vector<double> const LOB_CENTERS{30.0, 90.0};
   std::vector<double> const R_QUERY{0.5, 1.0, 2.0};
+  // GL tolerance: default (64/32) vs doubled nodes, measured on the real
+  // des_y3_cpp0d_fast_apriori.ini block at <= 6e-5 (bicubic xi_nl).
+  double constexpr PRECISION_GL = 1.0e-4;
 
   cosmosis::DataBlock
   make_cfg_block(std::vector<double> const& lob_centers = LOB_CENTERS)
@@ -217,17 +220,19 @@ namespace {
 
     if (o.xi) {
       // gauss_legendre inputs: concentration + rho_m_ref for xi_nfw, and
-      // xi_nl(r, z) as an (n_z, n_r) table.
+      // xi_nl(r, z) as an (n_z, n_r) table on the halo_model grid
+      // r = logspace(-3, 3, 128); 4 z rows (bicubic needs >= 4 per axis).
       std::vector<double> r_xi, xi_vals;
-      for (int i = 0; i != 200; ++i)
-        r_xi.push_back(std::pow(10.0, -2.0 + 4.0 * i / 199.0));
-      for (double zz : {0.0, 1.0})
+      std::vector<double> const z_xi{0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0};
+      for (int i = 0; i != 128; ++i)
+        r_xi.push_back(std::pow(10.0, -3.0 + 6.0 * i / 127.0));
+      for (double zz : z_xi)
         for (double r : r_xi)
           xi_vals.push_back(o.hh_amp * std::pow(r / 5.0, -1.8) / (1.0 + zz));
       s.put_val("xi_nl", "r", r_xi);
-      s.put_val("xi_nl", "z", std::vector<double>{0.0, 1.0});
+      s.put_val("xi_nl", "z", z_xi);
       s.put_val("xi_nl", "xi_nl",
-                cosmosis::ndarray<double>(xi_vals, {2, 200}));
+                cosmosis::ndarray<double>(xi_vals, {4, 128}));
       s.put_val("haloModel", "rho_m_ref", RHO_M_REF);
       s.put_val("haloModel", "concentration", std::vector<double>{4.0, 4.0});
     }
@@ -657,10 +662,10 @@ TEST_CASE("Shear1h2hMax gauss_legendre Bsel equals B DeltaSigma - M_sel/(pi R^2)
              (x * (1.0 + x) * (1.0 + x)) - 1.0;
   };
   auto const bias = y3_cluster::make_Interp2D(s, "haloModel", "lnM", "z", "bias");
-  auto const xi_nl = y3_cluster::make_Interp2D(s, "xi_nl", "r", "z", "xi_nl");
+  auto const xi_nl = y3_cluster::make_Interp2D(s, "xi_nl", "r", "z", "xi_nl", /*bicubic=*/true);
   y3_cluster::OperatorMax1h2h_gl const op(
     xi_nfw, [&](double m, double z) { return bias.clamp(m, z); },
-    [&](double r, double z) { return xi_nl.clamp(r, z); }, rho_m, 100.0);
+    [&](double r, double z) { return xi_nl.clamp(r, z); }, rho_m, 1000.0);
   auto const bsel_op = y3_cluster::BselDeltaSigmaOperator::from_datablock(
     s, "Sunayama23");
 
@@ -690,4 +695,35 @@ TEST_CASE("Shear1h2hMax gauss_legendre Bsel equals B DeltaSigma - M_sel/(pi R^2)
     CHECK(mod.evaluate({static_cast<double>(b), R})[0] ==
           Approx(expected).epsilon(1e-4));
   }
+}
+
+TEST_CASE("Shear1h2hMax gauss_legendre precision: default nodes vs doubled nodes")
+{
+  // GL convergence on log-spaced radii: the production nodes (n_los = 64,
+  // n_aperture = 32) must agree with twice the nodes in both integrals.
+  std::vector<double> radii;
+  for (int i = 0; i != 12; ++i)
+    radii.push_back(0.1 * std::pow(100.0, i / 11.0));   // 0.1 .. 10 Mpc/h
+  auto s = make_sample_block(SampleOpts{3.0, false, false, /*xi=*/true});
+
+  auto cfg = make_gl_cfg_block(false);
+  cfg.put_val(Shear1h2hMax::module_label(), "r_perp", radii);
+  auto cfg2 = cfg;
+  cfg2.put_val(Shear1h2hMax::module_label(), "n_los", 128);
+  cfg2.put_val(Shear1h2hMax::module_label(), "n_aperture", 64);
+  Shear1h2hMax base(cfg), doubled(cfg2);
+  base.set_sample(s);
+  doubled.set_sample(s);
+
+  double worst = 0.0;
+  for (int b : {0, 1})
+    for (double R : radii) {
+      auto const pt = Shear1h2hMax::grid_point_t{static_cast<double>(b), R};
+      double const v1 = base.evaluate(pt)[0];
+      double const v2 = doubled.evaluate(pt)[0];
+      worst = std::max(worst, std::abs(v1 / v2 - 1.0));
+      INFO("bin " << b << " R " << R);
+      CHECK(v1 == Approx(v2).epsilon(PRECISION_GL));
+    }
+  WARN("GL 64/32 vs 128/64: max |rel diff| = " << worst);
 }

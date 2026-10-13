@@ -336,16 +336,16 @@ private:
                              (std::log1p(c) - c / (1.0 + c));
       return delta_c / (x * (1.0 + x) * (1.0 + x)) - 1.0;
     };
-    auto const r_xi = s.view<std::vector<double>>("xi_nl", "r");
-    auto const& xi_nd = s.view<cosmosis::ndarray<double>>("xi_nl", "xi_nl");
-    y3_cluster::XiSplineLogR const xi_nl(
-      r_xi, s.view<std::vector<double>>("xi_nl", "z"),
-      std::vector<double>(xi_nd.begin(), xi_nd.end()));
+    // Bicubic: bilinear kinks at every r knot stall the GL convergence.
+    auto const xi_nl = y3_cluster::make_Interp2D(
+      s, "xi_nl", "r", "z", "xi_nl", /*bicubic=*/true);
+    double const r_max = s.view<std::vector<double>>("xi_nl", "r").back();
 
     gl_op_.emplace(
       xi_nfw,
       [bias](double lnM, double z) { return bias.clamp(lnM, z); },
-      xi_nl, rho_m, r_xi.back(), n_los_, n_aperture_);
+      [xi_nl](double r, double z) { return xi_nl.clamp(r, z); },
+      rho_m, r_max, n_los_, n_aperture_);
     gl_aperture_weights_ = gl_op_->aperture_weights();
 
     // Bin-independent: tabulate every wall radius once per sample.
