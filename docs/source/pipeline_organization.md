@@ -33,7 +33,6 @@ src/pipelines/
 │   ├── selection_richness/python/  # sel_function, sel_kernels
 │   ├── selection_bias/{python,cpp,cuda/3d}/  # bsel, BSelBins, PAGANI b_sel_marg
 │   ├── selection_function/         # prj_params (EMG coefficients)
-│   ├── costanzi_bprj/{python,cpp}/ # B_prj(R) max-model correction
 │   ├── boost_factor/               # McClintock+19 B(R) (published, unconsumed)
 │   └── shear_prj/cpp/              # ShearPrjCore + frozen twins
 ├── buzzard/likelihoods/            # likelihood_cp.py
@@ -111,7 +110,7 @@ validators, qualified as `validate_fast_vs_production.py` and
 | `3d` | One-halo miscentred shear | C++, CUDA | Adaptive explicit-selection accuracy references |
 | `0d` | One-halo miscentred shear | Python, C++ | Explicit 3-dim GL reference, the exact $z$-contracted 1-dim GL mass sum (C++ bitwise-equivalent to production), and the $U_\ell$ moment expansion |
 | `3d` | Traditional 1h+2h max model | C++ | Adaptive explicit reference for the max model |
-| `0d` | Traditional 1h+2h max model | Python, C++, CUDA | $z$-resolved 2-dim GL sum; two-halo profile has an open debugging flag |
+| `0d` | Traditional 1h+2h max model | Python, C++, CUDA | $z$-resolved 2-dim GL sum; `profile_method = piecewise_approx` (default) or `gauss_legendre` (full integral); CUDA keeps the older miscentred model |
 | `3d` | Projection shear | CUDA | Fully-coupled adaptive diagnostic with an open wall-edge convergence study |
 | `2d` | Projection shear | C++ | `ShearPrjCuhre`: feature-split $\theta$ GL, adaptive $(z, \ln M)$ |
 | `0d` | Projection shear | Python, C++, CUDA | Exact-$z$ region-split 3-dim GL Python/C++; CUDA reproduces the frozen production machinery |
@@ -171,5 +170,6 @@ locations:
 
 The path-stable support stages `cp_camb`, `halo_model`, and
 `average_sigma_crit_inv` also remain outside the new observable tree;
-the likelihood lives in `src/pipelines/buzzard/likelihoods/`. Shared C++ models stay under `src/models` and infrastructure
+the likelihood lives in `src/pipelines/buzzard/likelihoods/`. Shared C++ models stay under `src/models` and
+infrastructure
 under `src/utils`; the new layout does not reorganize either layer.

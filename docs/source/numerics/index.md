@@ -59,8 +59,9 @@ records) is in
 | `0d` | C++ (`Shear1hGl.so`) — $z$-contracted 1-dim GL mass sum | 9 ms | 8.4e-4; bitwise identity **vs production `Shear1hMisSel.so`** recorded separately |
 | `0d` | Python — radial series ($\ell\le2$, offline tables) | 6 ms | 3.7e-3 |
 | `0d` | C++ (`Shear1hRadialSeries.so`) — radial series | 7 ms | 3.7e-3 (truncation, **vs same-profile doubled-node fiducial**) + 1.6e-4 interp difference **vs its Python twin**; raw vs-3d amplitude is the open c=4 defect |
-| `0d` | max model C++ (`Shear1h2hMax.so`) — $z$-resolved 2-dim GL sum | 11 ms | 8.3e-4 (measured through the Python max-model chain); see {doc}`../variants` |
-| `0d` | max model CUDA (`Shear1h2hMaxGpu.so`) | 8 ms | machine precision **vs its C++ twin**; vs-3d inherited through it |
+| `0d` | max model C++ (`Shear1h2hMax.so`), `piecewise_approx` — $z$-resolved 2-dim GL sum | 3 ms (Apple M5) | not compared with 3d (no miscentering in `Shear1h2hMax`); within 0.43% **vs its `gauss_legendre` mode**; see {doc}`../observables/second_halo_term` |
+| `0d` | max model C++, `gauss_legendre` 64/32 — full GL integral of the max | 0.12 s (Apple M5) | 5.8e-5 **vs 128/64 nodes** |
+| `0d` | max model CUDA (`Shear1h2hMaxGpu.so`) — older miscentred model | 8 ms | historical: machine precision vs the earlier miscentred C++ |
 
 **Projection shear** (180-point wall; DES Y1
 `ShearPrjFrozenPhysics.so` = 82 ms):

@@ -16,7 +16,8 @@ these chapters) is
 [Costanzi et al. 2026, PhRvD 113, 103508](https://ui.adsabs.harvard.edu/abs/2026PhRvD.113j3508C/abstract)
 (arXiv:[2604.05833](https://arxiv.org/abs/2604.05833)).
 
-Further source material: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
+Further source material:
+[`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
 (selection functions and richness–mass models),
 [`RichnessSelection/docs/richness_selection.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection.tex) and
 [`delta_sigma_prj_derivation.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/delta_sigma_prj_derivation.tex) (projection lensing),
@@ -85,7 +86,9 @@ $N_{\rm grid} = N_{z^{\rm ob}}\cdot N_{\lambda^{\rm ob}}\cdot N_R$; the
 smoke setups use $N_{\rm grid}=12$ for scalar observables and $120$ for
 radial ones ($N_R = 10$).
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex) §Observables and the shear
+*Source:
+[`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex)
+§Observables and the shear
 composition / The $N_i[f]$ operator.*
 
 ## Cluster lensing
@@ -228,7 +231,9 @@ centred branch. At the fiducial parameters the small-$R$
 $\langle\gamma_t^{1h}\rangle$ is suppressed by $\sim 30\%$ at
 $R \lesssim 0.3\,h^{-1}\,\mathrm{Mpc}$ relative to the centred profile.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex) §Miscentering selection on
+*Source:
+[`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex)
+§Miscentering selection on
 $\Delta\Sigma$.*
 
 ### Projection lensing: $\Sigma_{\rm prj}$ and $\Delta\Sigma_{\rm prj}$
@@ -566,7 +571,9 @@ $\gamma_t^{\rm prj} = \Delta\Sigma^{\rm prj}\,\Sigma_{\rm crit}^{-1}$ in
 one pass; `sigma_prj/vals`, `dsigma_prj/vals`, and the `rnd`/`cl`
 subfields are published for diagnostics.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex) §Observables and the shear
+*Source:
+[`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex)
+§Observables and the shear
 composition.*
 
 ### The standard two-halo term (fiducial 1h+2h)
@@ -625,7 +632,9 @@ that build the fiducial 1h+2h shear must instead keep
 `compute_lensing_2h = T` so that `Sigma_hh`, `dSigma_hh`, and `Wp_hh` are
 available downstream.
 
-*Source: [`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex) §`halo_model`: bias $b(M,z)$ and
+*Source:
+[`docs/pipeline_modules.tex`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/docs/pipeline_modules.tex)
+§`halo_model`: bias $b(M,z)$ and
 $\xi_{\rm NL}(r,z)$.*
 
 ### Comparing the two compositions
@@ -640,13 +649,15 @@ That contradicts this project's own documented standard
 formulated via 3D halo exclusion on the correlation function,
 $\xi_{\rm hm}(r) = \max[\xi_{1h}(r),\, b(M, z)\,\xi_{\rm mm}(r, z)]$, with
 transition radius $r_{\rm trans}$ where $\xi_{1h}(r_{\rm trans}) = b(M, z)\,\xi_{\rm mm}(r_{\rm trans}, z)$,
-and assembled via 3-pillar bridging:
+and approximated around the transition radius via a piecewise function:
 $\Delta\Sigma_{1h}(R) + \Delta_{\rm gap}^1\,(R/r_{\rm trans})^2$ for $R < r_{\rm trans}$ and
 $b\,\Delta\Sigma_{hh}(R) + (C_0/R^2)\times 10^{-12}$ for $R \ge r_{\rm trans}$,
 where $C_0 = \Delta M_{\rm 3D}(r_{\rm trans})/\pi$ (in $M_\odot/h$) and
 $\Delta_{\rm gap}^1 = \Delta\Sigma_{\max}(r_{\rm trans}) - \Delta\Sigma_{1h}(r_{\rm trans})$,
 implemented by
-[`shear1h2h_max.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py).
+[`shear1h2h_max.py`](https://github.com/estevesjh/y3_cluster_cpp/blob/master/src/pipelines/des_y3/shear_1h2h/python/0d/shear1h2h_max.py)
+and its C++ twin `Shear1h2hMax` (`profile_method = piecewise_approx`;
+`gauss_legendre` computes the full integral of the max).
 Removed rather than left showing the wrong physics. Regenerating it
 needs a real fiducial pipeline dump with `compute_lensing_2h = T` — not
 available in this environment; see {doc}`../observables/second_halo_term`
@@ -836,7 +847,9 @@ $$
 | $z_\star$ | pivot redshift, $0.45$ |
 | $\sigma_{\mathrm{intr}}$ | super-Poissonian halo-to-halo scatter |
 
-*Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex) §Models
+*Source:
+[`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
+§Models
 for the mass–richness relation.*
 
 ### Observed richness: the projection kernel
@@ -923,7 +936,8 @@ all depend on $(\lambda^{\mathrm{tr}}, z)$ and are calibrated empirically
 | $f^{\mathrm{prj}}(\lambda^{\mathrm{tr}}, z) \in [0,1]$ | fraction of clusters affected by a projection boost (line-of-sight overlap with other haloes); increases with $\lambda^{\mathrm{tr}}$ and $z$ |
 | $\tau(\lambda^{\mathrm{tr}}, z) > 0$ | inverse scale of the exponential projection tail: smaller $\tau$ means longer tails and stronger projections |
 
-*Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
+*Source:
+[`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
 §Closed-form of the observed richness kernel with projection effects.*
 
 ### The observed-richness kernel
@@ -1115,6 +1129,7 @@ The evaluation grid in $(\ln M, z)$ then needs only elementary special
 functions ($\Phi$, $\exp$, $\ln\Gamma$), with the Gauss–Legendre nodes and
 weights pre-computed.
 
-*Source: [`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
+*Source:
+[`RichnessSelection/docs/richness_selection_function.tex`](https://github.com/estevesjh/RichnessSelection/blob/main/docs/richness_selection_function.tex)
 §Closed-form of the observed richness kernel with projection effects,
 §Gauss–Legendre numerical integration, §Summary.*

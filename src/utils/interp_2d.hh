@@ -9,9 +9,13 @@
 #include <cstddef>
 #include <vector>
 
-// Interp2D is used for linear interpolation in 1 dimension.
+// Interp2D is used for bilinear interpolation in 2 dimensions.
 // It uses the GSL library to do the actual interpolation.
 // Interp2D object do not allow extrapolation.
+//
+// bicubic = true uses GSL bicubic instead of bilinear interpolation (needs at
+// least 4 points per axis); it removes the derivative kinks at every knot
+// that otherwise stall quadrature convergence over the table.
 //
 namespace y3_cluster {
 
@@ -44,7 +48,8 @@ namespace y3_cluster {
     // because that is what is used by GSL.
     Interp2D(std::vector<double> const& xs,
              std::vector<double> const& ys,
-             std::vector<double> const& zs);
+             std::vector<double> const& zs,
+             bool bicubic = false);
 
     // Interpolator created from two vectors and one vector-of-vectors.
     Interp2D(std::vector<double> const& xs,
@@ -54,7 +59,8 @@ namespace y3_cluster {
     // Like above - assumes ndarray is 2D and fits it appropriately
     Interp2D(std::vector<double> const& xs,
              std::vector<double> const& ys,
-             cosmosis::ndarray<double> const& zs);
+             cosmosis::ndarray<double> const& zs,
+             bool bicubic = false);
 
     // Interpolator created from vector of triplets: throws std::logic_error if
     // the points do not lie on a grid in (x,y) space, or if any values are NaN
@@ -94,6 +100,7 @@ namespace y3_cluster {
     std::vector<double> ys_;
     std::vector<double> zs_; // stores z-values in row-major
     gsl_interp_ptr interp_;
+    bool bicubic_ = false;
 
     void init_gsl_bits_();
 
@@ -146,6 +153,7 @@ y3_cluster::Interp2D::swap(Interp2D& other) noexcept
   swap(ys_, other.ys_);
   swap(zs_, other.zs_);
   swap(interp_, other.interp_);
+  swap(bicubic_, other.bicubic_);
 }
 
 inline std::size_t

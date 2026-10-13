@@ -88,13 +88,11 @@ docs/source/_static/img/pipeline_dataflow.png -b white -s 2`.)
 
 Not in the reference module list, documented on their own pages:
 
-- `costanzi_bprj` — publishes the bin grid for the
-  $\mathcal B_{\rm prj}(R)$ selection-bias correction of the max model
-  ({doc}`systematics/costanzi_bprj`); enable with
-  `is_b_proj_costanzi26 = T` and `shear_max_section = shear1h2h_max` in
-  `[likelihoods]`.
-- `Shear1h2hMax` + `halo_model` with `compute_lensing_2h = T` — the
-  traditional 3D halo-exclusion max shear model ({doc}`observables/second_halo_term`).
+- `Shear1h2hMax` (C++) or `shear1h2h_max` (Python, never both) +
+  `halo_model` with `compute_lensing_1h = compute_lensing_2h = T` — the
+  traditional 3D halo-exclusion max shear model; `profile_method =
+  piecewise_approx` (default) or `gauss_legendre`
+  ({doc}`observables/second_halo_term`).
 - `boost_factor` — publishes the McClintock et al. (2019) source-dilution
   boost $B(R)$ per bin ({doc}`systematics/boost_factor`).
 - `prj_params` — publishes the frozen EMG projection-kernel coefficients
@@ -211,7 +209,6 @@ section names of the three observables as options; `des_y3.ini` sets
 them to `numcounts_sij_gl`, `shear1h_gl`, `shear_prj_gl`, so the
 des_y3 modules coexist with the DES Y1 ones without DataBlock
 overwrites. The optional `shear_max_section` switches the shear theory
-to the traditional max model (`shear1h2h_max`, no projection term) and
-`is_b_proj_costanzi26 = T` applies the Costanzi-2026
-$\mathcal{B}_{\rm prj}(R)$ correction to it
-({doc}`systematics/costanzi_bprj`, {doc}`variants`).
+to the traditional max model (`shear1h2h_max`, no projection term). Tagged
+selection-bias corrections are configured on the `Shear1h2hMax` module
+({doc}`systematics/bsel_profile`, {doc}`variants`).

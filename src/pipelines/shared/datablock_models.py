@@ -52,7 +52,7 @@ import os
 from typing import Any
 
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
+from scipy.interpolate import RectBivariateSpline, RegularGridInterpolator
 from scipy.special import gammaln
 
 GL_CACHE = {}
@@ -102,6 +102,12 @@ class DataBlockSource:
     def has(self, section: str, key: str) -> bool:
         """Return whether ``section/key`` is present."""
         return self.block.has_value(section, key)
+
+    def __getitem__(self, item: tuple[str, str]) -> Any:
+        return self.block[item]
+
+    def __contains__(self, item: tuple[str, str]) -> bool:
+        return self.block.has_value(item[0], item[1])
 
 
 class DumpSource:
@@ -869,9 +875,14 @@ class Bilinear2D:
 
     C++ convention: Interp2D(xs, ys, zs) with the value table stored
     rows = y, cols = x; queries are clamped to the domain.
+
+    cubic=True mirrors Interp2D(..., bicubic=true): a bicubic spline
+    (needs >= 4 points per axis) instead of bilinear, removing the
+    derivative kinks at every knot that stall quadrature convergence.
     """
 
-    def __init__(self, source, section, xkey, ykey, valkey, nan_fill=None):
+    def __init__(self, source, section, xkey, ykey, valkey, nan_fill=None,
+                 cubic=False):
         self._x = source.array(section, xkey)
         self._y = source.array(section, ykey)
         vals = np.asarray(source.array(section, valkey), dtype=float)
@@ -879,14 +890,21 @@ class Bilinear2D:
             vals = vals.reshape(self._y.size, self._x.size)
         if nan_fill is not None:
             vals = np.where(np.isfinite(vals), vals, float(nan_fill))
-        self._interp = RegularGridInterpolator(
-            (self._y, self._x), vals, method="linear",
-            bounds_error=False, fill_value=None)
+        self._cubic = bool(cubic)
+        if self._cubic:
+            self._interp = RectBivariateSpline(self._x, self._y, vals.T,
+                                               kx=3, ky=3, s=0)
+        else:
+            self._interp = RegularGridInterpolator(
+                (self._y, self._x), vals, method="linear",
+                bounds_error=False, fill_value=None)
 
     def __call__(self, x, y):
         x = np.clip(np.asarray(x, dtype=float), self._x[0], self._x[-1])
         y = np.clip(np.asarray(y, dtype=float), self._y[0], self._y[-1])
         y_b, x_b = np.broadcast_arrays(y, x)
+        if self._cubic:
+            return self._interp.ev(x_b, y_b)
         return self._interp(np.stack([y_b, x_b], axis=-1))
 
 

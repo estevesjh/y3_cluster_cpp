@@ -9,11 +9,11 @@
 //             Σ_crit^-1(zt) S_j(zt) S_i(lt, zt) P_HOD(lt | M, zt)
 //             d_tot(R, lnM, zt | bin),
 //
-// where d_tot is formulated via 3D halo exclusion and 3-pillar smooth bridging:
+// where d_tot is formulated via 3D halo exclusion and piecewise approximation:
 // 1. In 3D real space, halo exclusion is defined on the correlation function:
 //      xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
 //    with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
-// 2. The projected excess surface density DeltaSigma_max is assembled via 3-pillar bridging:
+// 2. The projected excess surface density DeltaSigma_max is approximated around transition radius and is assembled by building a piecewise function:
 //      For R < r_trans:
 //        DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
 //      For R >= r_trans:
@@ -65,6 +65,7 @@
 #include "models/plob_ltr_emg_t.hh"
 #include "models/richness_kernel_t.hh"
 #include "pipelines/shared/lensing_helpers.hh"
+#include "pipelines/systematics/selection_boost/Bsel.hh"
 #include "utils/interp_1d.hh"
 #include "utils/interp_2d.hh"
 #include "utils/make_interp_2d.hh"
@@ -87,6 +88,10 @@ private:
   std::vector<double> zob_min_, zob_max_, sigma_z_;
   std::vector<double> lob_centers_;
   bool include_mis_{true};
+  bool bsel_enabled_{false};
+  std::string bsel_model_;
+  std::optional<y3_cluster::BselDeltaSigmaOperator> bsel_op_;
+  std::optional<y3_cluster::Interp2D> sigma_bar_hh_, sigma_bar_nfw_;
 
   std::optional<y3_cluster::HMF_t> hmf_;
   std::optional<y3_cluster::DV_DO_DZ_t> dv_do_dz_;
@@ -94,7 +99,7 @@ private:
   std::optional<y3_cluster::MOR_HOD_t> mor_;
   std::optional<y3_cluster::PlobLtrEMG_t> plob_;
   std::optional<y3_cluster::Interp2D> dsigma_nfw_, bias_, dsigma_hh_;
-  std::optional<y3_cluster::Interp2D> r_trans_, c0_trans_, delta_gap_1_;
+  std::optional<y3_cluster::Interp2D> r_trans_, c0_trans_, delta_gap_1_, delta_gap_0_;
   std::optional<y3_cluster::Interp1D> sci_;
   // TODO(#14): drop the hardcoded c=4 — once claude/issue-4-dsigma-hh-2h-term
   // merges, call dsigma_mis_.set_concentration_table(
@@ -131,15 +136,43 @@ public:
       y3_pipelines::read_lob_centers(cfg, module_label());
     if (lob_centers_.empty())
       throw std::runtime_error("Shear1h2hMax3d: lob_centers is empty");
-    if (cfg.has_val(module_label(), "include_miscentering"))
-      include_mis_ =
-        cfg.view<int>(module_label(), "include_miscentering") != 0;
+    include_mis_ =
+      read_bool_opt(cfg, module_label(), "include_miscentering", true);
+    bsel_enabled_ =
+      read_bool_opt(cfg, module_label(), "bsel", false);
+    if (bsel_enabled_ && cfg.has_val(module_label(), "bsel_model"))
+      bsel_model_ = cfg.view<std::string>(module_label(), "bsel_model");
+  }
+
+  static bool read_bool_opt(cosmosis::DataBlock& cfg,
+                            char const* sec,
+                            char const* key,
+                            bool default_val)
+  {
+    if (!cfg.has_val(sec, key))
+      return default_val;
+    try {
+      return cfg.view<bool>(sec, key);
+    } catch (...) {
+      try {
+        return cfg.view<int>(sec, key) != 0;
+      } catch (...) {
+        auto const str = cfg.view<std::string>(sec, key);
+        return str == "T" || str == "true" || str == "True" || str == "1";
+      }
+    }
   }
 
   void
   set_sample(cosmosis::DataBlock& sample)
   {
     namespace w = y3_pipelines;
+    bsel_op_.reset();
+    if (bsel_enabled_) {
+      bsel_op_.emplace(
+        y3_cluster::BselDeltaSigmaOperator::from_datablock(
+          sample, bsel_model_));
+    }
     hmf_.emplace(sample);
     dv_do_dz_.emplace(sample);
     omega_z_.emplace(sample);
@@ -150,6 +183,11 @@ public:
     bias_.emplace(
       y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "bias"));
     dsigma_hh_.emplace(make_sanitized_hh(sample));
+    if (sample.has_val("haloModel", "Sigma_bar_hh"))
+      sigma_bar_hh_.emplace(make_sanitized_table(sample, "Sigma_bar_hh"));
+    if (sample.has_val("haloModel", "Sigma_bar_nfw"))
+      sigma_bar_nfw_.emplace(y3_cluster::make_Interp2D(
+        sample, "haloModel", "r_sigma", "lnM", "Sigma_bar_nfw"));
     if (sample.has_val("haloModel", "r_trans")) {
       r_trans_.emplace(
         y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "r_trans"));
@@ -157,10 +195,15 @@ public:
         y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "c0_trans"));
       delta_gap_1_.emplace(
         y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "delta_gap_1"));
+      if (sample.has_val("haloModel", "delta_gap_0")) {
+        delta_gap_0_.emplace(
+          y3_cluster::make_Interp2D(sample, "haloModel", "lnM", "z", "delta_gap_0"));
+      }
     } else {
       r_trans_.reset();
       c0_trans_.reset();
       delta_gap_1_.reset();
+      delta_gap_0_.reset();
     }
     sci_.emplace(w::load_sigma_crit_inv(sample));
     // Required: no fallback to the fiducial defaults — a pipeline that
@@ -220,9 +263,22 @@ public:
     } else {
       d_tot = std::max(d_1h, d_2h);
     }
+    double d_val = d_tot;
+    if (bsel_op_) {
+      // Apply the selection boost operator:
+      // DeltaSigma_sel(R) = B_sel(R) * DeltaSigma(R) - M_sel(R) / (pi R^2).
+      // The lambda supplies comoving barSigma(<r) matching the comoving B_sel(R) grid.
+      double const lob = lob_centers_[current_bin_ % lob_centers_.size()];
+      d_val = bsel_op_->apply(
+        d_tot,
+        [this, lnM, zt](double r) {
+          return mean_surface_density(r, lnM, zt);
+        },
+        current_R_, current_bin_, lob, zt);
+    }
     return (*hmf_)(lnM, zt) * (*dv_do_dz_)(zt) * (*omega_z_)(zt) *
            sci_->clamp(zt) * s_j * s_i_[current_bin_](lt, zt, *plob_) *
-           (*mor_)(lt, lnM, zt) * d_tot;
+           (*mor_)(lt, lnM, zt) * d_val;
   }
 
   static char const*
@@ -246,25 +302,52 @@ public:
   }
 
 private:
-  // haloModel/dSigma_hh through Interp2D, with the producer's NaNs
-  // replaced by 0 first (defensive guard; the producer defect in
-  // docs/known_issues/dsigma_hh_debug_flag.md is fixed), same
-  // convention as the fixed-GL Shear1h2hMax backends.
   static y3_cluster::Interp2D
-  make_sanitized_hh(cosmosis::DataBlock& s)
+  make_sanitized_table(cosmosis::DataBlock& s, char const* key)
   {
     using doubles = std::vector<double>;
     auto const r = s.view<doubles>("haloModel", "r_sigma");
     auto const z = s.view<doubles>("haloModel", "z");
     auto const& nd =
-      s.view<cosmosis::ndarray<double>>("haloModel", "dSigma_hh");
+      s.view<cosmosis::ndarray<double>>("haloModel", key);
     std::vector<double> vals(nd.begin(), nd.end());
     if (vals.size() != r.size() * z.size())
       throw std::runtime_error(
-        "Shear1h2hMax3d: dSigma_hh extents mismatch");
+        std::string("Shear1h2hMax3d: ") + key + " extents mismatch");
     for (auto& v : vals)
       if (!std::isfinite(v)) v = 0.0;
     return y3_cluster::Interp2D(r, z, vals);
+  }
+
+  static y3_cluster::Interp2D
+  make_sanitized_hh(cosmosis::DataBlock& s)
+  {
+    return make_sanitized_table(s, "dSigma_hh");
+  }
+
+  // barSigma(<r) = Sigma(r) + DeltaSigma(r) for a given (lnM, zt); the
+  // integrand input to BselDeltaSigmaOperator::apply in comoving coordinates.
+  double mean_surface_density(double r, double lnM, double zt) const
+  {
+    if (r_trans_ && c0_trans_ && delta_gap_1_) {
+      double const rt = r_trans_->clamp(lnM, zt);
+      if (r >= rt) {
+        double const s_2h = sigma_bar_hh_ ? bias_->clamp(lnM, zt) * sigma_bar_hh_->clamp(r, zt) : 0.0;
+        double const c0 = c0_trans_->clamp(lnM, zt);
+        return s_2h + (c0 / (r * r)) * 1.0e-12;
+      } else {
+        double const s_1h = sigma_bar_nfw_ ? sigma_bar_nfw_->clamp(r, lnM)
+                                           : (dsigma_nfw_ ? dsigma_nfw_->clamp(r, lnM) : 0.0);
+        double const gap0 = delta_gap_0_ ? delta_gap_0_->clamp(lnM, zt) : 0.0;
+        double const gap1 = delta_gap_1_->clamp(lnM, zt);
+        double const r_ratio = r / rt;
+        return s_1h + gap0 + 2.0 * gap1 - gap1 * r_ratio * r_ratio;
+      }
+    }
+    if (sigma_bar_nfw_ && sigma_bar_hh_) {
+      return std::max(sigma_bar_nfw_->clamp(r, lnM), bias_->clamp(lnM, zt) * sigma_bar_hh_->clamp(r, zt));
+    }
+    return dsigma_nfw_ ? dsigma_nfw_->clamp(r, lnM) : 0.0;
   }
 };
 
