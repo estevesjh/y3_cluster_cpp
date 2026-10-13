@@ -64,6 +64,19 @@ class TestSetupOptionContract(unittest.TestCase):
         self.assertEqual(cfg["bsel_model"], "Costanzi26")
         self.assertNotIn("bsel_section", cfg)
 
+    def test_setup_options_have_defaults_and_overrides(self):
+        cfg = mod.setup(make_options(_base_options()))
+        self.assertEqual(cfg["n_lnm"], 96)
+        self.assertEqual(cfg["n_z"], 64)
+        self.assertTrue(cfg["include_miscentering"])
+
+        entries = dict(_base_options(), n_lnm=48, n_z=32,
+                       include_miscentering=False)
+        cfg = mod.setup(make_options(entries))
+        self.assertEqual(cfg["n_lnm"], 48)
+        self.assertEqual(cfg["n_z"], 32)
+        self.assertFalse(cfg["include_miscentering"])
+
     def test_include_miscentering_defaults_true(self):
         cfg = mod.setup(make_options(_base_options()))
         self.assertTrue(cfg["include_miscentering"])

@@ -39,7 +39,7 @@ _disable_gsl_abort_handler()
 
 from astropy.constants import G
 
-from haloModel import biasModel, lensingModel, scaleShiftCosmo
+from haloModel import biasModel, lensingModel, scaleShiftCosmo, max1h2hOperators, ct_2hTerm
 
 ##################################################################
 ############# Build Wp(R,z) and Gammat(R,z) ############
@@ -98,6 +98,8 @@ def setup(options):
     compute_lensing = _bool("compute_lensing", True)
     compute_lensing_1h = _bool("compute_lensing_1h", compute_lensing)
     compute_lensing_2h = _bool("compute_lensing_2h", compute_lensing)
+    # Option for max1h2hOperators bridging (supports compute_max1h2h or max1h2hOperator)
+    compute_max1h2h = _bool("compute_max1h2h", False) or _bool("max1h2hOperator", False) or _bool("max1h2hOperators", False)
 
     # z_halo: the FIXED redshift at which the 1h concentration is
     # evaluated -- the owner-ratified convention (issue #3, review
@@ -189,7 +191,7 @@ def setup(options):
                   Radii_min, Radii_max, Radii_bins,
                   M_min, M_max, M_bins,
                   compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
-                  z_density, physical_density, conc_model)
+                  z_density, physical_density, conc_model, compute_max1h2h)
     return params_out
 
 
@@ -200,7 +202,7 @@ def execute(block, config):
      Radii_min, Radii_max, Radii_bins,
      M_min, M_max, M_bins,
      compute_lensing_1h, compute_lensing_2h, one_halo_z, c_amp,
-     z_density, physical_density, conc_model) = config
+     z_density, physical_density, conc_model, compute_max1h2h) = config
 
     # cosmo parameters
     omega_m = block[cosmo_names, "omega_m"]
@@ -292,14 +294,20 @@ def execute(block, config):
     RHOC_HUNITS = 2.77533742639e+11
     block[section_name, "rho_m_ref"] = (omega_m * RHOC_HUNITS
                                         * (1.0 + z_density) ** 3)
+    rho_m_comoving = omega_m * RHOC_HUNITS
+    m3d_hh = ct_2hTerm.m3d_at_r(r_xi, xi_NL, rho_m=rho_m_comoving)
+    int_r2_xi_nl = ct_2hTerm.m3d_at_r(r_xi, xi_NL, rho_m=1.0)
     # 0/1 flag for the rigorous physical-density treatment (see setup);
     # every shear-profile consumer reads this SAME entry.
     block[section_name, "one_halo_physical_density"] = int(physical_density)
     block[section_name, "bias"] = Bias
     # xi_NL(r, z) table for the b_sel_marg / sigma_prj integrands
-    block["xi_nl", "r"]     = r_xi
-    block["xi_nl", "z"]     = z
-    block["xi_nl", "xi_nl"] = xi_NL
+    block["xi_nl", "r"]            = r_xi
+    block["xi_nl", "z"]            = z
+    block["xi_nl", "xi_nl"]        = xi_NL
+    block["xi_nl", "int_r2_xi_nl"] = int_r2_xi_nl
+    block["xi_nl", "m3d_nl"]       = m3d_hh
+    block[section_name, "m3d_hh"]  = m3d_hh
 
     # ----- lensing section: optional ----------------------------------------
     # Split into two independent branches: 1h (cheap analytic NFW
@@ -307,7 +315,7 @@ def execute(block, config):
     # The modern red_shear_prj + bsel pipeline does not read either;
     # ReducedShear1hSel needs the 1h half; ReducedShearTotSel needs
     # both.  Skipping the 2h alone saves ~200-300 ms/sample.
-    if compute_lensing_1h or compute_lensing_2h:
+    if compute_lensing_1h or compute_lensing_2h or compute_max1h2h:
         lensModel = lensingModel(R_perp, omega_m, 200)
         scaleShift, hubbleShift = scaleShiftCosmo(z, cosmology)
         block[section_name, "r_sigma"] = R_perp
@@ -315,7 +323,7 @@ def execute(block, config):
         block[section_name, "hubble_shift"] = hubbleShift
         block[section_name, "k"] = k_h
 
-    if compute_lensing_1h:
+    if compute_lensing_1h or compute_max1h2h:
         # one_halo_z enters ONLY the Child18 concentration (the issue-#3
         # defect). The density normalisation must stay the COMOVING
         # rho_m0: first_halo_term scales rho by (1+z)^3 (physical), and
@@ -333,19 +341,70 @@ def execute(block, config):
         # z_density=0 -> comoving rho_m0 (default); z_density>0 -> physical
         # rho_m(z)=rho_m0(1+z)^3 (concentration stays fixed, pre-set above).
         lensModel.first_halo_term(M, z=z_density, conc_model_name=conc_model)
-        block[section_name, "Sigma_nfw"]  = lensModel.Sigma['1h']
-        block[section_name, "dSigma_nfw"] = lensModel.dSigma['1h']
+        block[section_name, "Sigma_nfw"]     = lensModel.Sigma['1h']
+        block[section_name, "dSigma_nfw"]    = lensModel.dSigma['1h']
+        block[section_name, "Sigma_bar_nfw"] = lensModel.sigma_bar['1h']
         block[section_name, "concentration"] = lensModel.c
 
-    if compute_lensing_2h:
+    if compute_lensing_2h or compute_max1h2h:
         lensModel.second_halo_term(z, k_nl, P_k_nl)
         # Wp_hh (xi_2halo on the R_perp grid, despite the Wp name) and its
         # mislabeled "Rp" axis are no longer published: unsupported, and
         # their only reader was the broken legacy wp_cluster.cuh
         # interpolation (wrong radial axis). The internal xi stays on
         # lensModel.Wp for validation; consumers needing xi read xi_nl.
-        block[section_name, "Sigma_hh"]  = lensModel.Sigma['2h']
-        block[section_name, "dSigma_hh"] = lensModel.dSigma['2h']
+        block[section_name, "Sigma_hh"]     = lensModel.Sigma['2h']
+        block[section_name, "dSigma_hh"]    = lensModel.dSigma['2h']
+        block[section_name, "Sigma_bar_hh"] = lensModel.sigma_bar['2h']
+
+    # ----- max(1h, 2h) bridging operators: optional ----------------------
+    # The Complete Unified Profile (Pillars 2 & 3 Assembled):
+    #
+    # Because DeltaSigma(R) = barSigma(<R) - Sigma(R) and
+    # d/dR [R^2 barSigma(<R)] = 2 R Sigma(R), enforcing the quadratic gap
+    # bridge for DeltaSigma uniquely determines the exact unified profiles
+    # for Sigma(R), barSigma(<R), and DeltaSigma(R):
+    #
+    # 1. Projected Surface Density Sigma(R):
+    #   For R < r_trans(M, z):
+    #     Sigma(R) = Sigma_1h(R, M) + Delta_gap^(Sigma)(M, z)
+    #                + 2 * Delta_gap(M, z) * [1 - (R / r_trans(M, z))^2]
+    #   For R >= r_trans(M, z):
+    #     Sigma(R) = b(M, z) * Sigma_hh(R, z)
+    #   where the boundary surface density gap is:
+    #     Delta_gap^(Sigma)(M, z) = b(M, z) * Sigma_hh(r_trans, z) - Sigma_1h(r_trans, M)
+    #
+    # 2. Enclosed Mean Surface Density barSigma(<R):
+    #   For R < r_trans(M, z):
+    #     barSigma(<R) = barSigma_1h(<R, M) + Delta_gap^(Sigma)(M, z)
+    #                    + 2 * Delta_gap(M, z) - Delta_gap(M, z) * (R / r_trans(M, z))^2
+    #   For R >= r_trans(M, z):
+    #     barSigma(<R) = b(M, z) * barSigma_hh(<R, z) + C_0(M, z) / R^2
+    #
+    # 3. Excess Surface Density DeltaSigma(R) = barSigma(<R) - Sigma(R):
+    #   Subtracting Sigma(R) from barSigma(<R), the constant sheet
+    #   Delta_gap^(Sigma) + 2 Delta_gap cancels out identically, leaving:
+    #   For R < r_trans(M, z):
+    #     DeltaSigma(R) = DeltaSigma_1h(R, M) + Delta_gap(M, z) * (R / r_trans(M, z))^2
+    #   For R >= r_trans(M, z):
+    #     DeltaSigma(R) = b(M, z) * DeltaSigma_hh(R, z) + C_0(M, z) / R^2
+    #   where Delta_gap(M, z) = [b * DeltaSigma_hh(r_trans) + C_0 / r_trans^2] - DeltaSigma_1h(r_trans).
+    #
+    # Exact Identity: DeltaSigma_hm(R) == barSigma_hm(<R) - Sigma_hm(R) holds analytically everywhere.
+    # Continuity: All three profiles (Sigma, barSigma, DeltaSigma) are strictly C^0 continuous at R = r_trans.
+    # DataBlock inputs: All tables are strictly 2D arrays:
+    #   Sigma_1h(R, M), Sigma_hh(R, z), r_trans(M, z), C_0(M, z), Delta_gap(M, z), Delta_gap^(Sigma)(M, z).
+    if compute_max1h2h or (compute_lensing_1h and compute_lensing_2h):
+        ops = max1h2hOperators(lensModel)
+        r_trans = ops.compute_rtrans(M, z, Bias, r_xi, xi_NL)
+        c0_trans = ops.compute_c0(r_trans, M, z, Bias, r_xi, m3d_hh)
+        delta_gap_0 = ops.compute_delta_gap_0(r_trans, M, z, Bias, z_density=z_density)
+        delta_gap_1 = ops.compute_delta_gap_1(r_trans, c0_trans, M, z, Bias, z_density=z_density)
+
+        block[section_name, "r_trans"]     = r_trans
+        block[section_name, "c0_trans"]    = c0_trans
+        block[section_name, "delta_gap_0"] = delta_gap_0
+        block[section_name, "delta_gap_1"] = delta_gap_1
 
     return 0
 

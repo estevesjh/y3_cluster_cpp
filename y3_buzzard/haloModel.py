@@ -45,6 +45,8 @@ class lensingModel(object):
 
         self.Sigma = {'1h':None, '2h':None}
         self.dSigma = {'1h':None, '2h':None}
+        self.sigma_bar = {'1h':None, '2h':None}
+        self.m3d = {'1h':None, '2h':None}
     
     def first_halo_term(self, M, z=0.0, conc_model_name='Child18'):
         if not hasattr(self,'c'):
@@ -60,6 +62,7 @@ class lensingModel(object):
         mm, rr  = np.meshgrid(M, self.R, indexing='ij')
         self.Sigma['1h'] = sigmaNFW_Analytical(rr, mm, self.c[:,np.newaxis], rho_c=self.rhom0*(1+z)**3)/1e12
         self.dSigma['1h'] = deltaSigmaNFW_Analytical(rr, mm, self.c[:,np.newaxis], rho_c=self.rhom0*(1+z)**3)/1e12
+        self.sigma_bar['1h'] = self.Sigma['1h'] + self.dSigma['1h']
     
     def second_halo_term(self, z, k, P):
         ## Cluster Toolkit Halo-Halo projected \Sigma and \Delta \Sigma second halo term computation
@@ -70,7 +73,10 @@ class lensingModel(object):
         p2h.pk_to_dsigma(self.R, k, P, z)
         self.Sigma['2h'] = p2h.Sigma
         self.dSigma['2h'] = p2h.dSigma
+        self.sigma_bar['2h'] = p2h.sigma_bar
         self.Wp = p2h.Xi
+        rho_m_h = self.omega_m * p2h.RHO_C
+        self.m3d['2h'] = ct_2hTerm.m3d_at_r(self.R, self.Wp, rho_m=rho_m_h)
 
     def concentration_at_M(self, M, z=0.0, model_name="Child18", **kwargs):
         """ Set the mass-concentration model
@@ -83,6 +89,213 @@ class lensingModel(object):
         else:
             raise Exception('Unknown mass-concentration model, %s.' % (model_name))
         return self.c
+
+
+class max1h2hOperators(object):
+    """Operators for 3D halo-exclusion max(1h, 2h) profile assembly.
+
+    Computes the 2D matching tables (shape: (n_z, n_M)) that bridge the
+    1-halo core and the decoupled 2-halo outer tail:
+        - rtrans: 3D crossing scale r_trans(M, z) where xi_1h = b * xi_nl
+        - c0: Core mass decoupling constant C_0(M, z) = [M_3D,1h(<r_trans) - b * M_3D,2h(<r_trans)] / pi
+        - delta_gap_0: Surface density boundary gap Delta_gap^(Sigma)(M, z) = b * Sigma_hh(r_trans) - Sigma_1h(r_trans)
+        - delta_gap_1: Excess surface density boundary gap Delta_gap(M, z) = [b * DeltaSigma_hh(r_trans) + C_0 / r_trans^2] - DeltaSigma_1h(r_trans)
+    """
+
+    def __init__(self, lens_model):
+        self.lens_model = lens_model
+
+    @staticmethod
+    def _interp_2d_log_r(ln_rq, ln_r_grid, data_2d):
+        """Piecewise-linear interpolation along log(r) for 2D arrays shape (n_z, n_M)."""
+        d = np.diff(ln_r_grid)
+        dln_r = d[0]
+        rows = np.arange(ln_rq.shape[0])[:, None]
+        # Fast path: uniform log-spaced grid (standard in cosmology pipelines)
+        if np.all(np.abs(d - dln_r) < 1e-6 * np.abs(dln_r)):
+            fj = (ln_rq - ln_r_grid[0]) / dln_r
+            j = np.clip(fj.astype(int), 0, len(ln_r_grid) - 2)
+            w = fj - j
+            y0 = data_2d[rows, j]
+            y1 = data_2d[rows, j + 1]
+            out = y0 + w * (y1 - y0)
+        else:
+            j = np.clip(np.searchsorted(ln_r_grid, ln_rq) - 1, 0, len(ln_r_grid) - 2)
+            x0 = ln_r_grid[j]
+            x1 = ln_r_grid[j + 1]
+            y0 = data_2d[rows, j]
+            y1 = data_2d[rows, j + 1]
+            slope = (y1 - y0) / (x1 - x0)
+            out = y0 + slope * (ln_rq - x0)
+        out = np.where(ln_rq < ln_r_grid[0], data_2d[rows, 0], out)
+        out = np.where(ln_rq > ln_r_grid[-1], data_2d[rows, -1], out)
+        return out
+
+    def compute_rtrans(self, M, z, bias, r_xi, xi_nl, conc=None):
+        """Compute the 2D crossing scale r_trans(M, z) where xi_1h = b * xi_nl.
+
+        Parameters
+        ----------
+        M : array_like, shape (n_M,)
+            Halo masses (Msun/h).
+        z : array_like, shape (n_z,)
+            Redshifts.
+        bias : array_like, shape (n_z, n_M)
+            Halo bias b(M, z).
+        r_xi : array_like, shape (n_r,)
+            Comoving radial grid (Mpc/h).
+        xi_nl : array_like, shape (n_z, n_r)
+            Nonlinear matter correlation function xi_nl(r, z).
+        conc : array_like, shape (n_M,), optional
+            Halo concentrations. If None, uses self.lens_model.c.
+
+        Returns
+        -------
+        r_trans : ndarray, shape (n_z, n_M)
+            Crossing radius in Mpc/h.
+        """
+        M_arr = np.atleast_1d(M)
+        bias_arr = np.atleast_2d(bias)
+        r_arr = np.asarray(r_xi, dtype=float)
+        xi_arr = np.atleast_2d(xi_nl)
+
+        if conc is None:
+            conc = getattr(self.lens_model, 'c', None)
+            if conc is None:
+                conc = child18_mass_concentration(M_arr, 0.0, halo_sample='stacked_nfw')
+        c_arr = np.asarray(conc, dtype=float)
+        if c_arr.ndim == 0 or c_arr.size == 1:
+            c_arr = np.full(M_arr.size, float(c_arr))
+
+        rho_m = self.lens_model.rhom0
+        r200 = (3.0 * M_arr / (800.0 * np.pi * rho_m))**(1.0 / 3.0)
+        rs = r200 / c_arr
+        delta_c = (200.0 / 3.0) * c_arr**3 / (np.log(1.0 + c_arr) - c_arr / (1.0 + c_arr))
+        rho_s = delta_c * rho_m
+
+        # Window optimization: crossing r_trans lies strictly in [0.2, 50.0] Mpc/h
+        # across all cluster masses (10^12 to 10^16 Msun/h) and redshifts (0 to 3)
+        mask = (r_arr >= 0.2) & (r_arr <= 50.0)
+        if np.any(mask):
+            idx_win = np.where(mask)[0]
+            i0 = max(0, idx_win[0] - 1)
+            i1 = min(len(r_arr), idx_win[-1] + 2)
+        else:
+            i0, i1 = 0, len(r_arr)
+        r_sub = r_arr[i0:i1]
+
+        # xi_1h on subgrid has shape (1, n_M, n_sub)
+        x_sub = r_sub[None, :] / rs[:, None]
+        xi_1h_sub = rho_s[:, None] / (rho_m * x_sub * (1.0 + x_sub)**2) - 1.0
+
+        # xi_2h on subgrid has shape (n_z, n_M, n_sub)
+        diff_sub = xi_1h_sub[None, :, :] - (bias_arr[:, :, None] * xi_arr[:, None, i0:i1])
+
+        # Bracket crossing detection on subgrid
+        is_crossing = (diff_sub[:, :, :-1] >= 0) & (diff_sub[:, :, 1:] <= 0)
+        idx_cross = np.argmax(is_crossing, axis=-1) + i0
+        ra = r_arr[idx_cross]
+        rb = r_arr[idx_cross + 1]
+
+        has_cross = np.any(is_crossing, axis=-1)
+        ra = np.where(has_cross, ra, np.maximum(r_arr[0], 0.25 * r200[None, :]))
+        rb = np.where(has_cross, rb, np.minimum(r_arr[-1], 4.0 * r200[None, :]))
+
+        # Vectorized bisection over (n_z, n_M) with O(1) grid interpolation
+        ln_r_arr = np.log(r_arr)
+        for _ in range(5):
+            rmid = np.sqrt(ra * rb)
+            xmid = rmid / rs[None, :]
+            x1h_mid = rho_s[None, :] / (rho_m * xmid * (1.0 + xmid)**2) - 1.0
+            x2h_mid = bias_arr * self._interp_2d_log_r(np.log(rmid), ln_r_arr, xi_arr)
+            f_mid = x1h_mid - x2h_mid
+            ra = np.where(f_mid > 0, rmid, ra)
+            rb = np.where(f_mid <= 0, rmid, rb)
+
+        return np.sqrt(ra * rb)
+
+    def compute_c0(self, r_trans, M, z, bias, r_xi, m3d_hh, conc=None):
+        """Compute the 2D core mass decoupling constant C_0(M, z) in (Msun/h).
+
+        C_0(M, z) = [M_3D,1h(<r_trans) - b(M, z) * M_3D,2h(<r_trans)] / pi
+        """
+        M_arr = np.atleast_1d(M)
+        bias_arr = np.atleast_2d(bias)
+        r_arr = np.asarray(r_xi, dtype=float)
+        m3d_2h_arr = np.atleast_2d(m3d_hh)
+
+        if conc is None:
+            conc = getattr(self.lens_model, 'c', None)
+            if conc is None:
+                conc = child18_mass_concentration(M_arr, 0.0, halo_sample='stacked_nfw')
+        c_arr = np.asarray(conc, dtype=float)
+        if c_arr.ndim == 0 or c_arr.size == 1:
+            c_arr = np.full(M_arr.size, float(c_arr))
+
+        rho_m = self.lens_model.rhom0
+        r200 = (3.0 * M_arr / (800.0 * np.pi * rho_m))**(1.0 / 3.0)
+        rs = r200 / c_arr
+        delta_c = (200.0 / 3.0) * c_arr**3 / (np.log(1.0 + c_arr) - c_arr / (1.0 + c_arr))
+        rho_s = delta_c * rho_m
+
+        ln_r_arr = np.log(r_arr)
+        xk = r_trans / rs[None, :]
+        m1h = (4.0 * np.pi * rho_s[None, :] * (rs[None, :]**3) * (np.log(1.0 + xk) - xk / (1.0 + xk))
+               - (4.0 / 3.0) * np.pi * rho_m * r_trans**3)
+        m2h = self._interp_2d_log_r(np.log(r_trans), ln_r_arr, m3d_2h_arr)
+
+        return (m1h - bias_arr * m2h) / np.pi
+
+    def compute_delta_gap_0(self, r_trans, M, z, bias, conc=None, z_density=0.0):
+        """Compute the 2D surface density boundary gap Delta_gap^(Sigma)(M, z) in (Msun/pc^2).
+
+        Delta_gap^(Sigma)(M, z) = b(M, z) * Sigma_hh(r_trans, z) - Sigma_1h(r_trans, M)
+        """
+        M_arr = np.atleast_1d(M)
+        bias_arr = np.atleast_2d(bias)
+
+        if conc is None:
+            conc = getattr(self.lens_model, 'c', None)
+            if conc is None:
+                conc = child18_mass_concentration(M_arr, 0.0, halo_sample='stacked_nfw')
+        c_arr = np.asarray(conc, dtype=float)
+        if c_arr.ndim == 0 or c_arr.size == 1:
+            c_arr = np.full(M_arr.size, float(c_arr))
+
+        rho_c_z = self.lens_model.rhom0 * (1.0 + z_density)**3
+        ln_R_2h = np.log(self.lens_model.R)
+        sig_2h = np.atleast_2d(self.lens_model.Sigma['2h'])
+
+        s2h = self._interp_2d_log_r(np.log(r_trans), ln_R_2h, sig_2h)
+        s1h = sigmaNFW_Analytical(r_trans, M_arr[None, :], c_arr[None, :], rho_c=rho_c_z) / 1e12
+
+        return bias_arr * s2h - s1h
+
+    def compute_delta_gap_1(self, r_trans, c0, M, z, bias, conc=None, z_density=0.0):
+        """Compute the 2D excess surface density boundary gap Delta_gap(M, z) in (Msun/pc^2).
+
+        Delta_gap(M, z) = [b(M, z) * DeltaSigma_hh(r_trans, z) + c0 / r_trans^2] - DeltaSigma_1h(r_trans, M)
+        """
+        M_arr = np.atleast_1d(M)
+        bias_arr = np.atleast_2d(bias)
+
+        if conc is None:
+            conc = getattr(self.lens_model, 'c', None)
+            if conc is None:
+                conc = child18_mass_concentration(M_arr, 0.0, halo_sample='stacked_nfw')
+        c_arr = np.asarray(conc, dtype=float)
+        if c_arr.ndim == 0 or c_arr.size == 1:
+            c_arr = np.full(M_arr.size, float(c_arr))
+
+        rho_c_z = self.lens_model.rhom0 * (1.0 + z_density)**3
+        ln_R_2h = np.log(self.lens_model.R)
+        dsig_2h = np.atleast_2d(self.lens_model.dSigma['2h'])
+
+        ds2h = self._interp_2d_log_r(np.log(r_trans), ln_R_2h, dsig_2h)
+        ds1h = deltaSigmaNFW_Analytical(r_trans, M_arr[None, :], c_arr[None, :], rho_c=rho_c_z) / 1e12
+        c0_term = (c0 / (r_trans * r_trans)) / 1e12
+
+        return (bias_arr * ds2h + c0_term) - ds1h
 
 
 class biasModel:
@@ -187,6 +400,91 @@ class ct_2hTerm(object):
             raise ValueError("dsigma_method must be 'direct' or 'sandwich', "
                              "got %r" % (dsigma_method,))
         self.dsigma_method = dsigma_method
+        self.Sigma = None
+        self.dSigma = None
+        self.sigma_bar = None
+        self.m3d = None
+
+    @classmethod
+    def m3d_at_r(cls, r_grid, xi_grid, rho_m=None, n_gl=5):
+        r"""Enclosed 3D mass profile M_3D(<r):
+            M_3D(<r) = 4*pi * rho_m * \int_0^r r'^2 \xi(r') dr'
+                     = 4*pi * rho_m * \int_0^r r'^3 \xi(r') d\ln r'
+        evaluated via Gauss-Legendre quadrature on logarithmic intervals.
+        Below r_grid[0], assumes an analytic flat core:
+            M_3D(<r_0) = (4*pi/3) * rho_m * xi(r_0) * r_0^3.
+
+        Parameters
+        ----------
+        r_grid : array_like, shape (n_r,)
+            Comoving radial grid (Mpc/h), must be strictly increasing.
+        xi_grid : array_like, shape (n_r,) or (n_z, n_r)
+            Correlation function values on r_grid.
+        rho_m : float or array_like, optional
+            Background matter density (Msun * h^2 / Mpc^3). If None,
+            uses 1.0 (returning the volume integral / mass per unit density).
+        n_gl : int, optional
+            Gauss-Legendre quadrature order per log interval (default: 5).
+
+        Returns
+        -------
+        m3d : ndarray, shape (n_r,) or (n_z, n_r)
+            Enclosed 3D mass profile M_3D(<r) in Msun/h (or (Mpc/h)^3 if rho_m=1).
+        """
+        r_arr = np.asarray(r_grid, dtype=float)
+        xi_arr = np.asarray(xi_grid, dtype=float)
+        is_1d = (xi_arr.ndim == 1)
+        if is_1d:
+            xi_arr = xi_arr[np.newaxis, :]
+
+        lnr = np.log(r_arr)
+        dlnr = np.diff(lnr)
+        xg, wg = np.polynomial.legendre.leggauss(n_gl)
+        t_nodes = lnr[:-1, None] + 0.5 * dlnr[:, None] * (xg[None, :] + 1.0)
+        w_nodes = 0.5 * dlnr[:, None] * wg[None, :]
+        exp_3t = np.exp(3.0 * t_nodes)
+
+        # Gauss-Legendre quadrature on logarithmic intervals. Within interval i
+        # [lnr[i], lnr[i+1]], quadrature nodes are t = lnr[i] + u * dlnr[i]
+        # where u = 0.5 * (xg + 1). Direct linear interpolation between knots:
+        #   xi(t) = xi_i + u * (xi_{i+1} - xi_i)
+        # evaluates in pure NumPy vectorization with zero spline overhead or
+        # knot search.
+        u = 0.5 * (xg + 1.0)
+        xi_left = xi_arr[:, :-1, np.newaxis]
+        xi_right = xi_arr[:, 1:, np.newaxis]
+        xi_eval = xi_left + (xi_right - xi_left) * u[np.newaxis, np.newaxis, :]
+        integrand = exp_3t[None, :, :] * xi_eval
+        steps = np.sum(w_nodes[None, :, :] * integrand, axis=-1)
+
+        cum = np.cumsum(steps, axis=-1)
+        zeros = np.zeros((xi_arr.shape[0], 1), dtype=float)
+        cum = np.concatenate([zeros, cum], axis=-1)
+        cum += (1.0 / 3.0) * (r_arr[0]**3) * xi_arr[:, 0:1]
+        cum *= 4.0 * np.pi
+
+        if rho_m is not None:
+            cum = cum * rho_m
+
+        return cum[0] if is_1d else cum
+
+    # Physical aliases and convenience methods
+    mass_3d_at_r = m3d_at_r
+    enclosed_mass_3d = m3d_at_r
+    m3d = m3d_at_r
+    int_r2_xi = m3d_at_r
+    int_r2_xi_nl = m3d_at_r
+    cumulative_volume_integral = m3d_at_r
+
+    def mass_3d(self, r_grid=None, rho_m=None, n_gl=5):
+        """Enclosed 3D mass profile M_3D,hh(<r) for the 2-halo term (b=1) via GL."""
+        if r_grid is None:
+            r_grid = self.Rfix
+        if rho_m is None:
+            rho_m = self.omega_m * self.RHO_C
+        if not hasattr(self, '_xi_rfix') or self._xi_rfix is None:
+            raise RuntimeError("pk_to_sigma must be called before mass_3d")
+        return self.m3d_at_r(r_grid, self._xi_rfix, rho_m=rho_m, n_gl=n_gl)
 
     def _pk_to_xi(self,k,pk):
         assert np.ndim(pk) == 1, "per-z P(k) slice expected"
@@ -238,7 +536,7 @@ class ct_2hTerm(object):
             zvec = np.atleast_1d(0.0)
 
         # check if Sigma is computed
-        if not hasattr(self,'Sigma'):
+        if not hasattr(self,'Sigma') or self.Sigma is None:
             self.pk_to_sigma(Rp,k,pk,zvec)
 
         # convert to delta sigma
@@ -250,18 +548,20 @@ class ct_2hTerm(object):
                 sigma_ext = ct.deltasigma.Sigma_at_R(
                     r_ext, self.Rfix, self._xi_rfix[i], self.Md, self.cd, self.omega_m)
                 self.dSigma[i] = self._dsigma_direct(r_ext, sigma_ext, Rp)
-            return
+        else:
+            # 'sandwich': add an analytic NFW so cluster_toolkit's interior
+            # extrapolation in DeltaSigma_at_R is NFW-dominated (hence valid),
+            # then subtract the same halo's analytic DeltaSigma. Consistent
+            # (Md, cd) throughout makes the dummy halo cancel exactly; the
+            # two-halo term's own interior mass below Rp.min() is NOT
+            # recovered by this method (use 'direct' for that).
+            sig_nfw = sigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
+            dsig_nfw = deltaSigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
+            for i in range(self.zvec.size):
+                self.dSigma[i] = self._to_dsigma(Rp, self.Sigma[i] + sig_nfw) - dsig_nfw
 
-        # 'sandwich': add an analytic NFW so cluster_toolkit's interior
-        # extrapolation in DeltaSigma_at_R is NFW-dominated (hence valid),
-        # then subtract the same halo's analytic DeltaSigma. Consistent
-        # (Md, cd) throughout makes the dummy halo cancel exactly; the
-        # two-halo term's own interior mass below Rp.min() is NOT
-        # recovered by this method (use 'direct' for that).
-        sig_nfw = sigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
-        dsig_nfw = deltaSigmaNFW_Analytical(Rp, self.Md, self.cd, rho_c=self.RHO_C*self.omega_m)/1e12
-        for i in range(self.zvec.size):
-            self.dSigma[i] = self._to_dsigma(Rp, self.Sigma[i] + sig_nfw) - dsig_nfw
+        self.sigma_bar = self.Sigma + self.dSigma
+        return
 
 def child18_mass_concentration(M200c, z, halo_sample = 'stacked_nfw'):
 	"""

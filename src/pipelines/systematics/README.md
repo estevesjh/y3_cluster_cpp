@@ -213,3 +213,4 @@ The tagged kernels and dispatchers are covered by:
 - `test/shear1h2h_max.test.py` and
   `test/shear1h2h_max_t.test.cc` — Python/C++ max-profile integration and
   preservation of the output contract.
+

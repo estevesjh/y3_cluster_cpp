@@ -39,7 +39,7 @@ from shear1h_radial_series import (  # noqa: E402
 )
 from numcounts_explicit_gl import compute_counts as full_ltmz_counts  # noqa: E402
 from shear1h_gl import compute_shear as fast_mass_shear  # noqa: E402
-from shear1h2h_max import compute_shear_max, z_resolved_weights  # noqa: E402
+from shear1h2h_max_explicit_gl import compute_shear_max, z_resolved_weights  # noqa: E402
 from shear1h_explicit_gl import compute_shear as full_ltmz_shear  # noqa: E402
 
 SHEAR_PRJ_FAST_MASS_PY = (PIPELINES / "des_y3"

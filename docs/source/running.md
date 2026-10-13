@@ -89,7 +89,7 @@ docs/source/_static/img/pipeline_dataflow.png -b white -s 2`.)
 Not in the reference module list, documented on their own pages:
 
 - `Shear1h2hMax` + `halo_model` with `compute_lensing_2h = T` — the
-  traditional $\max(1h, b\,2h)$ shear model ({doc}`observables/second_halo_term`).
+  traditional 3D halo-exclusion max shear model ({doc}`observables/second_halo_term`).
 - `boost_factor` — publishes the McClintock et al. (2019) source-dilution
   boost $B(R)$ per bin ({doc}`systematics/boost_factor`).
 - `prj_params` — publishes the frozen EMG projection-kernel coefficients

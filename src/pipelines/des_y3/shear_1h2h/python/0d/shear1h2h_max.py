@@ -1,27 +1,20 @@
-"""Traditional 1h+2h shear via the max model — Python (fast path).
+"""Traditional 1h+2h excess surface density via ``Shear1h2hMax``.
 
 The traditional-pipeline counterpart of the projection treatment (plan
 owner, 2026-08-12: "two pipelines — one with traditional shear and one
-with prj"). The radial operator is the Y1-era SIG_MAX/GAMMA_MAX
-composition on the modern haloModel tables:
+with prj"). The radial profile is formulated via 3D halo exclusion and 3-pillar
+smooth bridging:
 
-    DSigma_max(R, lnM, z | bin) = max( DSigma_cl(R, lnM | bin),
-                                       bias(lnM, z) * dSigma_hh(R, z) )
-
-with DSigma_cl the production miscentred 1-halo mixture (optionally
-pure centred via include_miscentering = F) and the biased two-halo term
-from haloModel (requires halo_model to run with
-compute_lensing_2h = T). The observable is the count-weighted stack
-
-    O_ij(R) = int dz int dlnM  n dV/dOmegadz Omega Sigma_crit^-1
-              S_ij(lnM, z) DSigma_max(R, lnM, z)
-
-**The two-halo term is z-dependent, so — unlike the 1h-only fixed-GL —
-the redshift integral cannot be contracted past the profile.** The fast
-path therefore keeps the z-resolved tabulated weight
-W2d(lnM, z) = zfac * hmf * S_stack (the S_ij tabulation is still the
-S_ij-tabulation hallmark) and performs the double fixed-GL contraction
-sum_kq W2d * DSigma_max per (bin, R).
+1. In 3D real space, halo exclusion is defined on the correlation function:
+       xi_hm(r) = max(xi_1h(r), b(M, z) * xi_mm(r, z))
+   with transition radius r_trans defined by xi_1h(r_trans) = b(M, z) * xi_mm(r_trans, z).
+2. The projected excess surface density DeltaSigma_max is assembled via the 3-pillar bridging operators:
+   - For R < r_trans:
+       DeltaSigma_1h(R) + Delta_gap^1 * (R / r_trans)^2
+   - For R >= r_trans:
+       b * DeltaSigma_hh(R) + (C_0 / R^2) * 1e-12
+   where C_0 = Delta M_3D(r_trans) / pi (in Msun/h) and
+   Delta_gap^1 = DeltaSigma_max(r_trans) - DeltaSigma_1h(r_trans).
 
 DataBlock contract
 ------------------
@@ -31,7 +24,7 @@ Reads (options): bin_index, r_perp (cartesian, bin slow / R fast),
     include_miscentering (default T), bsel (default F), and bsel_model when
     bsel is enabled. The model tag determines its standard DataBlock section.
 Reads (datablock): the Shear1hMisSel contract plus
-    halomodel/{r_sigma, z, dSigma_hh, bias}  (compute_lensing_2h = T).
+    halomodel/{r_sigma, z, dSigma_hh, bias, r_trans, c0_trans, delta_gap_1}
 Writes: shear1h2h_max/vals  (n_bins * n_r,)   [hardcoded section]
 
 Status: reference implementation of the traditional-shear model
@@ -109,7 +102,17 @@ def compute_shear_max(profile, lnm_x, lnm_w, z_x, w2d, bin_index, r_perp,
                 b, r_perp[:, None], lnm_x[None, :])[:, :, None]
         DSigma_2h = (profile._bias(lnm_x[:, None], z_x[None, :])[None, :, :]
                     * profile._hh(r_perp[:, None], z_x[None, :])[:, None, :])
-        DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
+        if getattr(profile, "_has_max1h2h", False):
+            rt = profile._r_trans(lnm_x[:, None], z_x[None, :])[None, :, :]
+            c0 = profile._c0_trans(lnm_x[:, None], z_x[None, :])[None, :, :]
+            gap1 = profile._delta_gap_1(lnm_x[:, None], z_x[None, :])[None, :, :]
+            r_arr = r_perp[:, None, None]
+            c0_term = (c0 / (r_arr * r_arr)) * 1.0e-12
+            outer = DSigma_2h + c0_term
+            inner = DSigma_1h + gap1 * (r_arr / rt)**2
+            DSigma_max = np.where(r_arr < rt, inner, outer)
+        else:
+            DSigma_max = np.maximum(DSigma_1h, DSigma_2h)             # (r, k, q)
         if selected_profile is not None:
             if lob_centers is None:
                 raise ValueError("selected Shear1h2hMax profile requires lob_centers")
@@ -160,13 +163,15 @@ def execute(block, cfg):
     source = dm.DataBlockSource(block)
     physical = dm.physical_density_flag(source)
     profile = lp.MaxMixtureProfile(
-        source, lob_centers=cfg["lob_centers"],
+        source=source,
+        lob_centers=cfg["lob_centers"],
         # Required: no fallback to the fiducial defaults — a pipeline
         # missing the miscentering section must fail loudly.
         f_mis=source.scalar("miscentering", "f_mis"),
         tau_mis=source.scalar("miscentering", "tau_mis"),
         omega_m=source.scalar("cosmological_parameters", "omega_m"),
-        include_miscentering=cfg["include_miscentering"])
+        include_miscentering=cfg["include_miscentering"],
+    )
     lnm_x, lnm_w, z_x, w2d = z_resolved_weights(
         source, n_lnm=cfg["n_lnm"], n_z=cfg["n_z"],
         zt_lo=cfg["zt_low"], zt_hi=cfg["zt_high"],
