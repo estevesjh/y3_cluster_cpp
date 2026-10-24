@@ -62,8 +62,8 @@ and `camb-for-cp/hmf_report/`.
 [cp_camb]
 file = ${Y3_CLUSTER_CPP_DIR}/src/modules/cp_camb/cp_camb.py
 emulator_repo      = /pscratch/sd/j/jesteves/github/camb-emulator/camb-for-cp
-linear_pk_path      = /pscratch/sd/j/jesteves/github/camb-emulator/camb-for-cp/models/camb_linear_v3c_emulator.npz
-linear_nonu_pk_path = /pscratch/sd/j/jesteves/github/camb-emulator/camb-for-cp/models/camb_linear_nonu_v3c_emulator.npz
+linear_pk_path      = /pscratch/sd/j/jesteves/github/camb-emulator/camb-for-cp/models/camb_pk_lin_mm_As.npz
+linear_nonu_pk_path = /pscratch/sd/j/jesteves/github/camb-emulator/camb-for-cp/models/camb_pk_lin_cb_As.npz
 zmin = 0.0
 zmax = 4.0
 nz = 50
@@ -79,8 +79,8 @@ nz = 50
 | Option | Meaning | Units | Reference value |
 |---|---|---|---|
 | `emulator_repo` | path prepended to `sys.path` so `cp_numpy` imports | — | `camb-for-cp` checkout |
-| `linear_pk_path` | total-matter linear emulator (required) | — | `camb_linear_v3c_emulator.npz` |
-| `linear_nonu_pk_path` | CDM+baryon (no-neutrino) emulator | — | `camb_linear_nonu_v3c_emulator.npz` |
+| `linear_pk_path` | total-matter linear emulator (required) | — | `camb_pk_lin_mm_As.npz` |
+| `linear_nonu_pk_path` | CDM+baryon (no-neutrino) emulator | — | `camb_pk_lin_cb_As.npz` |
 | `nonlinear_pk_path` | optional nonlinear emulator | — | unset |
 | `nonu_fallback` | copy the linear grid into `cdm_baryon_power_lin` when no nonu emulator is given | — | F (default) |
 | `zmin`, `zmax`, `nz` | output redshift grid | — | 0.0, 4.0, 50 |
