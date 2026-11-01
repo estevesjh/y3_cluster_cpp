@@ -569,7 +569,7 @@ and, in the values file,
 
 ```ini
 [boost_selection_costanzi26]
-A = 0.03
+A = 0.10
 alpha = 0.92
 beta = -0.53
 gamma = 4.1

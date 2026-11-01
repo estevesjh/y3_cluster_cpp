@@ -134,7 +134,7 @@ The corresponding values section for the Costanzi tag is:
 ```ini
 [boost_selection_costanzi26]
 ; Raw-Sigma calibration from Costanzi et al. (2026), App. C.
-A = 0.03
+A = 0.10
 alpha = 0.92
 beta = -0.53
 gamma = 4.1

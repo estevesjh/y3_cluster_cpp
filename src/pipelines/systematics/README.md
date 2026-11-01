@@ -89,7 +89,7 @@ bsel = T
 bsel_model = Costanzi26
 
 [boost_selection_costanzi26]
-A = 0.03
+A = 0.10
 alpha = 0.92
 beta = -0.53
 gamma = 4.1
@@ -224,7 +224,7 @@ cosmosis cosmosis-models/des_y3_cpp0d_fast_apriori.ini -p runtime.sampler=test t
   "pipeline.modules=consistency GrowthFactor cp_camb MfTinker halo_model \
     average_sigma_crit_inv sel_function Shear1h2hMax" \
   Shear1h2hMax.bsel=T Shear1h2hMax.bsel_model=Costanzi26 \
-  -v boost_selection_costanzi26.A=0.03 boost_selection_costanzi26.alpha=0.92 \
+  -v boost_selection_costanzi26.A=0.10 boost_selection_costanzi26.alpha=0.92 \
      boost_selection_costanzi26.beta=-0.53 boost_selection_costanzi26.gamma=4.1
 ```
 
