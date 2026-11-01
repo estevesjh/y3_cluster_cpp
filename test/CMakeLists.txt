@@ -1020,3 +1020,19 @@ target_include_directories(
           ${CUBA_INCLUDE_DIR} ${CUBACPP_DIR} ${PAGANI_DIR}
   )
 add_test(multi_dimensional_integrator_test multi_dimensional_integrator_test)
+
+# Composite-GL true-z rule of the fixed-GL selection evaluators
+# (models/sel_z_rule.hh): panel layout, closed-form accuracy on the
+# photo-z steps + seam, global-fallback bit identity.
+add_executable(sel_z_rule_test sel_z_rule.test.cc)
+target_link_libraries(
+  sel_z_rule_test PRIVATE testmain ${GSL_LIBRARIES} ${CUBA_LIBRARIES}
+                          utils models cosmosis fmt::fmt
+  )
+target_include_directories(
+  sel_z_rule_test PRIVATE ${CMAKE_SOURCE_DIR}/src
+                          ${CMAKE_SOURCE_DIR}/externals
+                          ${CUBACPP_DIR} ${CUBA_INCLUDE_DIR}
+                          ${GSL_INCLUDE_DIR}
+  )
+add_test(sel_z_rule_test sel_z_rule_test)

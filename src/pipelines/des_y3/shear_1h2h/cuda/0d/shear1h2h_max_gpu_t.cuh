@@ -63,6 +63,7 @@
 #include "models/nfw_dsigma_mis.cuh"
 #include "models/omega_z_des.hh"
 #include "models/sel_function_t.hh"
+#include "models/sel_z_rule.hh"
 #include "pipelines/shared/lensing_helpers.hh"
 #include "utils/datablock_reader.hh"
 #include "utils/interp_1d.hh"
@@ -136,8 +137,8 @@ public:
   explicit Shear1h2hMaxGpu(cosmosis::DataBlock& cfg)
     : N_lnm_(cfg.has_val(module_label(), "n_lnm")
                ? cfg.view<int>(module_label(), "n_lnm") : 96)
-    , N_z_(cfg.has_val(module_label(), "n_z")
-             ? cfg.view<int>(module_label(), "n_z") : 64)
+    , N_z_(0)
+    , z_rule_(cfg, module_label())
     , zt_lo_(cfg.view<double>(module_label(), "zt_low"))
     , zt_hi_(cfg.view<double>(module_label(), "zt_high"))
     , lnm_lo_(cfg.view<double>(module_label(), "lnm_low"))
@@ -155,7 +156,9 @@ public:
                       y3_cuda::DSIGMA_MIS_GAMMA)
   {
     y3_pipelines::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
-    y3_pipelines::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
+    z_x_ = z_rule_.xs();   // global nodes until the first sample
+    z_w_ = z_rule_.ws();
+    N_z_ = z_x_.size();
     lob_centers_ =
       y3_pipelines::read_lob_centers(cfg, module_label());
     if (lob_centers_.empty())
@@ -174,6 +177,12 @@ public:
   void
   set_sample(cosmosis::DataBlock& s)
   {
+    // True-z nodes for this sample (composite rule by default; see
+    // models/sel_z_rule.hh). Every (k, q) table below is sized from them.
+    z_rule_.update(s);
+    z_x_ = z_rule_.xs();
+    z_w_ = z_rule_.ws();
+    N_z_ = z_x_.size();
     namespace w = y3_pipelines;
     using y3_cuda_des_y3::cuda_check;
 
@@ -224,12 +233,12 @@ public:
     n_bins_ = static_cast<std::size_t>(n_bins);
     std::vector<double> w2d(n_bins_ * N_lnm_ * N_z_, 0.0);
     for (int b = 0; b != n_bins; ++b) {
-      y3_cluster::SelFunction_t const sel(s, b);
+      auto const S = z_rule_.tabulate(s, b, lnm_x_);
       for (std::size_t k = 0; k != N_lnm_; ++k)
         for (std::size_t q = 0; q != N_z_; ++q)
           w2d[(static_cast<std::size_t>(b) * N_lnm_ + k) * N_z_ + q] =
             lnm_w_[k] * zfac[q] * hmf(lnm_x_[k], z_x_[q]) *
-            sel(lnm_x_[k], z_x_[q]);
+            S[k * N_z_ + q];
     }
 
     std::vector<double> bias_kq(N_lnm_ * N_z_, 0.0);
@@ -345,6 +354,7 @@ private:
   }
 
   std::size_t N_lnm_, N_z_;
+  y3_cluster::SelZRule z_rule_;
   double zt_lo_, zt_hi_, lnm_lo_, lnm_hi_;
   bool include_mis_;
   y3_cuda::NFW_DSIGMA_MIS dsigma_mis_dev_;

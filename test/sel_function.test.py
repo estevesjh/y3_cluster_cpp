@@ -504,7 +504,7 @@ class TestTrueRedshiftSeamExcision(unittest.TestCase):
         base = dict(
             lam_min=[20.0, 30.0], lam_max=[30.0, 45.0],
             zob_min=[0.20, 0.20], zob_max=[0.35, 0.35],
-            sigma_z=[0.03, 0.03],
+            sigma_z=[0.01, 0.01],
             zt_low=0.05, zt_high=0.80, lnm_low=np.log(1e13),
             lnm_high=np.log(9e15), n_lnm=8, n_z=16, n_z_shared=16,
         )

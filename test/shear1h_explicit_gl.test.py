@@ -29,7 +29,7 @@ from shared import datablock_models as dm             # noqa: E402
 import shear1h_explicit_gl as mod                       # noqa: E402
 from _dump_datablock import datablock_from_dump, make_options  # noqa: E402
 
-DUMP_DIR = (Path("/pscratch/sd/j/jesteves/github/y3_cluster_cpp_dev")
+DUMP_DIR = (REPO
            / "cosmosis-models" / "real_pipeline_extract_output")
 HAS_DUMP = DUMP_DIR.is_dir()
 _SKIP_MSG = f"requires the real-pipeline dump at {DUMP_DIR}"
@@ -39,7 +39,7 @@ BINS_12 = dict(
     lam_max=np.array([30., 45., 60., 200.] * 3),
     zob_min=np.array([0.20] * 4 + [0.35] * 4 + [0.50] * 4),
     zob_max=np.array([0.35] * 4 + [0.50] * 4 + [0.65] * 4),
-    sigma_z=np.full(12, 0.03),
+    sigma_z=np.full(12, 0.01),
 )
 ENVELOPE = dict(zt_low=0.05, zt_high=0.80, lnm_low=29.9336, lnm_high=36.7300)
 R_PERP = np.array([0.20000, 0.28599, 0.40896, 0.58480, 0.83625,

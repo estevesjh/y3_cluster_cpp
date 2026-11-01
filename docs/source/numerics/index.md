@@ -277,14 +277,36 @@ $(f_{\rm mis}, \tau_{\rm mis})$ (defaults 0.22, 0.17).
 **Step 2 — contract the redshift axis** (the core trick). None of the
 lensing profile depends on $z$ (the geometry factor
 $\langle\Sigma_{\rm crit}^{-1}\rangle(z)$ folds into the weight), so the
-$z$ integral is done once per sample per bin, on `n_z` (= 64) fixed GL
-nodes:
+$z$ integral is done once per sample per bin, on fixed GL nodes of the
+composite true-$z$ rule (`models/sel_z_rule.hh`, below):
 
 $$W_{ij}(\ln M_k) = \sum_q w_q\, \Omega(z_q)\,
 \frac{dV}{d\Omega\,dz}(z_q)\, n(M_k, z_q)\, S_{ij}(\ln M_k, z_q)\,
 \Big[\langle\Sigma_{\rm crit}^{-1}\rangle(z_q)\Big]_{\rm lensing\ only},$$
 
 for all 12 bins on the `n_lnm` (= 96) mass nodes.
+
+*The true-$z$ rule.* The $z$ integrand is not smooth: with
+$S_{ij} = S_i(\ln M, z)\,\mathcal S_j(z)\,\mathbb 1[z \notin
+(z^{\rm excl}_{\rm lo}, z^{\rm excl}_{\rm hi})]$, $\mathcal S_j$ steps at every
+`zob` edge over a width $\sigma_z$ (0.001 for the true-$z$ Buzzard bins),
+the simulation-box seam is a true jump, and $\Omega(z)$ is piecewise at
+0.504 and 0.7. One GL panel over $[z_{\rm t,lo}, z_{\rm t,hi}]$ (the
+pre-2026-11 rule, `z_rule = global`) misses the Buzzard bins by up to
+2.7% against Cuhre and does not converge with more nodes (3.2% at 256),
+because the step was also point-sampled on `sel_function`'s $z$ table
+and interpolated as a one-cell ramp. The composite rule (default) reads
+`sel_function`'s factorised outputs — `S_rich_stack` ($S_i$ alone) plus
+the closed-form $\mathcal S_j$ parameters and the seam — evaluates
+$\mathcal S_j$ and the seam exactly at every node, interpolates the
+smooth $S_i$ with a tensor natural cubic spline, and cuts $z$ into GL
+panels (`n_z_panel` = 8 nodes each) at every step's
+$z_{\rm ob} \pm L\sigma_z$ ($L$ = `z_step_width` = 5), the seam edges and
+the $\Omega(z)$ breakpoints, over the union of the bins' supports. Same
+construction as the $\lambda^{\rm tr}$ rule of CLensPy PR #10. At the same
+cost as the old rule (56–96 nodes), every bin is within $4\times10^{-4}$ of
+Cuhre for $\sigma_z = 0.001, 0.01, 0.03$, with and without the seam. A
+block without the factorised keys falls back to the old rule bit for bit.
 
 **Step 3 — counts.** Each count is one 1-D GL sum:
 $N_i[1] = \sum_k w_k\, W_{ij}(\ln M_k)$. Twelve dot products total.
@@ -523,7 +545,8 @@ $36.7300 \approx \ln 10^{15.95}$, $36.8414 = \ln 10^{16}$.
 | `L_z` | `sel_function` | 6.0 | analogous bracket half-width for the $z$ axis | $\pm 6\sigma$ coverage of the Gaussian $\mathcal S_j$ kernel |
 | `N_q` | `sel_function` | 32 | GL nodes in $\lambda^{\rm tr}$ per $(\ln M, z)$ | GL bracket nodes in $\lambda^{\rm tr}$ (knob cheat-sheet) |
 | `algorithm`, `eps_rel`, `eps_abs`, `max_eval`, `use_cartesian_product` | `NumCountsSel`, one-halo shear | (legacy) | Cuhre knobs from the retired adaptive path | **ignored** by the fixed-GL evaluators; still honoured by the `NumCountsFullScalarIntegrand` brute-force reference (`eps_rel` $=1.5\times10^{-3}$, `max_eval` $=10^7$) |
-| `n_lnm` / `n_z` | `NumCountsSel`, one-halo shear | 96 / 64 (defaults) | fixed-GL node counts | z-contracted weight + 1-D mass sum per wall point |
+| `n_lnm` / `n_z` | `NumCountsSel`, one-halo shear, `Shear1h2hMax` | 96 / 64 (defaults) | fixed-GL node counts (`n_z`: `z_rule = global` only) | z-contracted weight + 1-D mass sum per wall point |
+| `z_rule` / `n_z_panel` / `z_step_width` / `sel_interp` | same | `composite` / 8 / 5.0 / `spline` | composite true-$z$ rule | panels at the photo-$z$ steps, seam and $\Omega(z)$ breaks; exact $\mathcal S_j$; spline $S_i$ |
 | `zt_low` / `zt_high` | `NumCountsSel`, one-halo shear | 0.05 / 0.80 | true-$z$ integration range | identical to the `sel_function` tabulation range — no clamped edge queries |
 | `lnm_low` / `lnm_high` | `NumCountsSel`, one-halo shear | 29.9336 / 36.7300 | $\ln M$ integration range | $[10^{13}, \sim 10^{15.95}]$; stays strictly inside the `S_stack` mass table ($\ln M \le 36.8414$) |
 | `r_perp` | one-halo shear | 10 log-spaced, 0.10–10.0 | radii of the 1-halo shear wall | $R$ grid of the shear datavector, $h^{-1}\mathrm{Mpc}$ |

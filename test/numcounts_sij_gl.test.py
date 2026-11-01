@@ -39,9 +39,9 @@ from shared import datablock_models as dm             # noqa: E402
 import numcounts_sij_gl as mod                          # noqa: E402
 from _dump_datablock import datablock_from_dump, make_options  # noqa: E402
 
-# Absolute path into the main checkout: fixture dumps are gitignored and
-# not present in this worktree (see CLAUDE.md's "Fixture data" note).
-DUMP_DIR = (Path("/pscratch/sd/j/jesteves/github/y3_cluster_cpp_dev")
+# The fixture dump is gitignored: regenerate it with
+# `cosmosis cosmosis-models/real_pipeline_extract.ini` (run from cosmosis-models/).
+DUMP_DIR = (REPO
            / "cosmosis-models" / "real_pipeline_extract_output")
 HAS_DUMP = DUMP_DIR.is_dir()
 _SKIP_MSG = f"requires the real-pipeline dump at {DUMP_DIR}"

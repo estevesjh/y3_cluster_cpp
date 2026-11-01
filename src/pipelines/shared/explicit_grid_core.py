@@ -179,10 +179,26 @@ def explicit_mass_integral_quad(bins, mor, plob_splines, hmf, dv, *,
     return vals, errs
 
 
+def _z_nodes(bins, zt_low, zt_high, n_z, z_rule, n_z_panel, z_step_width,
+             zt_excl):
+    """True-z nodes: composite GL with breaks at the photo-z steps, the
+    seam and the OMEGA_Z_DES breakpoints (dm.composite_z_panels, the
+    SelZRule twin), or the legacy single n_z panel (z_rule = global)."""
+    if z_rule == "global":
+        return dm.gl_nodes(zt_low, zt_high, n_z)
+    if z_rule != "composite":
+        raise ValueError(f"z_rule must be composite or global, got {z_rule!r}")
+    panels = dm.composite_z_panels(
+        bins["zob_min"], bins["zob_max"], bins["sigma_z"], zt_lo=zt_low,
+        zt_hi=zt_high, excl=zt_excl, step_width=z_step_width)
+    return dm.composite_gl_nodes(panels, n_z_panel)
+
+
 def explicit_mass_weights(bins, mor, plob_splines, hmf, dv, *,
                            sci=None, zt_low, zt_high, lnm_low, lnm_high,
                            n_lnm=96, n_z=64, n_q=32, l_lam=6.0,
-                           lnm_nodes=None):
+                           lnm_nodes=None, z_rule="composite",
+                           n_z_panel=8, z_step_width=5.0, zt_excl=None):
     """W_ij on GL mass nodes for every configured bin.
 
     ``bins``: dict of equal-length arrays (lam_min, lam_max, zob_min,
@@ -192,7 +208,8 @@ def explicit_mass_weights(bins, mor, plob_splines, hmf, dv, *,
     """
     sf = sel_kernels.load()
 
-    z_x, z_w = dm.gl_nodes(zt_low, zt_high, n_z)
+    z_x, z_w = _z_nodes(bins, zt_low, zt_high, n_z, z_rule, n_z_panel,
+                        z_step_width, zt_excl)
     if lnm_nodes is None:
         lnm_x, lnm_w = dm.gl_nodes(lnm_low, lnm_high, n_lnm)
     else:
@@ -224,6 +241,8 @@ def explicit_mass_weights(bins, mor, plob_splines, hmf, dv, *,
         s_kq = np.where(degenerate, 0.0, s_kq)
         k_j = sf._S_j(z_x, float(bins["zob_min"][b]),
                       float(bins["zob_max"][b]), float(bins["sigma_z"][b]))
+        if zt_excl is not None:
+            k_j = np.where((z_x > zt_excl[0]) & (z_x < zt_excl[1]), 0.0, k_j)
         weights[b] = (base_kq * s_kq) @ k_j
     return lnm_x, lnm_w, weights
 
@@ -231,7 +250,8 @@ def explicit_mass_weights(bins, mor, plob_splines, hmf, dv, *,
 def explicit_mass_z_weights(bins, mor, plob_splines, hmf, dv, *,
                              sci=None, zt_low, zt_high, lnm_low, lnm_high,
                              n_lnm=96, n_z=64, n_q=32, l_lam=6.0,
-                             lnm_nodes=None):
+                             lnm_nodes=None, z_rule="composite",
+                             n_z_panel=8, z_step_width=5.0, zt_excl=None):
     """z-RESOLVED explicit-3d weights: W2d[b, k, q] before the z sum.
 
     For observables whose radial operator depends on redshift (e.g. the
@@ -243,7 +263,8 @@ def explicit_mass_z_weights(bins, mor, plob_splines, hmf, dv, *,
     reproduces explicit_mass_weights exactly.
     """
     sf = sel_kernels.load()
-    z_x, z_w = dm.gl_nodes(zt_low, zt_high, n_z)
+    z_x, z_w = _z_nodes(bins, zt_low, zt_high, n_z, z_rule, n_z_panel,
+                        z_step_width, zt_excl)
     if lnm_nodes is None:
         lnm_x, lnm_w = dm.gl_nodes(lnm_low, lnm_high, n_lnm)
     else:
@@ -274,5 +295,7 @@ def explicit_mass_z_weights(bins, mor, plob_splines, hmf, dv, *,
         s_kq = np.where(degenerate, 0.0, s_kq)
         k_j = sf._S_j(z_x, float(bins["zob_min"][b]),
                       float(bins["zob_max"][b]), float(bins["sigma_z"][b]))
+        if zt_excl is not None:
+            k_j = np.where((z_x > zt_excl[0]) & (z_x < zt_excl[1]), 0.0, k_j)
         w2d[b] = base_kq * s_kq * k_j[None, :]
     return lnm_x, lnm_w, z_x, w2d

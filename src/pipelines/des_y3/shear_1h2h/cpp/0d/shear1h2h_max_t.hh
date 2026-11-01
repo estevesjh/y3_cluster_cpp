@@ -97,6 +97,7 @@
 #include "pipelines/shared/sel_gl_weights.hh"
 #include "models/omega_z_des.hh"
 #include "models/sel_function_t.hh"
+#include "models/sel_z_rule.hh"
 #include "pipelines/cosmology/operator_max1h2h_gl.hh"
 #include "pipelines/shared/lensing_helpers.hh"
 #include "pipelines/systematics/miscentering/Miscentering.hh"
@@ -146,8 +147,8 @@ public:
   explicit Shear1h2hMax(cosmosis::DataBlock& cfg)
     : N_lnm_(cfg.has_val(module_label(), "n_lnm")
                ? cfg.view<int>(module_label(), "n_lnm") : 96)
-    , N_z_(cfg.has_val(module_label(), "n_z")
-             ? cfg.view<int>(module_label(), "n_z") : 64)
+    , N_z_(0)
+    , z_rule_(cfg, module_label())
     , zt_lo_(cfg.view<double>(module_label(), "zt_low"))
     , zt_hi_(cfg.view<double>(module_label(), "zt_high"))
     , lnm_lo_(cfg.view<double>(module_label(), "lnm_low"))
@@ -166,7 +167,9 @@ public:
     , mis_enabled_(read_bool_opt(cfg, module_label(), "miscentering", false))
   {
     y3_pipelines::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
-    y3_pipelines::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
+    z_x_ = z_rule_.xs();   // global nodes until the first sample
+    z_w_ = z_rule_.ws();
+    N_z_ = z_x_.size();
     lob_centers_ =
       y3_pipelines::read_lob_centers(cfg, module_label());
     if (lob_centers_.empty())
@@ -192,6 +195,12 @@ public:
   void
   set_sample(cosmosis::DataBlock& s)
   {
+    // True-z nodes for this sample (composite rule by default; see
+    // models/sel_z_rule.hh). Every (k, q) table below is sized from them.
+    z_rule_.update(s);
+    z_x_ = z_rule_.xs();
+    z_w_ = z_rule_.ws();
+    N_z_ = z_x_.size();
     namespace w = y3_pipelines;
 
     bsel_op_.reset();
@@ -222,12 +231,12 @@ public:
     n_bins_ = static_cast<std::size_t>(n_bins);
     w2d_.assign(n_bins_ * N_lnm_ * N_z_, 0.0);
     for (int b = 0; b != n_bins; ++b) {
-      y3_cluster::SelFunction_t const sel(s, b);
+      auto const S = z_rule_.tabulate(s, b, lnm_x_);
       for (std::size_t k = 0; k != N_lnm_; ++k)
         for (std::size_t q = 0; q != N_z_; ++q)
           w2d_[(b * N_lnm_ + k) * N_z_ + q] =
             lnm_w_[k] * zfac[q] * hmf(lnm_x_[k], z_x_[q]) *
-            sel(lnm_x_[k], z_x_[q]);
+            S[k * N_z_ + q];
     }
 
     if (profile_method_ == "gauss_legendre")
@@ -681,6 +690,7 @@ private:
   }
 
   std::size_t N_lnm_, N_z_;
+  y3_cluster::SelZRule z_rule_;
   double zt_lo_, zt_hi_, lnm_lo_, lnm_hi_;
   bool bsel_enabled_;
   std::string bsel_model_;

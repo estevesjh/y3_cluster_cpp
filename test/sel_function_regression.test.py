@@ -102,7 +102,7 @@ def make_options():
         "lam_max": richness_max,
         "zob_min": redshift_min,
         "zob_max": redshift_max,
-        "sigma_z": np.full(12, 0.03),
+        "sigma_z": np.full(12, 0.01),
         "zt_low": 0.05,
         "zt_high": 0.80,
         "lnm_low": np.log(1.0e13),

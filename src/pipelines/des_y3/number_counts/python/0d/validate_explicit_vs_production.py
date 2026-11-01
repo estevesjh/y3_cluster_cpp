@@ -46,7 +46,7 @@ BINS = dict(
     lam_max=np.array([30., 45., 60., 200.] * 3),
     zob_min=np.array([0.20] * 4 + [0.35] * 4 + [0.50] * 4),
     zob_max=np.array([0.35] * 4 + [0.50] * 4 + [0.65] * 4),
-    sigma_z=np.full(12, 0.03),
+    sigma_z=np.full(12, 0.01),
 )
 ZT_LOW, ZT_HIGH = 0.05, 0.80
 LNM_LOW, LNM_HIGH = 29.9336, 36.7300

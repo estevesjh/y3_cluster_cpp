@@ -70,18 +70,23 @@ from systematics.selection_boost.Bsel import BselDeltaSigmaOperator
 OUTPUT_SECTION = "shear1h2h_max_explicit_gl"
 
 
-def z_resolved_weights(source, *, n_lnm, n_z, zt_lo, zt_hi, lnm_lo, lnm_hi):
-    """W2d[b, k, q] = zfac_q sci_q hmf(k,q) S_stack(b; k, q) on GL nodes."""
+def z_resolved_weights(source, *, n_lnm, n_z, zt_lo, zt_hi, lnm_lo, lnm_hi,
+                       z_rule="composite", n_z_panel=8, z_step_width=5.0,
+                       sel_interp="spline"):
+    """W2d[b, k, q] = zfac_q sci_q hmf(k,q) S_ij(b; k, q) on GL nodes
+    (true z by dm.sel_z_rule, the SelZRule twin)."""
     lnm_x, lnm_w = dm.gl_nodes(lnm_lo, lnm_hi, n_lnm)
-    z_x, z_w = dm.gl_nodes(zt_lo, zt_hi, n_z)
+    z_x, z_w, sel = dm.sel_z_rule(
+        source, zt_lo=zt_lo, zt_hi=zt_hi, n_z=n_z, z_rule=z_rule,
+        n_z_panel=n_z_panel, z_step_width=z_step_width, sel_interp=sel_interp)
+    n_z = z_x.size
     hmf = dm.HMF(source)
     dv = dm.DVDoDz(source)
-    sel = dm.SelStack(source)
     zfac = z_w * dv(z_x) * dm.omega_z_des(z_x) * dm.SigmaCritInv(source)(z_x)
     base = hmf(lnm_x[:, None], z_x[None, :]) * zfac[None, :]
     w2d = np.empty((sel.n_bins, n_lnm, n_z))
     for b in range(sel.n_bins):
-        w2d[b] = base * sel(b, lnm_x[:, None], z_x[None, :])
+        w2d[b] = base * dm.sel_on_grid(sel, b, lnm_x, z_x)
     return lnm_x, lnm_w, z_x, w2d
 
 

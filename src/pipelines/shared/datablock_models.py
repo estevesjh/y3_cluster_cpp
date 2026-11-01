@@ -53,7 +53,7 @@ from typing import Any
 
 import numpy as np
 from scipy.interpolate import RectBivariateSpline, RegularGridInterpolator
-from scipy.special import gammaln
+from scipy.special import gammaln, ndtr
 
 GL_CACHE = {}
 
@@ -873,6 +873,218 @@ class SelStack:
         return self._interps[b](np.stack([z_b, lnM_b], axis=-1))
 
 
+#: Where OMEGA_Z_DES switches polynomial (OMEGA_Z_DES::breakpoints).
+OMEGA_Z_DES_BREAKPOINTS = (0.504, 0.7)
+
+
+def composite_z_panels(zob_min, zob_max, sigma_z, *, zt_lo, zt_hi,
+                       excl=None, one_plus_z=False, step_width=5.0):
+    """Panels of the composite true-z rule (models/sel_z_rule.hh).
+
+    Breaks at every bin edge's step zob +- L sigma_z, at the seam edges
+    and the OMEGA_Z_DES breakpoints, over the union of the bins' supports
+    [zob_min - L sigma_z, zob_max + L sigma_z] clipped to [zt_lo, zt_hi];
+    panels inside the seam ``excl = (lo, hi)`` are dropped.
+    """
+    zob_min = np.atleast_1d(np.asarray(zob_min, dtype=float))
+    zob_max = np.atleast_1d(np.asarray(zob_max, dtype=float))
+    sigma_z = np.broadcast_to(np.asarray(sigma_z, dtype=float), zob_min.shape)
+    L = float(step_width)
+
+    def width(b, z):
+        return sigma_z[b] * ((1.0 + z) if one_plus_z else 1.0)
+
+    br, lo, hi = [], float(zt_hi), float(zt_lo)
+    for b in range(zob_min.size):
+        wl, wh = L * width(b, zob_min[b]), L * width(b, zob_max[b])
+        br += [zob_min[b] - wl, zob_min[b] + wl, zob_max[b] - wh,
+               zob_max[b] + wh]
+        lo, hi = min(lo, zob_min[b] - wl), max(hi, zob_max[b] + wh)
+    lo, hi = max(lo, float(zt_lo)), min(hi, float(zt_hi))
+    if not hi > lo:
+        return []
+    has_excl = excl is not None and excl[1] > excl[0]
+    if has_excl:
+        br += [excl[0], excl[1]]
+    br += list(OMEGA_Z_DES_BREAKPOINTS) + [lo, hi]
+    br = np.sort(np.clip(br, lo, hi))
+    out = []
+    for a, c in zip(br[:-1], br[1:]):
+        if not c - a > 1e-12:
+            continue
+        if has_excl and a >= excl[0] - 1e-12 and c <= excl[1] + 1e-12:
+            continue
+        out.append((float(a), float(c)))
+    return out
+
+
+def composite_gl_nodes(panels, n_panel):
+    """Concatenated GL nodes/weights, ``n_panel`` per panel."""
+    if not panels:
+        return np.empty(0), np.empty(0)
+    xs, ws = zip(*(gl_nodes(a, c, n_panel) for a, c in panels))
+    return np.concatenate(xs), np.concatenate(ws)
+
+
+class NaturalSplineGrid:
+    """Natural cubic spline on knots ``x`` for many rows at once -- the
+    numpy twin of sel_z_detail::NaturalSplineGrid (models/sel_z_rule.hh):
+    same Thomas factorisation, same operation order."""
+
+    def __init__(self, x):
+        self.x = np.asarray(x, dtype=float)
+        n = self.x.size
+        if n < 3:
+            raise ValueError("NaturalSplineGrid: needs >= 3 knots")
+        self.h = self.x[1:] - self.x[:-1]
+        self.cp = np.zeros(n)
+        self.den = np.ones(n)
+        for i in range(1, n - 1):
+            a, b = self.h[i - 1], 2.0 * (self.h[i - 1] + self.h[i])
+            self.den[i] = b - a * self.cp[i - 1]
+            self.cp[i] = self.h[i] / self.den[i]
+
+    def moments(self, y):
+        """Second derivatives; ``y`` has shape (..., n)."""
+        y = np.asarray(y, dtype=float)
+        n, h = self.x.size, self.h
+        dp = np.zeros_like(y)
+        m = np.zeros_like(y)
+        for i in range(1, n - 1):
+            r = 6.0 * ((y[..., i + 1] - y[..., i]) / h[i]
+                       - (y[..., i] - y[..., i - 1]) / h[i - 1])
+            dp[..., i] = (r - h[i - 1] * dp[..., i - 1]) / self.den[i]
+        for i in range(n - 2, 0, -1):
+            m[..., i] = dp[..., i] - self.cp[i] * m[..., i + 1]
+        return m
+
+    def eval(self, y, m, xq):
+        """Spline of rows (y, m) at the points xq (clamped): (..., nq)."""
+        x = np.clip(np.asarray(xq, dtype=float), self.x[0], self.x[-1])
+        i = np.clip(np.searchsorted(self.x, x, side="right"), 1,
+                    self.x.size - 1) - 1
+        h = self.h[i]
+        A = (self.x[i + 1] - x) / h
+        B = (x - self.x[i]) / h
+        h26 = h * h / 6.0
+        return (A * y[..., i] + B * y[..., i + 1]
+                + (A * A * A - A) * h26 * m[..., i]
+                + (B * B * B - B) * h26 * m[..., i + 1])
+
+
+class SelZFactored:
+    """Factorised S_ij reader (SelZRule): S_rich_stack (richness factor,
+    smooth in (lnM, z)) x exact S_j(z) x seam indicator; zero outside the
+    table. ``tabulate`` is the grid evaluator the GL weights use
+    (natural-spline by default, as sel_interp = spline)."""
+
+    def __init__(self, source, spline=True):
+        self.lnm = source.array("sel_function", "lnm")
+        self.z = source.array("sel_function", "z")
+        rich = np.asarray(source.array("sel_function", "s_rich_stack"),
+                          dtype=float)
+        if rich.ndim != 3:
+            rich = rich.reshape(-1, self.z.size, self.lnm.size)
+        self.n_bins = rich.shape[0]
+        self.zob_min = np.atleast_1d(source.array("sel_function", "zob_min"))
+        self.zob_max = np.atleast_1d(source.array("sel_function", "zob_max"))
+        self.sigma_z = np.atleast_1d(source.array("sel_function", "sigma_z"))
+        self.one_plus_z = (source.has("sel_function", "sigma_z_one_plus_z")
+                           and bool(int(source.scalar(
+                               "sel_function", "sigma_z_one_plus_z"))))
+        lo = (source.scalar("sel_function", "zt_excl_low")
+              if source.has("sel_function", "zt_excl_low") else 0.0)
+        hi = (source.scalar("sel_function", "zt_excl_high")
+              if source.has("sel_function", "zt_excl_high") else -1.0)
+        self.excl = (lo, hi) if hi > lo else None
+        self.spline = bool(spline)
+        self._rich = rich
+        self._interps = [
+            RegularGridInterpolator((self.z, self.lnm), rich[b],
+                                    method="linear")
+            for b in range(self.n_bins)]
+
+    @staticmethod
+    def available(source):
+        return all(source.has("sel_function", k) for k in
+                   ("s_rich_stack", "sigma_z", "zob_min", "zob_max"))
+
+    def s_j(self, b, z):
+        z = np.asarray(z, dtype=float)
+        w = self.sigma_z[b] * ((1.0 + z) if self.one_plus_z else 1.0)
+        out = (ndtr((self.zob_max[b] - z) / w)
+               - ndtr((self.zob_min[b] - z) / w))
+        if self.excl is not None:
+            out = np.where((z > self.excl[0]) & (z < self.excl[1]), 0.0, out)
+        return out
+
+    def panels(self, zt_lo, zt_hi, step_width=5.0):
+        return composite_z_panels(
+            self.zob_min, self.zob_max, self.sigma_z, zt_lo=zt_lo,
+            zt_hi=zt_hi, excl=self.excl, one_plus_z=self.one_plus_z,
+            step_width=step_width)
+
+    def __call__(self, b, lnM, z):
+        lnM_b, z_b = np.broadcast_arrays(np.asarray(lnM, dtype=float),
+                                         np.asarray(z, dtype=float))
+        inside = ((lnM_b >= self.lnm[0]) & (lnM_b <= self.lnm[-1])
+                  & (z_b >= self.z[0]) & (z_b <= self.z[-1]))
+        q = np.stack([np.clip(z_b, self.z[0], self.z[-1]),
+                      np.clip(lnM_b, self.lnm[0], self.lnm[-1])], axis=-1)
+        out = self._interps[b](q) * self.s_j(b, z_b)
+        return np.where(inside, out, 0.0)
+
+    def tabulate(self, b, lnm_nodes, z_nodes):
+        """S_ij on (lnm_nodes x z_nodes), shape (n_lnm, n_z): SelZRule::
+        tabulate -- tensor natural spline of S_rich (lnM pass, then z
+        pass) x exact S_j, or pointwise bilinear when spline=False."""
+        lnm_nodes = np.asarray(lnm_nodes, dtype=float)
+        z_nodes = np.asarray(z_nodes, dtype=float)
+        if not self.spline:
+            return self(b, lnm_nodes[:, None], z_nodes[None, :])
+        sm, sz = NaturalSplineGrid(self.lnm), NaturalSplineGrid(self.z)
+        plane = self._rich[b]                              # (n_zt, n_mt)
+        T = sm.eval(plane, sm.moments(plane), lnm_nodes)   # (n_zt, nk)
+        col = T.T                                          # (nk, n_zt)
+        out = sz.eval(col, sz.moments(col), z_nodes)       # (nk, nq)
+        sj = self.s_j(b, z_nodes)
+        inside = ((lnm_nodes[:, None] >= self.lnm[0])
+                  & (lnm_nodes[:, None] <= self.lnm[-1])
+                  & (z_nodes[None, :] >= self.z[0])
+                  & (z_nodes[None, :] <= self.z[-1]) & (sj[None, :] != 0.0))
+        return np.where(inside, out * sj[None, :], 0.0)
+
+
+def sel_on_grid(sel, b, lnm_nodes, z_nodes):
+    """S_ij of bin b on (lnm_nodes x z_nodes): the factorised reader's
+    tabulate (SelZRule::tabulate) or the S_stack table pointwise."""
+    if hasattr(sel, "tabulate"):
+        return sel.tabulate(b, lnm_nodes, z_nodes)
+    return sel(b, np.asarray(lnm_nodes)[:, None], np.asarray(z_nodes)[None, :])
+
+
+def sel_z_rule(source, *, zt_lo, zt_hi, n_z=64, z_rule="composite",
+               n_z_panel=8, z_step_width=5.0, sel_interp="spline"):
+    """(z_x, z_w, sel) of the true-z rule -- the SelZRule twin.
+
+    composite (default) with the factorised sel_function outputs present:
+    composite GL + SelZFactored. Otherwise the single n_z GL panel on the
+    bilinear S_stack table (previous behaviour, identical nodes).
+    """
+    if z_rule not in ("composite", "global"):
+        raise ValueError(f"z_rule must be composite or global, got {z_rule!r}")
+    if sel_interp not in ("spline", "bilinear"):
+        raise ValueError(f"sel_interp must be spline or bilinear, "
+                         f"got {sel_interp!r}")
+    if z_rule == "composite" and SelZFactored.available(source):
+        sel = SelZFactored(source, spline=(sel_interp == "spline"))
+        z_x, z_w = composite_gl_nodes(
+            sel.panels(zt_lo, zt_hi, z_step_width), n_z_panel)
+        return z_x, z_w, sel
+    z_x, z_w = gl_nodes(zt_lo, zt_hi, n_z)
+    return z_x, z_w, SelStack(source)
+
+
 class Bilinear2D:
     """Generic clamped-bilinear replica of make_Interp2D over a section.
 
@@ -963,24 +1175,28 @@ class MassZWeights:
                     [ * Sigma_crit_inv(z), shear only ]
 
     Mirrors nosel_gl_detail::SelGLCore::build_weights: identical node
-    placement (GL on [zt_lo, zt_hi] and [lnm_lo, lnm_hi]) and identical
-    term composition, vectorised over (bin, lnM node, z node).
+    placement (GL on [lnm_lo, lnm_hi]; true z by ``sel_z_rule``, the
+    SelZRule twin) and identical term composition, vectorised over
+    (bin, lnM node, z node).
     """
 
     def __init__(self, source, *, n_lnm=96, n_z=64,
                  zt_lo, zt_hi, lnm_lo, lnm_hi, include_sci=False,
-                 z_amp_power=0.0):
+                 z_amp_power=0.0, z_rule="composite", n_z_panel=8,
+                 z_step_width=5.0, sel_interp="spline"):
         """z_amp_power: fold (1+z)^p into the z weight -- the exact
         amplitude half of the physical-density identity
         DSigma_phys(R|z) = (1+z)^2 DSigma_com(R (1+z)). Shear consumers
         pass 2 when haloModel/one_halo_physical_density is on; number
         counts never pass it. Mirrors SelGLCore::build_weights."""
         self.lnm_x, self.lnm_w = gl_nodes(lnm_lo, lnm_hi, n_lnm)
-        self.z_x, self.z_w = gl_nodes(zt_lo, zt_hi, n_z)
+        self.z_x, self.z_w, sel = sel_z_rule(
+            source, zt_lo=zt_lo, zt_hi=zt_hi, n_z=n_z, z_rule=z_rule,
+            n_z_panel=n_z_panel, z_step_width=z_step_width,
+            sel_interp=sel_interp)
 
         hmf = HMF(source)
         dv = DVDoDz(source)
-        sel = SelStack(source)
         self.n_bins = sel.n_bins
 
         zfac = self.z_w * dv(self.z_x) * omega_z_des(self.z_x)
@@ -995,7 +1211,7 @@ class MassZWeights:
         self.W = np.empty((self.n_bins, self.lnm_x.size))
         Wz = np.empty_like(self.W)
         for b in range(self.n_bins):
-            s_kq = sel(b, lnm_grid, z_grid)                 # (n_lnm, n_z)
+            s_kq = sel_on_grid(sel, b, self.lnm_x, self.z_x)  # (n_lnm, n_z)
             t = hmf_kq * s_kq
             self.W[b] = t @ zfac
             Wz[b] = t @ (zfac * self.z_x)

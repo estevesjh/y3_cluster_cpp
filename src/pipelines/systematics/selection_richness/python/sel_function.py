@@ -24,6 +24,9 @@ Grid:
 
 Reads (ini options):
     sel_function/{lam_min, lam_max, zob_min, zob_max, sigma_z}   per-bin
+    sel_function/sigma_z_evolution   'constant' (default): photo-z width
+                                     sigma_z per bin; 'one_plus_z': width
+                                     sigma_z * (1 + z_true) on the true-z grid
     sel_function/{zt_low, zt_high, lnm_low, lnm_high}            envelope
     sel_function/{n_lnm, n_z_shared, L_z, N_q}                   grid knobs
 
@@ -605,6 +608,15 @@ def setup(options):
     cfg['zob_min'] = _read_array(options, option_section, 'zob_min')
     cfg['zob_max'] = _read_array(options, option_section, 'zob_max')
     cfg['sigma_z'] = _read_array(options, option_section, 'sigma_z')
+    try:
+        cfg['sigma_z_evolution'] = options.get_string(
+            option_section, 'sigma_z_evolution', default='constant')
+    except Exception:
+        cfg['sigma_z_evolution'] = 'constant'
+    if cfg['sigma_z_evolution'] not in ('constant', 'one_plus_z'):
+        raise ValueError(
+            "sel_function: sigma_z_evolution must be 'constant' or "
+            f"'one_plus_z', got {cfg['sigma_z_evolution']!r}")
 
     # Envelope of the downstream integration volume. Pass-through so the
     # feeder clips its per-bin grids to the same box.
@@ -666,10 +678,12 @@ def setup(options):
                                     'zt_excl_high', -1.0)
     if excl_hi > excl_lo:
         cfg['seam_weight'] = _seam_weight(cfg['z_grid'], excl_lo, excl_hi)
+        cfg['zt_excl'] = (float(excl_lo), float(excl_hi))
         print(f"[sel_function] true-z exclusion active: "
               f"[{excl_lo}, {excl_hi}]", flush=True)
     else:
         cfg['seam_weight'] = None
+        cfg['zt_excl'] = None
 
     # Per-module-instance cache for the plob EMG splines (see
     # _make_plob_splines) — plob_ltr_params never varies across a run in
@@ -978,11 +992,14 @@ def execute(block, config):
 
     # Apply the independent Gaussian photo-z factor to every bin in one
     # broadcast. The final datavector layout is (bin, z, lnM).
+    sigma_z = config['sigma_z'][:, None]
+    if config.get('sigma_z_evolution', 'constant') == 'one_plus_z':
+        sigma_z = sigma_z * (1.0 + z_grid[None, :])
     redshift_selection = _S_j(
         z_grid[None, :],
         config['zob_min'][:, None],
         config['zob_max'][:, None],
-        config['sigma_z'][:, None],
+        sigma_z,
     )
     # True-z seam excision (issue #8): the weight multiplies every bin's
     # S_j on the shared true-z grid, so all S_stack consumers inherit it.
@@ -992,6 +1009,24 @@ def execute(block, config):
         (richness_selection * redshift_selection[:, None, :])
         .transpose(0, 2, 1)
     )
+
+    # Factorised form of the same table, for consumers that integrate
+    # true z on their own nodes (composite-GL z rules):
+    #   S_ij(lnM, z) = S_rich_stack[b](lnM, z) * S_j(z) * 1[z outside excl]
+    # S_rich_stack is the richness factor alone -- smooth in z, so a
+    # linear-in-z table interpolates it well -- while the photo-z step and
+    # the seam are closed form and get evaluated exactly at each node
+    # instead of being point-sampled on z_grid and interpolated as a
+    # one-cell ramp. S_stack itself is unchanged.
+    block['sel_function', 'S_rich_stack'] = np.ascontiguousarray(
+        richness_selection.transpose(0, 2, 1))
+    block['sel_function', 'sigma_z'] = np.asarray(
+        config['sigma_z'], dtype=float)
+    block['sel_function', 'sigma_z_one_plus_z'] = int(
+        config.get('sigma_z_evolution', 'constant') == 'one_plus_z')
+    excl = config.get('zt_excl')
+    block['sel_function', 'zt_excl_low'] = excl[0] if excl else 0.0
+    block['sel_function', 'zt_excl_high'] = excl[1] if excl else -1.0
 
     block['sel_function', 'lnM'] = lnm_grid
     block['sel_function', 'z']   = z_grid

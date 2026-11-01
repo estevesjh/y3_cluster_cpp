@@ -30,7 +30,7 @@ from shared import datablock_models as dm             # noqa: E402
 import shear1h_gl as mod                                # noqa: E402
 from _dump_datablock import datablock_from_dump, make_options  # noqa: E402
 
-DUMP_DIR = (Path("/pscratch/sd/j/jesteves/github/y3_cluster_cpp_dev")
+DUMP_DIR = (REPO
            / "cosmosis-models" / "real_pipeline_extract_output")
 HAS_DUMP = DUMP_DIR.is_dir()
 _SKIP_MSG = f"requires the real-pipeline dump at {DUMP_DIR}"

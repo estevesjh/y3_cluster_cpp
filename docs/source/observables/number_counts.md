@@ -65,7 +65,8 @@ n_z   = 64
 - Ordering: after `sel_function`, `MfTinker`, `cp_camb`.
 - No adaptive-Cuhre knobs (`algorithm`/`eps_*`/`max_eval`/
   `use_cartesian_product`) — this evaluator is fixed Gauss-Legendre only;
-  `n_lnm`/`n_z` are its node counts.
+  `n_lnm` and `n_z_panel` (or `n_z` under `z_rule = global`) are its node
+  counts.
 
 ## Configuration options
 
@@ -74,7 +75,10 @@ n_z   = 64
 | `bin_index` | wall of bins to evaluate (richness index fastest) | — | `0 … 11` |
 | `zt_low`, `zt_high` | true-redshift integration limits | — | 0.05, 0.80 |
 | `lnm_low`, `lnm_high` | mass integration limits | $\ln(M_\odot/h)$ | 29.9336, 36.7300 |
-| `n_lnm`, `n_z` | GL nodes in $\ln M$ / $z$ | — | 96, 64 (defaults) |
+| `n_lnm`, `n_z` | GL nodes in $\ln M$ / $z$ (`n_z`: `z_rule = global` only) | — | 96, 64 (defaults) |
+| `z_rule` | true-$z$ quadrature: `composite` (panel breaks at the photo-$z$ steps, the seam and the $\Omega(z)$ breakpoints; see {doc}`../numerics/index`) or `global` (one GL panel of `n_z` nodes on the bilinear `S_stack`, the pre-2026-11 rule) | — | `composite` (default) |
+| `n_z_panel`, `z_step_width` | GL nodes per composite panel; half-width $L$ of the panel around each step, in $\sigma_z$ | — | 8, 5.0 (defaults) |
+| `sel_interp` | `S_rich_stack` interpolation in the composite rule: `spline` (tensor natural cubic) or `bilinear` | — | `spline` (default) |
 
 ## DataBlock inputs
 

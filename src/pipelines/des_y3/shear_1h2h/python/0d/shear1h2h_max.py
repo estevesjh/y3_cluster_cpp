@@ -85,6 +85,11 @@ class Shear1h2hMax:
         self.r_perp = sf._read_array(options, section, "r_perp")
         self.n_lnm = int(opt(options.get_int, "n_lnm", 96))
         self.n_z = int(opt(options.get_int, "n_z", 64))
+        # True-z rule (SelZRule twin; see models/sel_z_rule.hh).
+        self.z_rule = opt(options.get_string, "z_rule", "composite")
+        self.n_z_panel = int(opt(options.get_int, "n_z_panel", 8))
+        self.z_step_width = float(opt(options.get_double, "z_step_width", 5.0))
+        self.sel_interp = opt(options.get_string, "sel_interp", "spline")
         self.zt_lo = options.get_double(section, "zt_low")
         self.zt_hi = options.get_double(section, "zt_high")
         self.lnm_lo = options.get_double(section, "lnm_low")
@@ -99,7 +104,6 @@ class Shear1h2hMax:
         self.mis_enabled = bool(opt(options.get_bool, "miscentering", False))
 
         self.lnm_x, self.lnm_w = dm.gl_nodes(self.lnm_lo, self.lnm_hi, self.n_lnm)
-        self.z_x, self.z_w = dm.gl_nodes(self.zt_lo, self.zt_hi, self.n_z)
         self.lob_centers = (sf._read_array(options, section, "lob_centers")
                             if options.has_value(section, "lob_centers")
                             else np.asarray(dm.DEFAULT_LOB_CENTERS, dtype=float))
@@ -118,7 +122,10 @@ class Shear1h2hMax:
         hmf = dm.HMF(s)
         dv = dm.DVDoDz(s)
         sci = dm.SigmaCritInv(s)
-        sel = dm.SelStack(s)
+        self.z_x, self.z_w, sel = dm.sel_z_rule(
+            s, zt_lo=self.zt_lo, zt_hi=self.zt_hi, n_z=self.n_z,
+            z_rule=self.z_rule, n_z_panel=self.n_z_panel,
+            z_step_width=self.z_step_width, sel_interp=self.sel_interp)
         bias = dm.Bilinear2D(s, "halomodel", "lnm", "z", "bias")
 
         # z-only factors (Sigma_crit_inv folded in, as the shear weight
@@ -134,7 +141,8 @@ class Shear1h2hMax:
         lnm, z = self.lnm_x[:, None], self.z_x[None, :]
         base = self.lnm_w[:, None] * zfac[None, :] * hmf(lnm, z)
         self.n_bins = sel.n_bins
-        self.w2d = np.stack([base * sel(b, lnm, z) for b in range(self.n_bins)])
+        self.w2d = np.stack([base * dm.sel_on_grid(sel, b, self.lnm_x, self.z_x)
+                             for b in range(self.n_bins)])
 
         if self.profile_method == "gauss_legendre":
             self._set_sample_gauss_legendre(s, bias)

@@ -209,5 +209,8 @@ contains the baseline Git commit.
 | `sel_function/lnM` | shared mass grid | `(192,)` | `NumCountsSijGl`, `Shear1hGl`, `Shear1h2hMax` |
 | `sel_function/z` | shared redshift grid | `(64,)` | same |
 | `sel_function/S_stack` | packed selection tensor $S_{ij}(\ln M, z)$, layout `(bin, z, lnM)`, C-contiguous | `(12, 64, 192)` | same |
+| `sel_function/S_rich_stack` | richness factor $S_i(\ln M, z)$ alone (no photo-$z$ step, no seam), same layout; smooth in $z$, read by the composite true-$z$ rule | `(12, 64, 192)` | same |
+| `sel_function/sigma_z`, `sigma_z_one_plus_z` | per-bin photo-$z$ width; 1 if it scales as $(1+z)$ | `(12,)`, scalar | same |
+| `sel_function/zt_excl_low`, `zt_excl_high` | true-$z$ seam (inactive when high $\le$ low) | scalars | same |
 | `sel_function/lambda_edges` | unique observed-richness bin edges used by the selection wall | `(5,)` | `bsel.py` |
 | `sel_function/lambda_centres` | arithmetic centres of those edges | `(4,)` | `bsel.py` and shear consumers |

@@ -154,7 +154,10 @@ lob_centers = 25.0 37.5 52.5 130.0
 | `bin_index` × `r_perp` | Cartesian wall grid (bin slow, $R$ fast) | $R$: cMpc/$h$ | 12 × 15 |
 | `zt_low`, `zt_high` | true-redshift limits | — | 0.05, 0.80 |
 | `lnm_low`, `lnm_high` | mass limits | $\ln(M_\odot/h)$ | 29.9336, 36.7300 |
-| `n_lnm`, `n_z` | GL nodes | — | 96, 64 (defaults) |
+| `n_lnm`, `n_z` | GL nodes (`n_z`: `z_rule = global` only) | — | 96, 64 (defaults) |
+| `z_rule` | true-$z$ quadrature: `composite` (panel breaks at the photo-$z$ steps, the seam and the $\Omega(z)$ breakpoints; see {doc}`../numerics/index`) or `global` (one GL panel of `n_z` nodes on the bilinear `S_stack`, the pre-2026-11 rule) | — | `composite` (default) |
+| `n_z_panel`, `z_step_width` | GL nodes per composite panel; half-width $L$ of the panel around each step, in $\sigma_z$ | — | 8, 5.0 (defaults) |
+| `sel_interp` | `S_rich_stack` interpolation in the composite rule: `spline` (tensor natural cubic) or `bilinear` | — | `spline` (default) |
 | `lob_centers` | richness-bin centres driving $R_\lambda$ | — | 25 37.5 52.5 130 (default) |
 
 DES Y1's `Shear1hMisSel.so` additionally supports `method = idea2` (a

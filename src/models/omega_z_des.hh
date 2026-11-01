@@ -12,6 +12,10 @@ namespace y3_cluster {
     OMEGA_Z_DES() {}
     OMEGA_Z_DES(cosmosis::DataBlock&) {}
 
+    // Where the piecewise fit switches polynomial (a small jump in value
+    // and slope): quadrature rules over z restart here (SelZRule).
+    static constexpr std::array<double, 2> breakpoints{0.504, 0.7};
+
     double
     operator()(double zt) const
     {

@@ -52,6 +52,7 @@
 #include "models/omega_z_des.hh"
 #include "models/p_operator_cuhre_t.hh"
 #include "models/sel_function_t.hh"
+#include "models/sel_z_rule.hh"
 #include "modules/num_counts_sel/lensing_weights.hh"
 #include "utils/datablock_reader.hh"
 #include "utils/interp_1d.hh"
@@ -77,15 +78,15 @@ namespace y3_cluster {
       SelGLCore(cosmosis::DataBlock& cfg, char const* label)
         : N_lnm_(cfg.has_val(label, "n_lnm")
                    ? cfg.view<int>(label, "n_lnm") : 96)
-        , N_z_(cfg.has_val(label, "n_z")
-                 ? cfg.view<int>(label, "n_z") : 64)
+        , z_rule_(cfg, label)
         , zt_lo_(cfg.view<double>(label, "zt_low"))
         , zt_hi_(cfg.view<double>(label, "zt_high"))
         , lnm_lo_(cfg.view<double>(label, "lnm_low"))
         , lnm_hi_(cfg.view<double>(label, "lnm_high"))
       {
         p_op_detail::gl_nodes(lnm_lo_, lnm_hi_, N_lnm_, lnm_x_, lnm_w_);
-        p_op_detail::gl_nodes(zt_lo_, zt_hi_, N_z_, z_x_, z_w_);
+        z_x_ = z_rule_.xs();   // global nodes until the first sample
+        z_w_ = z_rule_.ws();
       }
 
       // z_amp_power: fold (1+z)^p into the z-only weight factor. Used by
@@ -98,6 +99,11 @@ namespace y3_cluster {
       build_weights(cosmosis::DataBlock& s, bool include_sci,
                     double z_amp_power = 0.0)
       {
+        // True-z nodes for this sample (composite rule by default; see
+        // models/sel_z_rule.hh). Rebuilt only when the bin layout changes.
+        z_rule_.update(s);
+        z_x_ = z_rule_.xs();
+        z_w_ = z_rule_.ws();
         y3_cluster::HMF_t const       hmf(s);
         y3_cluster::DV_DO_DZ_t const  dv(s);
         y3_cluster::OMEGA_Z_DES const omega(s);
@@ -124,13 +130,13 @@ namespace y3_cluster {
 
         std::vector<double> Wz(lnm_x_.size());
         for (int b = 0; b != n_bins; ++b) {
-          SelFunction_t const sel(s, b);
+          auto const S = z_rule_.tabulate(s, b, lnm_x_);
           auto& Wb = W_[b];
           for (std::size_t k = 0; k != lnm_x_.size(); ++k) {
             double const lnM = lnm_x_[k];
             double acc = 0.0, acc_z = 0.0;
             for (std::size_t q = 0; q != z_x_.size(); ++q) {
-              double const t = zfac[q] * hmf(lnM, z_x_[q]) * sel(lnM, z_x_[q]);
+              double const t = zfac[q] * hmf(lnM, z_x_[q]) * S[k * z_x_.size() + q];
               acc += t;
               acc_z += t * z_x_[q];
             }
@@ -183,7 +189,7 @@ namespace y3_cluster {
 
      private:
       std::size_t N_lnm_;
-      std::size_t N_z_;
+      SelZRule z_rule_;
       double zt_lo_, zt_hi_, lnm_lo_, lnm_hi_;
       std::vector<double> lnm_x_, lnm_w_;
       std::vector<double> z_x_, z_w_;
