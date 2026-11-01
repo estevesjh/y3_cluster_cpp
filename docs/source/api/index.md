@@ -58,7 +58,6 @@ own accuracy/timing matrix (also surfaced in {doc}`../numerics/index`).
 | `number_counts/0d` (fast sum) | Python production-algorithm replica, `NumCountsSijGl.so` | Python 5 ms; C++ 6 ms (= DES Y1 `NumCountsSel.so` by identity) |
 | `shear_1h2h/3d` | Python reference, `Shear1h3d.so`, `Shear1h3dGpu.so` | Python 35 s (adaptive) / 149 ms (fixed GL); C++ 51 s; CUDA 32 s |
 | `shear_1h2h/0d` (GL paths) | Python references, `Shear1hGl.so`, `Shear1h2hMax.so`, `Shear1h2hMaxGpu.so` | `Shear1hGl` Python 74 ms / C++ 9 ms; `Shear1h2hMax` piecewise C++ 3 ms / Python 14 ms, `gauss_legendre` C++ 0.12 s (Apple M5); `Shear1h2hMaxGpu` (older miscentred model) 8 ms |
-| `shear_1h2h/0d` | Python offline generator/evaluator and `Shear1hRadialSeries.so` | Python 6 ms; C++ 7 ms |
 | `shear_projection/2d` + `shear_projection/3d` | `ShearPrjCuhre.so` (2d), `DSigmaPrj3dGpu.so` (3d) | CUDA 95 s |
 | `shear_projection/0d` | Python exact-$z$ reference, `ShearPrjGl.so`, `ShearPrjFrozenGpu.so` | Python 270 ms; C++ 154 ms; CUDA (frozen) 8.3 ms |
 

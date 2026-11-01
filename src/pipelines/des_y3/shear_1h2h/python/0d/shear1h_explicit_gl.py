@@ -20,9 +20,7 @@ commute past it exactly; the "quadruple" integral is the counts
 triple integral weighted by DSigma in the final mass sum.
 
 Difference vs the fixed-GL backend is precisely the production
-S_ij-tabulation error; difference vs radial_series is tabulation +
-truncation + the centred-profile convention (see the radial_series
-README).
+S_ij-tabulation error.
 
 DataBlock contract
 ------------------

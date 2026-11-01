@@ -6,15 +6,13 @@ every other cell, per the matrix in docs/source/pipeline_organization.md:
 
     full_ltmz     -> Python, C++, CUDA        (explicit-selection references)
     fast_mass     -> Python, C++ (bitwise = production Shear1hMisSel.so)
-    radial_series -> Python, C++ (offline U_ell tables + moments)
     max model     -> Python, C++, CUDA        (traditional 1h+2h; ΔΣ_hh has
                                                an open debugging flag, see
                                                docs/known_issues/dsigma_hh_debug_flag.md)
 
 The reference is the C++ full_ltmz backend (Shear1h3d.so, adaptive
 Cuhre eps_rel=1e-4). Its values, the CUDA full_ltmz backend's
-(Shear1h3dGpu.so, PAGANI), the C++ radial_series backend's
-(Shear1hRadialSeries.so), and the C++/CUDA max-model backends'
+(Shear1h3dGpu.so, PAGANI), and the C++/CUDA max-model backends'
 (Shear1h2hMax.so / Shear1h2hMaxGpu.so) are hard-coded below: reproducing
 them needs a full CosmoSIS pipeline run of the compiled .so modules
 (the max model additionally needs `compute_lensing_2h = T`, which the
@@ -23,38 +21,17 @@ docs/known_issues/dsigma_hh_debug_flag.md), and CUDA needs a GPU.
 
 Provenance: `shear_gpu_smoke.ini`/`shear_extra_backends.ini` (2026-08-12
 job 56790321 companion runs, and a 2026-08-14 companion run for the
-fast_mass/radial_series/max-model C++/CUDA backends), same
+fast_mass/max-model C++/CUDA backends), same
 `mock_mcmc_widePlanck_values.ini` fiducial point and pinned 12-bin x
 10-radius wall used everywhere else in this repo's tests. To
 regenerate: append the relevant module(s) to
 cosmosis-models/real_pipeline_extract.ini (same bin wall; for the max model,
 also set halo_model's `compute_lensing_2h = T`) and read back
-`shear1h3d(gpu)/vals`, `shear1h_radial_series/vals`,
-`shear1h2h_max(_gpu)/vals`.
+`shear1h3d(gpu)/vals`, `shear1h2h_max(_gpu)/vals`.
 
-The Python full_ltmz, fast_mass, and radial_series backends, and
+The Python full_ltmz and fast_mass backends, and
 production's own saved output, are all computed/read LIVE from this
 repo's checked-in fiducial dump (cosmosis-models/real_pipeline_extract_output).
-
-Note on radial_series vs full_ltmz (FINDING, real -- see
-docs/known_issues/radial_series_vs_full_ltmz_defect.md): `nfw_profile_family.py`
-hardcodes `CONC = 4.0` as a module-level constant, used for BOTH the
-profile shape function and its amplitude normalization (r_s(M), A0(y)),
-rather than reading the per-sample Child18 concentration
-full_ltmz/fast_mass/production use. This is not just a shape/curvature
-difference: raw ΔΣ values disagree by 56-86% (dominant, growing with
-richness bin, i.e. with mass -- consistent with real concentration
-decreasing with mass while c=4 stays fixed), on top of a further ~10%
-shape/curvature residual once that amplitude offset is normalized out
-(the number `validate_radial_series.py`'s own "check 4" already
-reports, "the disclosed centred-profile convention gap"). Kept at the
-project's standard tolerance rather than loosened or reported-only, per
-policy: a failing test here is doing its job (see
-test_cpp_radial_series_matches_cpp_full_ltmz below). The
-C++-vs-Python identity check (test_python_radial_series_matches_
-cpp_radial_series) stays separately, since it isolates the language/
-interpolation-implementation question from this modeling-approximation
-one.
 """
 from __future__ import annotations
 
@@ -77,8 +54,6 @@ from shared import lensing_profiles as lp  # noqa: E402
 from systematics.selection_richness.python import sel_kernels  # noqa: E402
 from shear1h_explicit_gl import compute_shear as compute_shear_full_ltmz  # noqa: E402
 from shear1h_gl import compute_shear as compute_shear_fast_mass  # noqa: E402
-import nfw_profile_family as pf  # noqa: E402
-from shear1h_radial_series import RadialSeriesTable, evaluate_series  # noqa: E402
 
 DUMP_DIR = REPO / "cosmosis-models" / "real_pipeline_extract_output"
 HAS_DUMP = (DUMP_DIR / "matter_power_lin" / "p_k.txt").is_file()
@@ -164,40 +139,6 @@ CUDA_FULL_LTMZ = np.array([
     1965.215280791274, 1184.4749513579568, 12350.171103391933, 11202.449268760658,
     9828.094001951855, 8265.561693433778, 6586.580030510737, 4928.610847495364,
     3460.0210069679065, 2300.9355981544522, 1463.246071173168, 897.7703686373897,
-])
-
-# C++ radial_series (Shear1hRadialSeries.so, ell_max=2 default).
-CPP_RADIAL_SERIES = np.array([
-    98730.42169358414, 85706.34946678484, 71302.24714856083, 56228.56520970219,
-    41639.08024621691, 28947.73380537987, 19063.059225617544, 12021.513250421822,
-    7322.815005202493, 4334.903423845499, 48372.96663543758, 42954.96983178918,
-    36666.000153039626, 29748.02360723042, 22690.09619287764, 16215.94249311044,
-    10935.033222474876, 7033.16695097371, 4353.5506947197255, 2612.34101350488,
-    16504.720837003937, 14914.830138838171, 12993.897445139193, 10789.64137138133,
-    8436.582412660422, 6176.3163218290565, 4253.609744690189, 2784.481219617833,
-    1749.4701793758563, 1062.5992863964377, 13366.95386704789, 12267.403864590655,
-    10905.430286193328, 9298.654464801271, 7510.8151781642055, 5690.091057554262,
-    4040.877993580741, 2712.877884515725, 1739.7742989752091, 1074.892725923193,
-    158996.6350907304, 137630.30818019615, 114163.95081069348, 89768.5001692467,
-    66292.79732338799, 45969.91213564924, 30204.842359337377, 19011.521265162704,
-    11562.172560002038, 6835.345005862895, 71817.3483180483, 63617.31797365546,
-    54161.55021430457, 43825.94962824538, 33341.55611839577, 23770.21615589425,
-    15994.171917935586, 10268.122019094364, 6346.24869808485, 3802.7237006813593,
-    22354.794766031468, 20159.55573607043, 17522.7906414348, 14515.225441473714,
-    11322.486860582787, 8269.81292648109, 5683.561311388189, 3713.9461142558102,
-    2329.489323806536, 1413.150831095906, 15569.955544354223, 14250.523625759895,
-    12628.370022342418, 10730.60680754896, 8636.435321681858, 6519.5534063191035,
-    4614.273557159645, 3088.373131454979, 1975.3375858484578, 1217.6897983407891,
-    162269.12760637054, 139854.94325437138, 115493.24535291507, 90415.88943726002,
-    66492.8158636441, 45928.33964076884, 30077.21674139854, 18878.65621365811,
-    11451.674444134493, 6756.591628704379, 68222.72916588932, 60208.631030326185,
-    51055.37712287234, 41147.107229311354, 31180.92056196563, 22149.63562854272,
-    14854.865605106941, 9509.094092210193, 5863.747388948489, 3506.8203703063596,
-    19528.788255333606, 17555.97737050649, 15206.580473514943, 12550.761710903937,
-    9754.391952545073, 7099.61710814619, 4863.625230022577, 3169.146832479224,
-    1983.1697090633797, 1200.616219251731, 11930.692445073855, 10882.781538910423,
-    9606.23448680467, 8127.910501666849, 6512.848787072882, 4895.048366286093,
-    3450.1249274087254, 2300.474698168853, 1466.818692711358, 901.6859600952454,
 ])
 
 # C++ max model (Shear1h2hMax.so). Requires compute_lensing_2h = T.
@@ -323,50 +264,6 @@ class TestShear1hCrossBackend(unittest.TestCase):
         # far tighter than any physics-level tolerance).
         prod = self.source.array("shear1hmissel", "vals")
         np.testing.assert_allclose(self._fast_mass_python(), prod, rtol=1e-5)
-
-    def test_python_radial_series_matches_cpp_radial_series(self):
-        # C++ vs Python radial_series, identical U_ell tables and
-        # profile family -- an interpolation-scheme-only difference,
-        # measured 1.6e-4 (docs/source/pipeline_organization.md's
-        # matrix: "radial_series / C++ ... 3.7e-3 + 1.6e-4 interp-scheme
-        # difference vs Python"). Deliberately NOT compared to
-        # full_ltmz/production here -- see module docstring.
-        table = RadialSeriesTable()
-        weights = dm.MassZWeights(
-            self.source, n_lnm=96, n_z=64, zt_lo=ZT_LOW, zt_hi=ZT_HIGH,
-            lnm_lo=LNM_LOW, lnm_hi=LNM_HIGH, include_sci=True)
-        rho_ref = self.source.scalar("halomodel", "rho_m_ref")
-        norm, ybar, mu = weights.moments_of(
-            lambda lnm: pf.y_of_lnM(lnm, rho_ref), ell_max=3)
-        f_mis, tau_mis = dm.F_MIS_DEFAULT, dm.TAU_MIS_DEFAULT
-        lob = np.asarray(dm.DEFAULT_LOB_CENTERS)
-
-        vals = np.empty((12, R_PERP.size))
-        for b in range(12):
-            r_mis = tau_mis * float(dm.R_lambda(lob[b % lob.size]))
-            vals[b] = evaluate_series(table, R_PERP, r_mis, norm[b], ybar[b],
-                                      mu[b], f_mis=f_mis, rho_ref=rho_ref,
-                                      ell_max=2)
-        np.testing.assert_allclose(vals.ravel(), CPP_RADIAL_SERIES, rtol=3e-4)
-
-    def test_cpp_radial_series_matches_cpp_full_ltmz(self):
-        # FINDING (real, at the project's standard 1e-3 tolerance -- see
-        # docs/known_issues/radial_series_vs_full_ltmz_defect.md). The
-        # historical 56-86% disagreement was dominated by the density
-        # convention mismatch (rho_crit/200c family vs the production
-        # rho_m0/200m) and is RESOLVED by the unified
-        # haloModel/rho_m_ref convention (2026-08-24): under the
-        # regenerated pins (z_halo = 0 tables, matching the dump) the
-        # residual envelope is -10.6% .. +3.9%
-        # (sign flipping with radius within each bin). What remains is
-        # the documented CONC = 4.0 defect: nfw_profile_family.py
-        # hardcodes the concentration for both the profile shape and
-        # its amplitude, instead of the per-sample Child18 relation the
-        # 3d reference/production interpolate from haloModel/dSigma_nfw
-        # -- a shape+amplitude residual that grows with mass. Kept at
-        # the project's default tolerance rather than loosened, per
-        # policy -- a failing test here is doing its job (issue #5).
-        np.testing.assert_allclose(CPP_RADIAL_SERIES, CPP_FULL_LTMZ, rtol=1e-3)
 
     def test_cuda_max_model_matches_cpp_max_model(self):
         # Both backends' inner NFW-mixture contraction is bit-identical

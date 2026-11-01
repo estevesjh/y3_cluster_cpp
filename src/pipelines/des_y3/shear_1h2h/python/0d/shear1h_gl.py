@@ -18,8 +18,7 @@ lensing_profiles.MisMixtureProfile for Phi (haloModel bilinear +
 NFW_DSIGMA_MIS gamma table, interpolation-exact) — so the backend
 agrees with production to near machine precision (see README.md).
 
-Unlike radial_series (whose per-(bin,R) work is three table lookups),
-this pays the full n_lnm-node mass sum per (bin, R) point; unlike
+This pays the full n_lnm-node mass sum per (bin, R) point; unlike
 explicit-3d, it consumes the tabulated S_ij rather than re-evaluating the
 selection kernels.
 

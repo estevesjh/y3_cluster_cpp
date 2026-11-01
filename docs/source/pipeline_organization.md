@@ -88,9 +88,7 @@ dimensions do not count, whatever their number.
 : Everything with zero adaptive dimensions, merged per observable:
   the $S_{ij}$-tabulated fixed-GL sums (formerly `fast_mass`), the
   explicit fixed-GL Python references (formerly the `full_ltmz` Python
-  backends), the offline $U_\ell$ radial-series expansion (formerly
-  `radial_series`, one-halo shear only; tables in `data/radial_series`),
-  and for projection shear the region-split fixed-GL path (exact-$z$
+  backends), and for projection shear the region-split fixed-GL path (exact-$z$
   core plus the frozen-physics CUDA port).
 
 Only the folders carry the new names: module labels, class names, file
@@ -108,7 +106,7 @@ validators, qualified as `validate_fast_vs_production.py` and
 | `3d` | Number counts | C++, CUDA | Adaptive explicit-selection accuracy references |
 | `0d` | Number counts | Python (explicit GL + fast), C++ (production by identity) | Explicit 3-dim GL reference and the $S_{ij}$-tabulated 2-dim GL fast sum |
 | `3d` | One-halo miscentred shear | C++, CUDA | Adaptive explicit-selection accuracy references |
-| `0d` | One-halo miscentred shear | Python, C++ | Explicit 3-dim GL reference, the exact $z$-contracted 1-dim GL mass sum (C++ bitwise-equivalent to production), and the $U_\ell$ moment expansion |
+| `0d` | One-halo miscentred shear | Python, C++ | Explicit 3-dim GL reference and the exact $z$-contracted 1-dim GL mass sum (C++ bitwise-equivalent to production) |
 | `3d` | Traditional 1h+2h max model | C++ | Adaptive explicit reference for the max model |
 | `0d` | Traditional 1h+2h max model | Python, C++, CUDA | $z$-resolved 2-dim GL sum; `profile_method = piecewise_approx` (default) or `gauss_legendre` (full integral); CUDA keeps the older miscentred model |
 | `3d` | Projection shear | CUDA | Fully-coupled adaptive diagnostic with an open wall-edge convergence study |

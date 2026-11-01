@@ -2,7 +2,7 @@
 // "max model" shear -- src/pipelines/des_y3/shear_1h2h/
 // fast_mass/cpp/Shear1h2hMax.cc).
 //
-// Unlike shear1h_radial_series (RadialSeriesTable) or Shear1hGl
+// Unlike Shear1hGl
 // (SelGLCore in models/n_operator_sel_gl_t.hh), Shear1h2hMax.cc has NO
 // header-only core to instantiate directly: its class is defined
 // entirely inside the module .cc, private to that translation unit, and

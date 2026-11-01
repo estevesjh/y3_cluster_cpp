@@ -17,7 +17,7 @@ S_stack interpolation), expressed through the shared Python replica
 backend agrees with production to machine precision (measured 2.4e-15;
 see README.md). It exists so the namespace carries a readable,
 importable statement of the production algorithm that the explicit 3d
-references and the radial_series moments all build on.
+references build on.
 
 DataBlock contract
 ------------------

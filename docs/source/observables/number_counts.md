@@ -119,8 +119,7 @@ $\le 10^{-6}$):
 | `0d` | Python | `numcounts_sij_gl.py` — $S_{ij}$-tabulated 2-dim GL fast sum | 5 ms | 7.6e-4 (2.4e-15 vs production) |
 | `0d` | **C++ (this page)** | `NumCountsSijGl.so` — same fast sum, algorithmically identical to DES Y1's `NumCountsSel.so` | 6 ms | 7.6e-4 (identity with production) |
 
-A radial-series reduction does not apply because the counts operator
-has no radial profile ($f=1$). The $7.6\times10^{-4}$ of the fast path
+The $7.6\times10^{-4}$ of the fast path
 is the cost of tabulating $S_{ij}$ on the shared `sel_function` grid
 rather than evaluating the richness kernels at every node; it is the
 dominant approximation of the production counts. Agreement with

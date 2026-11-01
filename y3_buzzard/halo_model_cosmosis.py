@@ -314,7 +314,7 @@ def execute(block, config):
     block[section_name, "z"] = z
     block[section_name, "rhoc"] = rho_mz
     # rho_m_ref: THE single NFW reference density every profile consumer
-    # (CPU/CUDA mis readers, Python replicas, radial-series family) uses
+    # (CPU/CUDA mis readers, Python replicas) uses
     # for BOTH the halo boundary r_200 = [3M/(800 pi rho_m_ref)]^(1/3)
     # and the amplitude rho_s = delta_c * rho_m_ref. Identical to the
     # density first_halo_term builds the centred tables with:

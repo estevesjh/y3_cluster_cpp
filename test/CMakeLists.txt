@@ -243,21 +243,6 @@ target_include_directories(
   )
 add_test(interp_2d_test interp_2d_test)
 
-# radial_series C++ backend (src/pipelines/des_y3, Phase 2): table
-# loading, series assembly, and the NFW_DSIGMA_MIS amplitude
-# cross-check.  fmt::fmt comes in through nfw_dsigma_mis.hh.
-add_executable(shear1h_radial_series_test shear1h_radial_series.test.cc)
-target_link_libraries(
-  shear1h_radial_series_test PRIVATE testmain ${GSL_LIBRARIES} utils
-                                     cosmosis fmt::fmt
-  )
-target_include_directories(
-  shear1h_radial_series_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CUBACPP_DIR}
-                                     ${CMAKE_SOURCE_DIR}/externals
-                                     ${GSL_INCLUDE_DIR}
-  )
-add_test(shear1h_radial_series_test shear1h_radial_series_test)
-
 # fast_mass C++ backend, shear_projection (src/pipelines/des_y3, Phase 2):
 # theta-grid / exclusion-angle golden values vs the Python fast_mass
 # port, the NFW_DSIGMA_MIS c=4/single convention, and ShearPrjCore's
@@ -350,7 +335,6 @@ target_compile_definitions(
     PIPELINES_SO_NUMCOUNTS_SIJ_GL="$<TARGET_FILE:NumCountsSijGl>"
     PIPELINES_SO_NUMCOUNTS_3D="$<TARGET_FILE:NumCounts3d>"
     PIPELINES_SO_SHEAR1H_GL="$<TARGET_FILE:Shear1hGl>"
-    PIPELINES_SO_SHEAR1H_RADIAL_SERIES="$<TARGET_FILE:Shear1hRadialSeries>"
     PIPELINES_SO_SHEAR1H2H_MAX="$<TARGET_FILE:Shear1h2hMax>"
     PIPELINES_SO_SHEAR1H_3D="$<TARGET_FILE:Shear1h3d>"
     PIPELINES_SO_SHEAR1H2H_MAX_3D="$<TARGET_FILE:Shear1h2hMax3d>"
@@ -359,7 +343,7 @@ target_compile_definitions(
   )
 add_dependencies(
   pipelines_module_so_test
-    NumCountsSijGl NumCounts3d Shear1hGl Shear1hRadialSeries Shear1h2hMax
+    NumCountsSijGl NumCounts3d Shear1hGl Shear1h2hMax
     Shear1h3d Shear1h2hMax3d ShearPrjGl ShearPrjCuhre
   )
 target_link_libraries(pipelines_module_so_test PRIVATE testmain ${CMAKE_DL_LIBS})
@@ -420,7 +404,7 @@ add_test(
 
 # Cross-backend/cross-strategy consistency for one-halo miscentred shear
 # (full_ltmz Python/C++/CUDA, fast_mass Python/production C++,
-# radial_series Python/C++, max-model C++/CUDA identity). C++/CUDA
+# max-model C++/CUDA identity). C++/CUDA
 # values are hard-coded (see the test module docstring for provenance);
 # Python backends and production's own output are computed/read live
 # from the checked-in fiducial dump.

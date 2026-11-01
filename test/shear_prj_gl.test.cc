@@ -29,8 +29,8 @@
 // running this repo's own Python fast_mass port
 // (../python/shear_prj_gl.py), which the module's docstring
 // documents as a line-for-line port of these exact two functions,
-// exercised with the same inputs -- a cross-language identity check in
-// the same spirit as shear1h_radial_series.test.cc's golden values.
+// exercised with the same inputs -- a cross-language identity check
+// against golden values.
 //
 // NFW_DSIGMA_MIS convention note (c=4 vs c=5): ShearPrjCore constructs
 // its miscentering kernel as

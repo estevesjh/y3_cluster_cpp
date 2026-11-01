@@ -12,9 +12,9 @@ quadrature knob cheat-sheet), `docs/shear1h_radial_factorization.tex`, and
 
 New DES Y3 implementations use adaptive-dimension strategy names: the
 folder tag counts adaptive integration dimensions only, and `0d` collects
-everything with none — fixed-GL sums and offline tables (formerly
-`fast_mass`, `radial_series`, and the `full_ltmz` fixed-GL Python
-references). Their precise meanings and available backends are listed in
+everything with none — fixed-GL sums (formerly `fast_mass` and the
+`full_ltmz` fixed-GL Python references). Their precise meanings and
+available backends are listed in
 {doc}`../pipeline_organization`; the production recipes below correspond
 to the fast, path-stable modules loaded by the reference ini. Every
 table below leads with a **Dims** column — the adaptive-dimension tag —
@@ -57,8 +57,6 @@ records) is in
 | `3d` | CUDA (PAGANI) | 32 s | 3.4e-4 |
 | `0d` | Python — $z$-contracted 1-dim GL mass sum | 74 ms | 8.4e-4 |
 | `0d` | C++ (`Shear1hGl.so`) — $z$-contracted 1-dim GL mass sum | 9 ms | 8.4e-4; bitwise identity **vs production `Shear1hMisSel.so`** recorded separately |
-| `0d` | Python — radial series ($\ell\le2$, offline tables) | 6 ms | 3.7e-3 |
-| `0d` | C++ (`Shear1hRadialSeries.so`) — radial series | 7 ms | 3.7e-3 (truncation, **vs same-profile doubled-node fiducial**) + 1.6e-4 interp difference **vs its Python twin**; raw vs-3d amplitude is the open c=4 defect |
 | `0d` | max model C++ (`Shear1h2hMax.so`), `piecewise_approx` — $z$-resolved 2-dim GL sum | 3 ms (Apple M5) | not compared with 3d (no miscentering in `Shear1h2hMax`); within 0.43% **vs its `gauss_legendre` mode**; see {doc}`../observables/second_halo_term` |
 | `0d` | max model C++, `gauss_legendre` 64/32 — full GL integral of the max | 0.12 s (Apple M5) | 5.8e-5 **vs 128/64 nodes** |
 | `0d` | max model CUDA (`Shear1h2hMaxGpu.so`) — older miscentred model | 8 ms | historical: machine precision vs the earlier miscentred C++ |

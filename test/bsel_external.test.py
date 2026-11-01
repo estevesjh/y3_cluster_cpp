@@ -27,7 +27,7 @@ docs/known_issues/distances_grid_resolution_defect.md:
       4.8e-3 on I1 with a dense distances grid).
 
 Convention per the project's known-defect pins (sel_function,
-radial_series, nfw_dsigma_mis): assertions stay at the DEFAULT 1e-3
+nfw_dsigma_mis): assertions stay at the DEFAULT 1e-3
 tolerance, so the I1/J rows (and some P1 rows) are DELIBERATELY red
 until the defect is fixed or explicitly accepted. Regenerate the pins
 with make_bsel_quad_truth_pins.py after any fix.

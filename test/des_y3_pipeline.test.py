@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Unit tests for the pure-Python DES Y3 pipeline and radial decomposition."""
+"""Unit tests for the pure-Python DES Y3 pipeline."""
 from __future__ import annotations
 
-import math
 import sys
 import unittest
 from pathlib import Path
@@ -11,7 +10,6 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 PIPELINES = REPO / "src" / "pipelines"
-RADIAL_PY = (PIPELINES / "des_y3" / "shear_1h2h" / "python" / "0d")
 NUMCOUNTS_FULL_LTMZ_PY = (PIPELINES / "des_y3"
                           / "number_counts" / "python" / "0d")
 SHEAR_FAST_MASS_PY = (PIPELINES / "des_y3" / "shear_1h2h"
@@ -20,23 +18,13 @@ SHEAR_MAX_PY = (PIPELINES / "des_y3" / "shear_1h2h" / "python" / "0d")
 SHEAR_FULL_LTMZ_PY = (PIPELINES / "des_y3" / "shear_1h2h"
                       / "3d" / "python")
 sys.path.insert(0, str(PIPELINES))
-for _p in (RADIAL_PY, NUMCOUNTS_FULL_LTMZ_PY, SHEAR_FAST_MASS_PY,
+for _p in (NUMCOUNTS_FULL_LTMZ_PY, SHEAR_FAST_MASS_PY,
           SHEAR_MAX_PY, SHEAR_FULL_LTMZ_PY):
     sys.path.insert(0, str(_p))
 
 from shared import datablock_models as dm  # noqa: E402
 from shared import lensing_profiles as lp  # noqa: E402
 from systematics.selection_richness.python import sel_kernels  # noqa: E402
-import generate_radial_series_tables as generator  # noqa: E402
-import nfw_profile_family as pf
-
-# Convention-independent algebra tests use one fixed reference density
-# (the identities hold for any rho_ref; production reads haloModel/rho_m_ref).
-RHO_TEST = 0.3096 * pf.RHOC  # noqa: E402
-from shear1h_radial_series import (  # noqa: E402
-    RadialSeriesTable,
-    evaluate_series,
-)
 from numcounts_explicit_gl import compute_counts as full_ltmz_counts  # noqa: E402
 from shear1h_gl import compute_shear as fast_mass_shear  # noqa: E402
 from shear1h2h_max_explicit_gl import compute_shear_max, z_resolved_weights  # noqa: E402
@@ -180,98 +168,6 @@ class TestSharedQuadratureAndMoments(unittest.TestCase):
         np.testing.assert_allclose(mu[:, 1], 0.0, rtol=0.0, atol=1e-15)
         np.testing.assert_allclose(mu[0, 2:], [0.5, 0.0],
                                    rtol=0.0, atol=1e-15)
-
-
-class TestNfwDecomposition(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.table = RadialSeriesTable()
-
-    def test_mass_scale_radius_round_trip(self):
-        lnm = np.linspace(29.9336, 36.7300, 21)
-        np.testing.assert_allclose(
-            pf.lnM_of_y(pf.y_of_lnM(lnm, RHO_TEST), RHO_TEST), lnm,
-            rtol=0.0, atol=2e-14)
-
-    def test_nfw_shape_is_stable_through_x_equal_one(self):
-        import mpmath as mp
-
-        mp.mp.dps = 40
-        x = np.array([0.9901, 0.999999, 1.0, 1.000001, 1.0099])
-        got = pf.u_cen(x)
-        expected = np.array([float(pf.u_cen_mp(v, mp)) for v in x])
-        np.testing.assert_allclose(got, expected, rtol=REL_TOL, atol=0.0)
-
-    def test_mixture_endpoints(self):
-        # Unified rho_m convention: both components share rho_ref inside
-        # A0, so the mix is a plain f_mis blend with exact endpoints.
-        lnx = np.array([-1.2, 0.1, 1.7])
-        lnxm = np.array([-0.8, -0.4, 0.2])
-        for ell in range(4):
-            cen = self.table.u_cen(ell, lnx)
-            mis = self.table.u_mis(ell, lnx, lnxm)
-            np.testing.assert_allclose(
-                self.table.u_mix(ell, lnx, lnxm, 0.0), cen,
-                rtol=0.0, atol=1e-14)
-            np.testing.assert_allclose(
-                self.table.u_mix(ell, lnx, lnxm, 1.0),
-                mis, rtol=0.0, atol=1e-14)
-
-    def test_series_matches_direct_skewed_mass_population(self):
-        r = np.array([0.20, 0.84, 3.0, 10.0])
-        r_mis = 0.15
-        norm = 137.0
-        ybar = math.log(0.30)
-        f_mis = 0.22
-
-        # Mean displacement is zero and the third central moment is nonzero.
-        dy = np.array([-0.03, 0.06])
-        probability = np.array([2.0 / 3.0, 1.0 / 3.0])
-        mu = np.array([1.0, np.dot(probability, dy),
-                       np.dot(probability, dy**2),
-                       np.dot(probability, dy**3)])
-        self.assertAlmostEqual(mu[1], 0.0, places=15)
-        self.assertNotEqual(mu[3], 0.0)
-
-        direct = np.zeros_like(r)
-        for displacement, weight in zip(dy, probability):
-            y = ybar + displacement
-            lnx = np.log(r) - y
-            lnxm = np.full_like(r, math.log(r_mis) - y)
-            direct += weight * pf.A0_of_y(y, RHO_TEST) * self.table.u_mix(
-                0, lnx, lnxm, f_mis)
-        direct *= norm
-
-        series = evaluate_series(
-            self.table, r, r_mis, norm, ybar, mu,
-            f_mis=f_mis, rho_ref=RHO_TEST, ell_max=3)
-        np.testing.assert_allclose(series, direct, rtol=REL_TOL, atol=0.0)
-
-
-class TestOfflineRadialGenerator(unittest.TestCase):
-    def test_finite_difference_weights_recover_polynomial_derivatives(self):
-        offsets = np.arange(-4, 5)
-        h = 0.0125
-        # p(s) = sum c_k s^k; the order-n derivative at zero is n! c_n.
-        coefficients = np.array([1.1, -0.7, 0.4, 0.2, -0.1,
-                                 0.05, 0.01, -0.02, 0.005])
-        samples = np.polynomial.polynomial.polyval(offsets * h,
-                                                   coefficients)
-        for order in range(4):
-            got = np.dot(generator.fd_weights(order, offsets, h), samples)
-            expected = math.factorial(order) * coefficients[order]
-            self.assertAlmostEqual(got, expected, places=8)
-
-    def test_gamma_average_matrix_preserves_a_constant_profile(self):
-        h = 0.0125
-        lnv = np.arange(-10.0, 7.0 + 0.5 * h, h)
-        self.assertEqual(lnv.size % 2, 1)
-        lnxm = np.array([-3.0, 0.0, 2.0])
-        q = generator.gamma_average_matrix(lnv, lnxm, h)
-        # Integral w exp(-w) dw = 1. The analytic below-grid tail is
-        # included by gamma_average_matrix; the upper tail is negligible.
-        np.testing.assert_allclose(q.sum(axis=0), 1.0,
-                                   rtol=REL_TOL, atol=0.0)
 
 
 @unittest.skipUnless(HAS_DUMP, _SKIP_MSG)

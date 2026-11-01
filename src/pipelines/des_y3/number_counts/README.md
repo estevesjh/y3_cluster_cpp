@@ -81,7 +81,7 @@ W_{ij}(M)=\int dz\;n(M,z)\frac{dV}{d\Omega dz}\Omega(z)S_{ij}(M,z),
 N_{ij}=\int d\ln M\;W_{ij}(M).
 $$
 
-The radial-series population moments use the same $W_{ij}(M)$, which is
+The one-halo shear backends use the same $W_{ij}(M)$, which is
 why the fixed-GL weight builder is kept in the shared layer: the
 pipeline-owned `shared/sel_gl_weights.hh`
 (`y3_pipelines::SelGlWeights`, identity-certified against the

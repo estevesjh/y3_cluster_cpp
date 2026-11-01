@@ -38,8 +38,7 @@
 //      run.
 //   3. The f_mis = 0 structural invariant: the centred-only limit must not
 //      depend on the miscentering-kernel parameters (lob_centers,
-//      tau_mis) at all, mirroring the exact-endpoint style of
-//      test/shear1h_radial_series.test.cc.
+//      tau_mis) at all (an exact-endpoint check).
 //   4. The constructor/evaluate guard clauses (empty lob_centers,
 //      out-of-range bin_index).
 //
@@ -51,8 +50,7 @@
 // setup/execute/cleanup are inert, unexported symbols in this executable.
 //
 // Requires Y3_CLUSTER_CPP_DIR to point at the source tree: NFW_DSIGMA_MIS
-// reads the real data/nfw_off_center/*gamma* tables at construction (same
-// requirement as shear1h_radial_series.test.cc).
+// reads the real data/nfw_off_center/*gamma* tables at construction.
 #include "catch2/catch.hpp"
 
 #include "cosmosis/datablock/datablock.hh"
@@ -285,8 +283,7 @@ TEST_CASE("Shear1hGl at f_mis = 0 is invariant to the miscentering-kernel parame
   // At f_mis = 0 the mixture is pure dSigma_nfw; lob_centers and tau_mis
   // only ever enter through the f_mis-weighted miscentred term, so two
   // very different miscentering configurations must give bit-identical
-  // output -- the fast_mass analogue of shear1h_radial_series.test.cc's
-  // "mixture decomposition has exact endpoints".
+  // output (the mixture decomposition has exact endpoints).
   auto cfg_a = make_cfg_block(std::vector<double>{30.0, 90.0});
   auto cfg_b = make_cfg_block(std::vector<double>{5.0, 500.0});
   auto s = make_sample_block(/*f_mis=*/0.0, /*tau_mis=*/0.17);

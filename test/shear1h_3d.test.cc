@@ -28,7 +28,7 @@
 // table values are chosen.
 //
 // Requires Y3_CLUSTER_CPP_DIR: NFW_DSIGMA_MIS reads data/nfw_off_center/*
-// at construction, same as shear1h_radial_series.test.cc.
+// at construction.
 #include "catch2/catch.hpp"
 
 #include "pipelines/des_y3/shear_1h2h/cpp/3d/shear1h_3d_t.hh"

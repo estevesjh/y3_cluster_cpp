@@ -94,8 +94,7 @@ dimensions, and the physics dictates which reductions are legal:
   so nothing commutes: its `0d` backend keeps the $z$-resolved weight
   and performs a double $(\ln M, z)$ GL sum. The explicit fixed-GL
   Python references evaluate the full composition on fixed grids with
-  feature-placed nodes; the radial series replaces runtime integration
-  entirely with offline profile tables and population moments.
+  feature-placed nodes.
 
 ## Precision and cost
 
@@ -112,7 +111,6 @@ baselines are stated in-cell.
 | `0d` | [one-halo Python/C++ (1-dim GL, z contracted)](#one-halo-z-contracted-gl) | 74 / 9 ms | 8.4e-4; also identity with production (separate baseline) |
 | `0d` | [max model (piecewise)](#traditional-1h2h-max-model-z-resolved-gl) | 3 / 14 ms | Within 0.43% of GL |
 | `0d` | [max model (GL 64/32)](#traditional-1h2h-max-model-z-resolved-gl) | 0.12 / 0.35 s | 5.8e-5 vs 128/64 nodes |
-| `0d` | [radial series Python/C++ (tables + moments)](#moment-expanded-radial-series) | 6--7 ms | 56--86% vs 3d (known fixed-c=4 defect); 3.7e-3 internal fixed-profile consistency |
 
 The traditional max model is a model option, not part of the reference
 pipeline. All backends read their
@@ -125,15 +123,14 @@ through the CosmoSIS wrapper `y3_buzzard/halo_model_cosmosis.py`).
 ## The 0d backends
 
 Every backend here has zero adaptive integration dimensions — fixed
-Gauss–Legendre sums or offline table lookups — so all are fast and
-MCMC-viable. Four algorithms:
+Gauss–Legendre sums — so all are fast and MCMC-viable. Three
+algorithms:
 
 | Algorithm | Backends |
 | --- | --- |
 | [1h z-contracted GL](#one-halo-z-contracted-gl) | Python, C++ |
 | [Max model z-resolved GL](#traditional-1h2h-max-model-z-resolved-gl) | Python, C++, CUDA |
 | [Explicit fixed-GL references](#explicit-fixed-gl-python-references) | Python |
-| [Moment-expanded radial series](#moment-expanded-radial-series) | Python, C++ |
 
 ### One-halo z-contracted GL
 
@@ -364,71 +361,6 @@ Convergence is certified by doubled-node self-convergence
 (96→192, 64→128, 32→64 nodes and $L_\lambda$ 6→8) in
 `src/pipelines/des_y3/validate_against_fiducial.py`.
 
-### Moment-expanded radial series
-
-(Formerly `radial_series`; no runtime integration — offline tables plus
-population moments.) Replaces the mass-dependent radial profile
-evaluation with an offline expansion around the population mean of the
-scale-radius coordinate. It is a candidate speed approximation for
-one-halo shear, not a general profile emulator.
-
-**Strong model limitation.** The committed table uses a fixed NFW
-concentration, $c(M,z)=4$: no concentration–mass or
-concentration–redshift evolution in the tabulated dimensionless
-profile. The scale radius still varies with mass through
-$r_s\propto M^{1/3}$, but a production $c(M,z)$ relation changes both
-the amplitude and radial shape, and exact redshift contraction of the
-population weights does not restore that missing dependence. Direct
-radial evaluation is the correct choice when the production profile is
-required.
-
-Mathematical construction: let
-
-$$
-y=\ln r_s(M),\qquad x=R e^{-y},\qquad
-x_{\rm mis}=\tau e^{-y},
-$$
-
-and write the fixed profile as
-$\Delta\Sigma(R,y,\tau)=A_0(y)\,u(x,x_{\rm mis})$ with
-$A_0(y)\propto e^y$. For a population with mean $\bar y$, define
-
-$$
-U_\ell(x,x_{\rm mis})=
-\frac{1}{\ell!A_0(y)}
-\left.\frac{\partial^\ell}{\partial s^\ell}
-\left[A_0(y+s)\,u\!\left(Re^{-(y+s)},\tau e^{-(y+s)}\right)\right]
-\right|_{s=0}.
-$$
-
-Because $A_0\propto e^y$, only the two dimensionless coordinates are
-needed. With
-$L=\partial/\partial\ln x + \partial/\partial\ln x_{\rm mis}$,
-the stored functions are $U_0=u$, $U_1=(1-L)u$,
-$U_2=\tfrac12(1-2L+L^2)u$, $U_3=\tfrac16(1-3L+3L^2-L^3)u$. The mass
-integral is approximated with population moments,
-
-$$
-O(R)\approx N A_0(\bar y)\left[U_0+\mu_2U_2+\mu_3U_3\right],
-$$
-
-with $U_0$, $U_2$, $U_3$ interpolated at
-$(\ln R-\bar y,\ln\tau-\bar y)$; $U_1$ is retained for validation (its
-coefficient vanishes for the centered expansion used here). At runtime
-the exact fixed-GL redshift weight supplies $N$, $\bar y$, $\mu_2$,
-$\mu_3$.
-
-| Dims | Backend | Cost | Precision vs 3d |
-| --- | --- | ---: | --- |
-| `0d` | Python (tables + moments) | 6--7 ms/sample | 56--86% (known fixed-c=4 defect); $3.7\times10^{-3}$ internal fixed-profile consistency (separate baseline) |
-| `0d` | C++ (tables + moments) | 7 ms/sample | Same vs-3d defect; $3.7\times10^{-3}$ plus $1.6\times10^{-4}$ interpolation difference vs Python (separate baselines) |
-
-These numbers measure internal consistency and the fixed-profile
-approximation; they do not certify agreement with the production
-profile (fixed $c=4$ vs the per-sample Child18 concentration used
-elsewhere). The table data are documented in
-[`data/radial_series/README.md`](../../../../data/radial_series/README.md).
-
 ## The 3d backends
 
 (Formerly `full_ltmz`; three adaptive dimensions.) The independent
@@ -477,16 +409,15 @@ production timing is supplied by the `0d` fixed-GL C++ backends.
 | `0d` | Python | `python/0d/shear1h2h_max.py` (twin of C++) | ini `[shear1h2h_max]`, output `shear1h2h_max/vals` |
 | `0d` | CUDA | `cuda/0d/Shear1h2hMaxGpu.cu` (physics `cuda/0d/shear1h2h_max_gpu_t.cuh`; older miscentred piecewise model) | `Shear1h2hMaxGpu.so` in `des_y3_shear1h_0d_cuda/`, section `shear1h2h_max_gpu` |
 | `0d` | Python | `python/0d/shear1h_explicit_gl.py`, `python/0d/shear1h2h_max_explicit_gl.py` (+ `validate_explicit_vs_production.py`) | `shear1h_explicit_gl/vals`, `shear1h2h_max_explicit_gl/vals` |
-| `0d` | Python/C++ | radial series: `python/0d/{generate_radial_series_tables,nfw_profile_family,shear1h_radial_series,validate_radial_series}.py`; `cpp/0d/Shear1hRadialSeries.cc` (physics `cpp/0d/shear1h_radial_series_t.hh`) | `shear1h_radial_series/vals` |
 | `3d` | C++ | `cpp/3d/Shear1h3d.cc`, `cpp/3d/Shear1h2hMax3d.cc` (physics `cpp/3d/shear1h_3d_t.hh`, `cpp/3d/shear1h2h_max_3d_t.hh`) | `shear1h3d/…`, `shear1h2hmax3d/…` in `des_y3_shear1h_3d_cpp/` |
 | `3d` | CUDA | `cuda/3d/Shear1h3dGpu.cu` (physics `cuda/3d/shear1h_3d_gpu_t.cuh`) | `shear1h3dgpu/…` in `des_y3_shear1h_3d_cuda/` |
 
 The `0d` C++ modules build into one binary dir,
-`release-build/src/modules/des_y3_shear1h_0d_cpp/` (three `.so`). No
-CUDA backend exists for the 1h z-contracted path or the radial series
-(a 1-D contraction / a few table lookups are not useful GPU targets).
+`release-build/src/modules/des_y3_shear1h_0d_cpp/` (two `.so`). No
+CUDA backend exists for the 1h z-contracted path (a 1-D contraction is
+not a useful GPU target).
 Module labels are the ini `[section]` names (`[Shear1hGl]`,
-`[Shear1h2hMax]`, `[Shear1hRadialSeries]`, ...), so pipelines drive
+`[Shear1h2hMax]`, ...), so pipelines drive
 these backends by pointing those sections at the `.so` paths above.
 
 ## How to run `Shear1h2hMax`

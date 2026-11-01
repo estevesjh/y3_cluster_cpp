@@ -43,7 +43,6 @@ namespace {
     {"NumCountsSijGl", PIPELINES_SO_NUMCOUNTS_SIJ_GL},
     {"NumCounts3d", PIPELINES_SO_NUMCOUNTS_3D},
     {"Shear1hGl", PIPELINES_SO_SHEAR1H_GL},
-    {"Shear1hRadialSeries", PIPELINES_SO_SHEAR1H_RADIAL_SERIES},
     {"Shear1h2hMax", PIPELINES_SO_SHEAR1H2H_MAX},
     {"Shear1h3d", PIPELINES_SO_SHEAR1H_3D},
     {"Shear1h2hMax3d", PIPELINES_SO_SHEAR1H2H_MAX_3D},

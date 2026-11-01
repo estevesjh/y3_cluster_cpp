@@ -52,11 +52,11 @@ src/pipelines/des_y3/
 │                         (formerly full_ltmz Python) + validators
 ├── shear_1h2h/
 │   ├── README.md
-│   ├── cpp/{0d, 3d}/     0d: 1h z-contracted + max z-resolved +
-│   │                     radial series; 3d: adaptive explicit (1h, max)
+│   ├── cpp/{0d, 3d}/     0d: 1h z-contracted + max z-resolved;
+│   │                     3d: adaptive explicit (1h, max)
 │   ├── cuda/{0d, 3d}/    0d: max model GPU; 3d: adaptive explicit GPU
 │   └── python/0d/        all fixed-GL replicas, explicit fixed-GL
-│                         references, radial series + validators
+│                         references + validators
 └── shear_projection/
     ├── README.md
     ├── cpp/{0d, 2d}/     0d: region-split GL exact-z; 2d: ShearPrjCuhre
@@ -96,17 +96,12 @@ strategies and language backends.
 | --- | --- | --- |
 | `3d` | All three integration variables handled by adaptive Cuhre/Vegas/PAGANI quadrature. | Independent reference and convergence tool; the maximum-dimension adaptive reference of each observable. |
 | `2d` (projection only) | Fixed log-GL angular grid; adaptive quadrature over the inner (z, lnM). | Adaptive comparison backend (`ShearPrjCuhre`). |
-| `0d` | No adaptive integration: fixed Gauss--Legendre sums (with the redshift/selection contractions of the former `fast_mass` paths, or the full explicit composition on fixed nodes) and offline tables + moments (the former `radial_series`). | Maintained production methods; fast and MCMC-viable. |
+| `0d` | No adaptive integration: fixed Gauss--Legendre sums (with the redshift/selection contractions of the former `fast_mass` paths, or the full explicit composition on fixed nodes). | Maintained production methods; fast and MCMC-viable. |
 
 The `3d` adaptive implementations define the accuracy baseline
 ("Precision vs 3d" in every table); fixed Gauss--Legendre backends are
 evaluated against that baseline. Agreement with an existing production
 module is a separate backend-identity check, not an accuracy measurement.
-
-The radial-series `0d` algorithm is not an exact replacement for the
-varying-concentration one-halo model: its current profile uses a fixed
-concentration and is not scientifically interchangeable with the other
-implementations.
 
 ## Precision and cost overview
 
@@ -133,7 +128,6 @@ evaluator), the baseline is stated in the cell:
 | `3d` | One-halo shear | [`3d`](shear_1h2h/README.md#the-3d-backends), PAGANI CUDA/A100 | 32 s | 3.0e-4 direct vs the 3d Python reference (re-measured 2026-08-26); CUDA vs C++ twin 4.3e-5 (separate baseline, shared A100) |
 | `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), explicit Python (3-dim GL) | 149 ms | 4.9e-5 |
 | `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), 1h C++ (1-dim GL, z contracted) | 9 ms | 8.4e-4; also identity with production (separate baseline); 2.3e-4 direct vs cuda-3d on the reduced 6-pt wall (re-measured 2026-08-26, python twin gave numerically identical values) |
-| `0d` | One-halo shear | [`0d`](shear_1h2h/README.md#the-0d-backends), radial series (tables + moments) | 6--7 ms | 56--86% (known fixed-c=4 defect); 3.7e-3 internal fixed-profile consistency (separate baseline) |
 | `0d` | Max model | [`0d`](shear_1h2h/README.md#traditional-1h2h-max-model-z-resolved-gl), max C++/Python, `piecewise_approx` (2-dim GL, z-resolved) | 3 / 14 ms (Apple M5) | not compared with 3d (no miscentering); within 0.43% of `gauss_legendre` |
 | `0d` | Max model | [`0d`](shear_1h2h/README.md#traditional-1h2h-max-model-z-resolved-gl), max C++/Python, `gauss_legendre` 64/32 | 0.12 / 0.35 s (Apple M5) | 5.8e-5 vs 128/64 nodes |
 | `3d` | Projection shear | [`3d`](shear_projection/README.md#the-3d-backend), PAGANI on A100, eps_rel=1e-3 | 95 s | Reference-class diagnostic (3d); convergence open — median 9.5e-4, maximum 2.2% vs region-split GL (separate baseline) |
@@ -254,9 +248,6 @@ variants.
 
 ## Important limitations
 
-- The radial-series `0d` algorithm currently uses a fixed concentration and
-  is not validated as an accurate replacement for the varying-concentration
-  one-halo model.
 - The projection `3d` GPU calculation has unresolved wall-edge
   convergence; do not call its default result fully converged.
 - The traditional max model depends on `haloModel/dSigma_hh` and is

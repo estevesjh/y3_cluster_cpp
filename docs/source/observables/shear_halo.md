@@ -200,16 +200,11 @@ $\le 10^{-6}$; the `3d` C++/CUDA rows were re-measured on the reduced
 | `3d` | CUDA | `Shear1h3dGpu.so`; PAGANI on A100 | 32 s | 3.0e-4 (4.3e-5 vs the C++ twin) |
 | `0d` | Python | `shear1h_explicit_gl.py` — explicit fixed-GL 3-dim grid | 149 ms | 4.9e-5 |
 | `0d` | **C++ (this page)**, Python | `Shear1hGl.so` / `shear1h_gl.py` — exact redshift contraction, 1-dim GL mass sum; bitwise-equivalent to `Shear1hMisSel.so` | 9 ms (Python 74 ms) | 8.4e-4 (identity with production) |
-| `0d` | Python, C++ | `Shear1hRadialSeries.so` — offline $U_\ell$ radial-series tables plus per-sample population moments | 6–7 ms | 56–86% raw amplitude (open fixed-$c{=}4$ defect); 3.7e-3 internal fixed-profile consistency |
 | `0d` | Python, C++ | `Shear1h2hMax` — traditional 3D halo-exclusion max model, centred one-halo arm, $z$-resolved 2-dim GL sum; `profile_method = piecewise_approx` (default) or `gauss_legendre` (full integral); a model option, not in the reference pipeline ({doc}`second_halo_term`) | piecewise 3 ms (Python 14 ms); GL 64/32 0.12 s (Python 0.35 s); Apple M5 | not compared with 3d (the 3d max reference keeps miscentering); piecewise within 0.43% of GL, GL 5.8e-5 node convergence |
 | `0d` | CUDA | `Shear1h2hMaxGpu.so` — older miscentred piecewise max model (no `profile_method`) | 8 ms | historical: agreed with the earlier miscentred C++ to 6.4e-15 |
 
-The radial-series tables are versioned under `data/radial_series` and
-are loaded, never regenerated, during sampling; the family is not a
-validated replacement for the varying-concentration one-halo model
-(56–86% raw amplitude offset, open fixed-$c{=}4$ defect — see the row
-above). Validators:
+Validators:
 `validate_fast_vs_production.py`,
-`validate_explicit_vs_production.py`, `validate_radial_series.py`,
+`validate_explicit_vs_production.py`,
 `validate_shear1h2h_max.py`; tests in
 {doc}`../testing/src_pipelines_des_y3`.

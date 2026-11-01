@@ -240,7 +240,6 @@ methods" table of `src/pipelines/des_y3/README.md`. The namespace under
 | `0d` | Python | `shear_prj_gl.py` — exact-$z$ region-split GL port of `ShearPrjCore` | 270 ms | 1.6e-11 vs the exact evaluator; 5.5e-5 vs frozen production |
 | `0d` | **C++ (this page)** | `ShearPrjGl.so`; exact-$z$ core emitting $\Sigma$, $\Delta\Sigma$ and shear in one pass | 154 ms | 9.9e-12 vs the exact-$z$ evaluator (same core) |
 | `0d` | CUDA | `ShearPrjFrozenGpu.so`; CUDA port of the frozen DES Y1 machinery (issue #24 closed 2026-08-28) | 16 ms | ~1e-10 vs the CPU frozen module on `vals`/`rnd`/`cl` |
-| radial series | — | not applicable / not planned | — | — |
 
 The exact-$z$ region-split path is the current precision reference of
 this observable; the `3d` PAGANI run is a diagnostic whose own error

@@ -11,9 +11,8 @@ ctest -j 10 --output-on-failure
 ```
 
 Use `ctest -N` for the exact target list. Default relative tolerance is
-`1e-3`. Two known-failing tests are deliberate (real defects, not test
-bugs): `shear1h_cross_backend.test.py`'s radial-series-vs-full_ltmz
-check, and `nfw_dsigma_mis.test.cu`'s one out-of-tolerance point.
+`1e-3`. One known-failing test is deliberate (a real defect, not a test
+bug): `nfw_dsigma_mis.test.cu`'s one out-of-tolerance point.
 
 ## Folder inventories
 

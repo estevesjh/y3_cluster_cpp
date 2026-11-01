@@ -77,3 +77,11 @@ The rest are orphans/experiments:
   `shear_prj`.
 - **Reduced shear $g_t$** — retired observable (see
   {doc}`../math/index`).
+- **Radial-series one-halo shear** (`Shear1hRadialSeries`,
+  `shear1h_radial_series.py`, formerly the `radial_series` strategy) —
+  retired. It expanded the miscentred NFW profile into offline $U_\ell$
+  moment tables at fixed concentration $c = 4$ and so could not
+  reproduce the varying-$c(M, z)$ production profile; its
+  `data/radial_series/` tables were deleted in 46f0b8d. The fixed-GL
+  `Shear1hGl` (and production `Shear1hMisSel`) cover `0d` one-halo
+  shear.
