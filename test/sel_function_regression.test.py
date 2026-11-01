@@ -174,6 +174,21 @@ def load_previous_pipeline():
     # The baseline used cache=True.  The test loads it from a string, so its
     # source location is not a normal importable file for Numba's cache.
     source = source.replace("cache=True", "cache=False")
+    # 2026-11-01 HOD fix (central counted once): bring the frozen baseline to
+    # the documented x = ltr + delta so this test keeps guarding the refactor
+    # (same physics, no slowdown) rather than the old double-counted central.
+    for old_hod, new_hod in (
+            ("    x = ltr - lcentral + delta                              # broadcast to full tensor",
+             "    x = ltr + delta                                         # broadcast to full tensor"),
+            ("    density = np.where((ltr < 0.0) | (ltr < lcentral), 0.0, density)",
+             "    density = np.where(ltr < 0.0, 0.0, density)"),
+            ("                if ltr < 0.0 or ltr < lcentral:",
+             "                if ltr < 0.0:"),
+            ("                x = ltr - lcentral + delta",
+             "                x = ltr + delta")):
+        if source.count(old_hod) != 1:
+            raise AssertionError(f"baseline HOD line not found once: {old_hod!r}")
+        source = source.replace(old_hod, new_hod)
     exec(compile(source, module.__file__, "exec"), module.__dict__)
     return module
 

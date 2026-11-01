@@ -6,8 +6,15 @@
 //   μ_sat  = ((M - Mmin)/(M1 - Mmin))^α · ((1+z)/(1+z_pivot))^ε
 //   δ      = (σ_intr · μ_sat)^2
 //   ν      = μ_sat + δ
-//   x      = ltr - λ^cen + δ                (shift by the central count)
+//   x      = ltr + δ
 //   P(ltr | M, z; φ) = exp[-ν + (x - 1) ln(ν) - lnΓ(x)]     for x > 0
+//
+// The "-1"/Γ(x) of the Γ-continued Poisson pmf is the central: ltr - 1 + δ is
+// Poisson-like with mean ν, so <ltr> = 1 + μ_sat.  This is the documented
+// Costanzi form (docs math/index.md), identical to p_operator_t.hh and
+// mor_shifted_poisson_t.cuh.  Below Mmin μ_sat = 0 and the density is the
+// narrow Gaussian at λ^cen = 0.  (Before 2026-11-01 x = ltr - λ^cen + δ, which
+// counted the central twice and put <ltr> one unit high.)
 //
 // Closed form; no discrete k-sum; recovers the Poisson limit as
 // σ_intr → 0 and extends smoothly to non-integer ltr. Matches the
@@ -85,10 +92,9 @@ namespace y3_cluster {
     // P(lt | M, z; φ) — shifted-Poisson continuous form.
     // lnM is raw natural log of M in h^-1 M_sun (M = exp(lnM)).
     //
-    // Physical support: ltr = lambda_central + lambda_sat, both non-negative,
-    // so ltr >= lambda_central. We enforce both boundaries explicitly:
-    //   * ltr < 0              -> 0  (unphysical)
-    //   * ltr < lambda_central -> 0  (lambda_sat would be < 0)
+    // Support: ltr >= 0 and x > 0.  The continuous density spreads the
+    // zero-satellite state over ltr in [0, 1) above Mmin, as the other
+    // shifted-Poisson evaluators do.
     double
     operator()(double lt, double lnM, double zt) const
     {
@@ -96,7 +102,6 @@ namespace y3_cluster {
 
       double const M = std::exp(lnM);
       double const lcentral = _lambda_central(M);
-      if (lt < lcentral) return 0.0;        // lambda_sat >= 0
       double const mu = _mu_sat(M, zt);
 
       // μ_sat → 0 branch: collapse to narrow Gaussian δ(lt - lcentral).
@@ -108,7 +113,7 @@ namespace y3_cluster {
 
       double const delta = (_sigma_lambda * mu) * (_sigma_lambda * mu);
       double const nu = mu + delta;
-      double const x = lt - lcentral + delta;
+      double const x = lt + delta;
       if (x <= 0.0) return 0.0;
 
       double const log_P = -nu + (x - 1.0) * std::log(nu) - std::lgamma(x);

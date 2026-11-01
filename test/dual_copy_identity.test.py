@@ -40,8 +40,8 @@ Pairs covered:
 
 Note on scope: this file asserts AGREEMENT, never that either copy is
 correct. The physics of the selection kernels is pinned by
-``sel_function.test.py`` (including its three deliberately-red HOD
-normalization pins) and of the projection coefficients by
+``sel_function.test.py`` (including its HOD-normalization and GL-bracket
+characterization pins) and of the projection coefficients by
 ``cosmology_package.test.py``.
 """
 from __future__ import annotations

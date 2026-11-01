@@ -17,15 +17,13 @@
 // S_i = F(lam_max | lt, zt) − F(lam_min | lt, zt) with no lambda_ob
 // quadrature).
 //
-// MOR convention note: this backend previously used
-// MOR_SHIFTED_POISSON_t — the Costanzi-2026 P-operator form
-// (p_operator_t.hh, x = ltr + δ, no central-count shift) — which made
-// the GPU integrand the CPU one offset by one ltr unit
-// (MOR_SP(ltr) = MOR_HOD(ltr + 1) above Mmin; identity pinned in
-// test/num_counts_3d_gpu.test.cu). The explicit-3d backends now all
-// use the HOD form so CPU↔GPU cross-backend pins compare identical
-// physics; MOR_SHIFTED_POISSON_t remains the P[X]/b_sel operator MOR
-// (p_operator_gpu_t.cuh), matching its CPU twin.
+// MOR convention note: the explicit-3d backends all use MOR_HOD_t so
+// CPU↔GPU cross-backend pins compare identical physics.  Since 2026-11-01
+// MOR_HOD_t uses the documented x = ltr + δ, so above Mmin it equals
+// MOR_SHIFTED_POISSON_t, the P[X]/b_sel operator MOR (p_operator_gpu_t.cuh);
+// identity pinned in test/num_counts_3d_gpu.test.cu.  (This backend once
+// used MOR_SHIFTED_POISSON_t; the one-unit offset to the CPU backend was then
+// resolved toward the old MOR_HOD_t, which counted the central twice.)
 //
 // The observed-redshift kernel S_j is the 3-line Gaussian
 // CDF difference below, verbatim the CPU richness_zkernel with the

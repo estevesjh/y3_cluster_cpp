@@ -8,12 +8,12 @@
 // the explicit-3d GPU backends must use THIS class so CPU<->GPU
 // cross-backend pins compare the same physics.
 //
-// The Costanzi-2026 continuous form WITHOUT the central shift
-// (x = ltr + delta) lives in mor_shifted_poisson_t.cuh and is
-// reserved for the P[X]/b_sel operators, whose CPU twin
-// (p_operator_t.hh) uses that form too. The two are related exactly by
-// MOR_SP(ltr) = MOR_HOD(ltr + 1) above Mmin — pinned in
-// test/num_counts_3d_gpu.test.cu.
+// The Costanzi-2026 continuous form x = ltr + delta (no central term) lives
+// in mor_shifted_poisson_t.cuh for the P[X]/b_sel operators, whose CPU twin
+// is p_operator_t.hh.  Above Mmin the two are identical:
+// MOR_SP(ltr) = MOR_HOD(ltr) — pinned in test/num_counts_3d_gpu.test.cu.
+// (Before 2026-11-01 MOR_HOD used x = ltr - lambda_central + delta, so
+// MOR_SP(ltr) = MOR_HOD(ltr + 1): the central was counted twice.)
 //
 // Formula (identical to the host class, kernels/mor_hod.py:91-105):
 //   lambda_central = 1 for M >= Mmin, else 0
@@ -21,8 +21,8 @@
 //                    * ((1+z)/(1+z_pivot))^epsilon
 //   delta          = (sigma_lambda * mu_sat)^2
 //   nu             = mu_sat + delta
-//   x              = ltr - lambda_central + delta
-//   pdf(ltr)       = exp(-nu + (x - 1) ln(nu) - lgamma(x))    x > 0
+//   x              = ltr + delta   (the -1 / lgamma(x) is the central)
+//   pdf(ltr)       = exp(-nu + (x - 1) ln(nu) - lgamma(x))    ltr >= 0, x > 0
 // with the mu_sat -> 0 branch collapsing to a narrow Gaussian at
 // lambda_central, exactly as the host class.
 
@@ -124,8 +124,6 @@ namespace y3_cuda {
 
       double const M = exp(lnM);
       double const lcentral = (M >= Mmin_) ? 1.0 : 0.0;
-      if (lt < lcentral)
-        return 0.0; // lambda_sat >= 0
 
       // mu_sat(M, z)
       double mu = 0.0;
@@ -143,7 +141,7 @@ namespace y3_cuda {
 
       double const delta = (sigma_lambda_ * mu) * (sigma_lambda_ * mu);
       double const nu = mu + delta;
-      double const x = lt - lcentral + delta;
+      double const x = lt + delta;
       if (x <= 0.0)
         return 0.0;
 

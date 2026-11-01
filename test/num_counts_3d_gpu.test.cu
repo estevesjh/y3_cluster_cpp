@@ -69,13 +69,15 @@ TEST_CASE("zkernel_sj matches the host richness_zkernel closed form")
   }
 }
 
-TEST_CASE("MOR_SHIFTED_POISSON_t is MOR_HOD_t shifted by the central count")
+TEST_CASE("MOR_SHIFTED_POISSON_t equals MOR_HOD_t above Mmin")
 {
-  // The Costanzi-2026 P-operator form (x = ltr + delta) relates to
-  // MOR_HOD_t's central-shifted form (x = ltr - lambda_cen + delta,
-  // lambda_cen = 1 above Mmin) exactly by
+  // Both use the documented Costanzi form x = ltr + delta (the central is
+  // the -1 / lgamma(x) of the continued Poisson pmf), so
   //
-  //   MOR_SP(ltr, lnM, z) = MOR_HOD(ltr + 1, lnM, z)   for M >= Mmin
+  //   MOR_SP(ltr, lnM, z) = MOR_HOD(ltr, lnM, z)   for M >= Mmin
+  //
+  // (Before 2026-11-01 MOR_HOD used x = ltr - lambda_cen + delta and this
+  // read MOR_HOD(ltr + 1): the central was counted twice.)
   //
   // away from the mu_sat -> 0 fallback branch. This pins the
   // b_sel-operator device model's formula; the explicit-3d GPU
@@ -96,7 +98,7 @@ TEST_CASE("MOR_SHIFTED_POISSON_t is MOR_HOD_t shifted by the central count")
                         std::array<double, 3>{80.0, lnM_high, 0.6}}) {
     double const lt = p[0], m = p[1], zt = p[2];
     CHECK(mor_sp(lt, m, zt) ==
-          Approx(mor_hod(lt + 1.0, m, zt)).epsilon(PORT_TOL));
+          Approx(mor_hod(lt, m, zt)).epsilon(PORT_TOL));
   }
 
   // Below Mmin both conventions vanish.

@@ -827,14 +827,14 @@ def _compute_lam_nodes_and_P_HOD_nb(lnM, z, log10_Mmin, log10_M1, alpha, epsilon
                 lam_k[k, zi, qi] = ltr
                 W_k[k, zi, qi] = half * gl_w[qi]
 
-                if ltr < 0.0 or ltr < lcentral:
+                if ltr < 0.0:
                     P_Mz[k, zi, qi] = 0.0
                     continue
                 if tiny:
                     dx = (ltr - lcentral) / FALLBACK_SIGMA
                     P_Mz[k, zi, qi] = math.exp(-0.5 * dx * dx) / (SQRT2PI * FALLBACK_SIGMA)
                     continue
-                x = ltr - lcentral + delta
+                x = ltr + delta   # documented form; the central is the -1 below (PHOD)
                 if x <= 0.0:
                     P_Mz[k, zi, qi] = 0.0
                     continue

@@ -347,9 +347,12 @@ class PHOD:
         # of the continuous distribution.
         scatter_shift = (parameters.sigma_lambda * satellite_mean) ** 2
         poisson_mean = satellite_mean + scatter_shift
-        shifted_richness = (
-            lambda_true - central_richness + scatter_shift
-        )
+        # x = lambda_true + delta: the "-1"/Gamma(x) of the continued
+        # Poisson pmf is the central, so <lambda_true> = 1 + mu_sat above
+        # Mmin (below Mmin mu_sat = 0 and the fallback applies).  Before
+        # 2026-11-01 x = lambda_true - central + delta counted the central
+        # twice and put <lambda_true> one unit high.
+        shifted_richness = lambda_true + scatter_shift
 
         zero_satellite_limit = satellite_mean <= self.poisson_tol
         fallback = (
@@ -359,7 +362,7 @@ class PHOD:
         )
 
         valid_support = (
-            (lambda_true >= central_richness)
+            (lambda_true >= 0.0)
             & (shifted_richness > 0.0)
         )
         safe_richness = np.where(valid_support, shifted_richness, 1.0)
@@ -368,7 +371,7 @@ class PHOD:
         #
         #   delta = (sigma_lambda * mu_sat)^2
         #   nu    = mu_sat + delta
-        #   x     = lambda_true - lambda_central + delta
+        #   x     = lambda_true + delta
         #   P     = exp[-nu + (x - 1) * log(nu) - log Gamma(x)]
         #
         # ``gammaln`` evaluates log Gamma(x) directly.  This is both the

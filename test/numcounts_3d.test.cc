@@ -80,9 +80,10 @@ TEST_CASE("NumCounts3d: MOR_HOD_t shifted-Poisson matches an "
                       /*epsilon=*/-0.2, /*sigma_lambda=*/0.35);
   double const lnM = std::log(std::pow(10.0, 14.2));
 
-  CHECK(mor(5.0, lnM, 0.3) == Approx(5.411587466357029e-03).epsilon(REL_TOL));
-  CHECK(mor(12.0, lnM, 0.5) == Approx(5.639899981958428e-12).epsilon(REL_TOL));
-  CHECK(mor(25.0, lnM, 0.6) == Approx(7.820106802009195e-34).epsilon(REL_TOL));
+  // Documented form x = ltr + delta (central counted once; 2026-11-01).
+  CHECK(mor(5.0, lnM, 0.3) == Approx(4.910415359496124e-04).epsilon(REL_TOL));
+  CHECK(mor(12.0, lnM, 0.5) == Approx(1.8107675544193602e-13).epsilon(REL_TOL));
+  CHECK(mor(25.0, lnM, 0.6) == Approx(1.1362278289274627e-35).epsilon(REL_TOL));
 }
 
 TEST_CASE("NumCounts3d: operator() equals the documented product of "
@@ -192,7 +193,7 @@ TEST_CASE("NumCounts3d: operator() equals the documented product of "
   // chain (scipy RegularGridInterpolator-equivalent bilinear + the erf/erfc
   // kernels above), tying the composition to physics, not just self-
   // consistency.
-  CHECK(got == Approx(4.542270107063506e+02).epsilon(REL_TOL));
+  CHECK(got == Approx(46.4764456842068).epsilon(REL_TOL));
 }
 
 namespace {
@@ -294,12 +295,13 @@ TEST_CASE("NumCounts3d: bin selection and support-boundary invariants")
   CHECK_THROWS_AS(model.set_grid_point({2}), std::out_of_range);
   CHECK_THROWS_AS(model.set_grid_point({-1}), std::out_of_range);
 
-  // Physical support boundary: lambda_true < lambda_central (= 1 once
-  // M >= Mmin) is unphysical for MOR_HOD_t (lambda_sat would be
-  // negative), which returns exactly 0 -- propagating to an exact 0 for
-  // the whole product regardless of the other four terms.
-  model.set_grid_point({0});
-  CHECK(model(0.5, zt, lnM) == 0.0);
+  // Physical support boundary: lambda_true < 0 is unphysical for
+  // MOR_HOD_t, which returns exactly 0.  (lambda_true in [0, 1) is the
+  // continuous spread of the zero-satellite state, so the support starts at
+  // 0, outside the richness kernel's domain; checked on the MOR directly.)
+  MOR_HOD_t const mor_support(13.8, 14.5, 1.1, -0.2, 0.35);
+  CHECK(mor_support(-0.5, lnM, zt) == 0.0);
+  CHECK(mor_support(0.5, lnM, zt) > 0.0);
 }
 
 TEST_CASE("NumCounts3d: operator() matches a second, fully-independent "
@@ -366,5 +368,5 @@ TEST_CASE("NumCounts3d: operator() matches a second, fully-independent "
   // mor_hod_t.hh formulas re-derived independently in Python
   // (scipy.special.erf/erfc/gammaln) rather than called back into this
   // codebase.
-  CHECK(got == Approx(58314101.196420856).epsilon(REL_TOL));
+  CHECK(got == Approx(17519614.213425994).epsilon(REL_TOL));
 }

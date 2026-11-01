@@ -95,7 +95,9 @@ $$P(\lambda^{\rm tr}\mid M, z) =
 \exp\!\big[-\nu + (\lambda^{\rm tr} + \delta - 1)\ln\nu
 - \ln\Gamma(\lambda^{\rm tr} + \delta)\big],$$
 
-a continuous shifted-Poisson with mean $\mu_{\rm sat}(M, z)$ set by the
+a continuous shifted-Poisson in which the $-1$ of the continued Poisson
+pmf is the central galaxy, so $\langle\lambda^{\rm tr}\rangle = 1 +
+\mu_{\rm sat}(M, z)$ above $M_{\rm min}$, with $\mu_{\rm sat}$ set by the
 HOD parameters above — Poissonian at low occupancy, super-Poissonian at
 high occupancy through the halo-to-halo scatter $\sigma_\lambda$. The
 exact Poisson-plus-scatter law has no closed form; Costanzi et al. 2019b
@@ -106,10 +108,12 @@ matches the exact law even in the low-$\lambda^{\rm tr}$ tail.
 Numerical guards: narrow-Gaussian fallback where
 $\mu_{\rm sat} \le 10^{-8}$; `z_pivot` defaults to 0.45. When both
 `log10_ratio` and `log10_M1` are present, `log10_ratio` wins:
-$\log_{10} M_1 = \log_{10} M_{\rm min} + \texttt{log10\_ratio}$. Two
-known small divergences between evaluators: `b_sel_marg` and `bsel` use
-the satellite term without the central-galaxy shift $\lambda_{\rm cen}$,
-and `bsel` defaults its pivot to 0.4544. (The log-normal
+$\log_{10} M_1 = \log_{10} M_{\rm min} + \texttt{log10\_ratio}$. Every
+evaluator (`MOR_HOD_t`, `PHOD`, `sel_function`, and the `b_sel_marg`
+P-operators) uses this same form; until 2026-11-01 the HOD evaluators
+subtracted $\lambda_{\rm cen}$ from $\lambda^{\rm tr}$ as well, counting the
+central twice ($\langle\lambda^{\rm tr}\rangle$ one unit high). One known
+small divergence remains: `bsel` defaults its pivot to 0.4544. (The log-normal
 mass–richness model of Costanzi et al. 2021 is the drop-in alternative;
 only the quadrature bracket changes.)
 
