@@ -28,13 +28,6 @@ TEST_CASE("Test NFW Misc Implementation")
   double  RHOM = RHOC*omega_m;
   NFW_DSIGMA_MIS model(conc, RHOM, "gamma");
 
-  // FINDING (real, at the project's standard 1e-3 -- see
-  // docs/known_issues/nfw_dsigma_mis_defect.md): authored at epsrel=5e-3 because the
-  // (r=10, r_mis=2.0) point below does not pass at 1e-3 (measured
-  // -0.497% vs the cluster_toolkit reference; not a table-domain-edge
-  // artifact -- x=r/rs~35.5, x_mis=r_mis/rs~7.1 are both well inside
-  // the tabulated x in [1e-3, 5e3] range). Kept strict rather than
-  // loosened, per policy: a failing test here is doing its job.
   double const epsrel = 1.0e-3;
   double const epsabs = 1.0e-12;
 
@@ -43,18 +36,21 @@ TEST_CASE("Test NFW Misc Implementation")
   std::vector<double> r{ 0.1       ,  0.16681005,  0.27825594,  0.46415888,  0.77426368,
                          1.29154967,  2.15443469,  3.59381366,  5.9948425 , 10.        };
 
-  // Answers drawn from cluster toolkit
+  // Exact gamma-kernel DeltaSigma_mis (scipy quad, rel. acc. ~1e-9), from
+  // test/make_nfw_dsigma_mis_pins.py.  The former cluster_toolkit values used
+  // a radial grid ending at 15 Mpc/h, which truncates the offset integral
+  // (+0.49% at r = 10, r_mis = 2; +0.05% for r >= 6).
   // Each columns is a different rmis, each row is a different r
-  std::vector<double> answers{12.3685326, 0.3899747, 0.0104446,
-                              22.7491859, 0.9300333, 0.0264995,
-                              33.3082693, 2.0334094, 0.0641354,
-                              36.0917619, 3.9092169, 0.1455426,
-                              28.3882168, 6.2393766, 0.3031914,
-                              17.5178459, 7.6804544, 0.5638920,
-                              9.4010319, 6.7788772, 0.9002713,
-                              4.6358405, 4.2448975, 1.1650680,
-                              2.1556775, 2.1118245, 1.1349319,
-                              0.9599990, 0.9545601, 0.7860161};
+  std::vector<double> answers{12.3686391, 0.3899398, 0.0104433,
+                              22.7501877, 0.9300026, 0.0264943,
+                              33.3086883, 2.0334077, 0.0641273,
+                              36.0931224, 3.9092922, 0.1455337,
+                              28.3875362, 6.2398990, 0.3031729,
+                              17.5147493, 7.6814796, 0.5638974,
+                              9.3980618, 6.7792105, 0.9002984,
+                              4.6338910, 4.2439746, 1.1650775,
+                              2.1546326, 2.1109057, 1.1344388,
+                              0.9595161, 0.9540855, 0.7821932};
 
   std::vector<double> rmis{0.1,0.5,2.0};
   std::vector<double> lnMs{32.2361913};
@@ -129,25 +125,7 @@ TEST_CASE("y3_cuda::NFW_DSIGMA_MIS::r_s matches the host twin exactly")
   }
 }
 
-// 
-// To Generate The Answers; Go To a Python Interface with Cluster Toolkit
-// 
-// import numpy as np
-// import cluster_toolkit as ct
-
-// def make_deltasimga_mis(R, Rmis=0.3, Mt=1e14, c=4., omega_m=0.3):
-//     Rp = np.logspace(np.log10(0.001),np.log10(15.),300)
-//     st = ct.deltasigma.Sigma_nfw_at_R(Rp, Mt, c, omega_m)
-//     st_mis = ct.miscentering.Sigma_mis_at_R(Rp, Rp, st, Mt, c, omega_m, Rmis, kernel='gamma')
-//     _dst_mis = ct.miscentering.DeltaSigma_mis_at_R(Rp, Rp, st_mis)
-//     return np.interp(R,Rp,_dst_mis)
-    
-// R = np.logspace(np.log10(0.1),np.log10(10.),10)
-// R
-
-// res = np.vstack([make_deltasimga_mis(R, 0.1),
-//                  make_deltasimga_mis(R, 0.5),
-//                  make_deltasimga_mis(R, 2.)])
-
-// for row in res.T:
-//     print('%.7f, %.7f, %.7f,'%(row[0],row[1],row[2]))
+// The answers come from test/make_nfw_dsigma_mis_pins.py (exact quadrature).
+// The old cluster_toolkit recipe (Sigma_mis_at_R on Rp = logspace(1e-3, 15, 300))
+// is biased at r >~ 6 because its grid ends at 15 Mpc/h; with Rp up to 100 Mpc/h
+// it agrees with the exact values to 7e-5.
