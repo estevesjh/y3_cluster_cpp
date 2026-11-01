@@ -9,7 +9,7 @@ Consumers should import :class:`PrjParams` rather than reload arrays
 from disk:
 
     from y3_buzzard.prj_params import PrjParams
-    params = PrjParams.default()
+    params = PrjParams.hod()           # or PrjParams.lognormal()
     raw    = params.as_dict()           # bsel.py-style dict of 1-D arrays
     splines = params.splines()          # sel_function.py-style ius dict
 
@@ -85,7 +85,12 @@ class PrjParams:
     _splines_cache: dict = field(default=None, repr=False, compare=False)
 
     @classmethod
-    def default(cls) -> "PrjParams":
+    def hod(cls) -> "PrjParams":
+        """Kernel table for the HOD richness-mass relation.
+
+        The 15 rows are read as z knots on [0.10, 0.80] and interpolated
+        linearly in z, so P(lob | ltr, z) evolves with redshift.
+        """
         return cls(
             z=_arr(_Z),
             a_tau=_arr(_A_TAU),   b_tau=_arr(_B_TAU),
@@ -93,6 +98,37 @@ class PrjParams:
             a_sig=_arr(_A_SIG),   b_sig=_arr(_B_SIG),
             a_fprj=_arr(_A_FPRJ), b_fprj=_arr(_B_FPRJ),
         )
+
+    @classmethod
+    def lognormal(cls) -> "PrjParams":
+        """Kernel table for the lognormal richness-mass relation.
+
+        The 15 rows are averaged into one set of coefficients, repeated on
+        the same z grid, so P(lob | ltr, z) does not depend on z.  This is
+        the kernel of the Buzzard mock (xtang126/mock_cluster_buzzard,
+        ``load_prj_posterior_mean``), whose lambda_tr is a lognormal-broadened
+        Poisson draw.
+        """
+        hod = cls.hod()
+        return cls(
+            z=hod.z,
+            **{k: np.full(hod.z.size, getattr(hod, k).mean())
+               for k in COEFF_NAMES},
+        )
+
+    @classmethod
+    def named(cls, table: str) -> "PrjParams":
+        """Return the ``"hod"`` or ``"lognormal"`` kernel table."""
+        tables = {"hod": cls.hod, "lognormal": cls.lognormal}
+        if table not in tables:
+            raise ValueError(
+                f"PrjParams: unknown table {table!r}; use 'hod' or 'lognormal'")
+        return tables[table]()
+
+    @classmethod
+    def default(cls) -> "PrjParams":
+        """The HOD table (kept so existing callers keep working)."""
+        return cls.hod()
 
     @classmethod
     def from_dict(cls, d: Mapping) -> "PrjParams":
@@ -133,8 +169,11 @@ class PrjParams:
 # ---------------------------------------------------------------------------
 # CosmoSIS module shim: replaces src/modules/plob_ltr_loader/plob_ltr_loader.py
 # ---------------------------------------------------------------------------
-def setup(_options):
-    return PrjParams.default()
+def setup(options):
+    """``table = hod`` (default) or ``lognormal`` in the module's ini section."""
+    from cosmosis.datablock import option_section
+    table = options.get_string(option_section, "table", default="hod")
+    return PrjParams.named(table)
 
 
 def execute(block, params: PrjParams):
