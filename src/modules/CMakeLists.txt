@@ -69,6 +69,9 @@ add_subdirectory(
   ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/cuda/3d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_3d_cuda)
 add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/number_counts/cuda/0d
+  ${CMAKE_CURRENT_BINARY_DIR}/des_y3_numcounts_0d_cuda)
+add_subdirectory(
   ${CMAKE_SOURCE_DIR}/src/pipelines/des_y3/shear_1h2h/cpp/0d
   ${CMAKE_CURRENT_BINARY_DIR}/des_y3_shear1h_0d_cpp)
 add_subdirectory(
